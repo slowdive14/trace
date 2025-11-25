@@ -9,6 +9,7 @@ const CATEGORY_KEYWORDS: Record<ExpenseCategory, string[]> = {
     '문화/취미': ['영화', '책', '공연', '전시', '취미', '게임', '운동', '헬스', '수영'],
     '종교/기부': ['봉헌', '헌금', '성당', '교회', '절', '기부', '후원'],
     '생필품': ['마트', '편의점', '생필품', '세제', '휴지', '샴푸', '비누', '치약'],
+    '공간 사용료': ['스터디카페', '스카', '독서실', '상담실', '대여', '공간', '회의실', '세미나실', '연습실'],
     '기타': []
 };
 
@@ -65,6 +66,7 @@ export async function classifyExpenseWithAI(description: string): Promise<Expens
 - 문화/취미
 - 종교/기부
 - 생필품
+- 공간 사용료
 - 기타
 
 지출 내역: "${description}"
@@ -85,7 +87,7 @@ export async function classifyExpenseWithAI(description: string): Promise<Expens
 
         // 유효한 카테고리인지 확인
         const validCategories: ExpenseCategory[] = [
-            '커피/음료', '식사', '간식', '교통', '문화/취미', '종교/기부', '생필품', '기타'
+            '커피/음료', '식사', '간식', '교통', '문화/취미', '종교/기부', '생필품', '공간 사용료', '기타'
         ];
 
         if (validCategories.includes(category)) {

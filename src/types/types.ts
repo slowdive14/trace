@@ -25,6 +25,7 @@ export type ExpenseCategory =
     | '문화/취미'
     | '종교/기부'
     | '생필품'
+    | '공간 사용료'
     | '기타';
 
 export const EXPENSE_CATEGORIES: ExpenseCategory[] = [
@@ -35,6 +36,7 @@ export const EXPENSE_CATEGORIES: ExpenseCategory[] = [
     '문화/취미',
     '종교/기부',
     '생필품',
+    '공간 사용료',
     '기타'
 ];
 
@@ -46,5 +48,6 @@ export const EXPENSE_CATEGORY_EMOJI: Record<ExpenseCategory, string> = {
     '문화/취미': '🎨',
     '종교/기부': '🙏',
     '생필품': '🛒',
+    '공간 사용료': '🏢',
     '기타': '🏷️'
 };

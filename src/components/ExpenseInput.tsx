@@ -133,7 +133,7 @@ const ExpenseInput: React.FC<ExpenseInputProps> = ({ externalDate }) => {
 
                     {/* Preview & Manual Override Section */}
                     {batchParsed.length > 0 ? (
-                        <div className="flex flex-col gap-1.5 text-sm max-h-32 overflow-y-auto">
+                        <div className="flex flex-col gap-1.5 text-sm overflow-y-auto">
                             <div className="text-xs text-text-secondary">📋 {batchParsed.length}개 항목</div>
                             {batchParsed.map((item, idx) => (
                                 <div key={idx} className="flex items-center gap-2 overflow-x-auto pb-1">
