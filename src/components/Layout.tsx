@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useAuth } from './AuthContext';
-import { LogOut, Calendar, Search } from 'lucide-react';
+import { LogOut, Calendar, Search, Settings } from 'lucide-react';
+import SettingsModal from './SettingsModal';
 
 interface LayoutProps {
     children: React.ReactNode;
@@ -10,6 +11,7 @@ interface LayoutProps {
 
 const Layout: React.FC<LayoutProps> = ({ children, onSearch, onCalendar }) => {
     const { user, signOut, signInWithGoogle } = useAuth();
+    const [showSettings, setShowSettings] = useState(false);
 
     return (
         <div className="min-h-screen bg-bg-primary text-text-primary font-sans">
@@ -30,6 +32,12 @@ const Layout: React.FC<LayoutProps> = ({ children, onSearch, onCalendar }) => {
                             >
                                 <Calendar size={20} />
                             </button>
+                            <button
+                                onClick={() => setShowSettings(true)}
+                                className="text-text-secondary hover:text-text-primary transition-colors"
+                            >
+                                <Settings size={20} />
+                            </button>
                             <button onClick={signOut} className="text-text-secondary hover:text-red-400 transition-colors">
                                 <LogOut size={20} />
                             </button>
@@ -47,6 +55,7 @@ const Layout: React.FC<LayoutProps> = ({ children, onSearch, onCalendar }) => {
             <main className="pt-16 min-h-screen">
                 {children}
             </main>
+            {showSettings && <SettingsModal onClose={() => setShowSettings(false)} />}
         </div>
     );
 };

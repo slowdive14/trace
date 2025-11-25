@@ -4,12 +4,47 @@ export interface Entry {
     tags: string[];
     category: 'action' | 'thought';
     timestamp: Date;
-    userId: string;
+    createdAt: Date;
+    updatedAt: Date;
 }
 
-export interface User {
-    uid: string;
-    displayName: string | null;
-    email: string | null;
-    photoURL: string | null;
+export interface Expense {
+    id: string;
+    description: string;
+    amount: number;
+    category: ExpenseCategory;
+    timestamp: Date;
+    createdAt: Date;
 }
+
+export type ExpenseCategory =
+    | '커피/음료'
+    | '식사'
+    | '간식'
+    | '교통'
+    | '문화/취미'
+    | '종교/기부'
+    | '생필품'
+    | '기타';
+
+export const EXPENSE_CATEGORIES: ExpenseCategory[] = [
+    '커피/음료',
+    '식사',
+    '간식',
+    '교통',
+    '문화/취미',
+    '종교/기부',
+    '생필품',
+    '기타'
+];
+
+export const EXPENSE_CATEGORY_EMOJI: Record<ExpenseCategory, string> = {
+    '커피/음료': '☕',
+    '식사': '🍽️',
+    '간식': '🍕',
+    '교통': '🚌',
+    '문화/취미': '🎨',
+    '종교/기부': '🙏',
+    '생필품': '🛒',
+    '기타': '🏷️'
+};

@@ -119,19 +119,19 @@ const EntryItem: React.FC<EntryItemProps> = ({ entry, onDelete, highlightQuery, 
                     <>
                         <button
                             type="button"
+                            onClick={handleCancelDelete}
+                            className="text-text-secondary hover:text-text-primary transition-colors p-1 text-xs"
+                            aria-label="Cancel delete"
+                        >
+                            취소
+                        </button>
+                        <button
+                            type="button"
                             onClick={handleConfirmDelete}
                             className="text-red-500 hover:text-red-600 transition-colors p-1 flex items-center gap-1 text-xs font-bold"
                             aria-label="Confirm delete"
                         >
                             삭제
-                        </button>
-                        <button
-                            type="button"
-                            onClick={handleCancelDelete}
-                            className="text-text-secondary hover:text-text-primary transition-colors p-1"
-                            aria-label="Cancel delete"
-                        >
-                            취소
                         </button>
                     </>
                 ) : (

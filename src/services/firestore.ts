@@ -6,12 +6,14 @@ import {
     getDocs,
     deleteDoc,
     doc,
-    Timestamp
+    Timestamp,
+    where
 } from "firebase/firestore";
 import { db } from "./firebase";
-import type { Entry } from "../types/types";
+import type { Entry, Expense, ExpenseCategory } from "../types/types";
 
 const ENTRIES_COLLECTION = "entries";
+const EXPENSES_COLLECTION = "expenses";
 
 export const addEntry = async (
     userId: string,
@@ -60,6 +62,65 @@ export const deleteEntry = async (userId: string, entryId: string) => {
         await deleteDoc(doc(db, `users/${userId}/${ENTRIES_COLLECTION}`, entryId));
     } catch (e) {
         console.error("Error deleting document: ", e);
+        throw e;
+    }
+};
+
+// Expense functions
+export const addExpense = async (
+    userId: string,
+    description: string,
+    amount: number,
+    category: ExpenseCategory,
+    date?: Date
+) => {
+    try {
+        const timestamp = date ? Timestamp.fromDate(date) : Timestamp.now();
+        const docRef = await addDoc(collection(db, `users/${userId}/${EXPENSES_COLLECTION}`), {
+            description,
+            amount,
+            category,
+            timestamp,
+            createdAt: Timestamp.now(),
+        });
+        return docRef.id;
+    } catch (e) {
+        console.error("Error adding expense: ", e);
+        throw e;
+    }
+};
+
+export const getExpenses = async (userId: string, startDate?: Date, endDate?: Date) => {
+    try {
+        let q = query(
+            collection(db, `users/${userId}/${EXPENSES_COLLECTION}`),
+            orderBy("timestamp", "desc")
+        );
+
+        if (startDate) {
+            q = query(q, where("timestamp", ">=", Timestamp.fromDate(startDate)));
+        }
+        if (endDate) {
+            q = query(q, where("timestamp", "<=", Timestamp.fromDate(endDate)));
+        }
+
+        const querySnapshot = await getDocs(q);
+        return querySnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            timestamp: doc.data().timestamp.toDate(),
+        })) as Expense[];
+    } catch (e) {
+        console.error("Error getting expenses: ", e);
+        throw e;
+    }
+};
+
+export const deleteExpense = async (userId: string, expenseId: string) => {
+    try {
+        await deleteDoc(doc(db, `users/${userId}/${EXPENSES_COLLECTION}`, expenseId));
+    } catch (e) {
+        console.error("Error deleting expense: ", e);
         throw e;
     }
 };
