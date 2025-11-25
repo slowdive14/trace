@@ -167,12 +167,7 @@ const AppContent: React.FC = () => {
             />
           )}
           {showSearch && (
-            <SearchBar
-              onClose={() => setShowSearch(false)}
-              onSelectEntry={(entry) => {
-                setShowSearch(false);
-              }}
-            />
+            <SearchBar onClose={() => setShowSearch(false)} />
           )}
 
           {showUnifiedCalendar && (
