@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
-import type { Expense, ExpenseCategory } from '../types/types';
+import type { Expense } from '../types/types';
 import { EXPENSE_CATEGORIES, EXPENSE_CATEGORY_EMOJI } from '../types/types';
 
 interface ExpenseInsightsProps {
@@ -83,8 +83,8 @@ const ExpenseInsights: React.FC<ExpenseInsightsProps> = ({ expenses }) => {
                         key={period.key}
                         onClick={() => setSelectedPeriod(period.key)}
                         className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-all ${selectedPeriod === period.key
-                                ? 'bg-accent text-white'
-                                : 'bg-bg-tertiary text-text-secondary hover:text-text-primary hover:bg-bg-tertiary/80'
+                            ? 'bg-accent text-white'
+                            : 'bg-bg-tertiary text-text-secondary hover:text-text-primary hover:bg-bg-tertiary/80'
                             }`}
                     >
                         {period.label}
