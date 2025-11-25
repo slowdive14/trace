@@ -128,3 +128,24 @@ export function extractAmountFromDescription(description: string): {
 
     return { description, amount: null };
 }
+
+/**
+ * 여러 줄의 지출 내역을 한 번에 파싱
+ */
+export function parseBatchExpenses(input: string): Array<{
+    description: string;
+    amount: number;
+    rawLine: string;
+}> {
+    const lines = input.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+    const results: Array<{ description: string; amount: number; rawLine: string }> = [];
+
+    for (const line of lines) {
+        const { description, amount } = extractAmountFromDescription(line);
+        if (amount !== null && description) {
+            results.push({ description, amount, rawLine: line });
+        }
+    }
+
+    return results;
+}

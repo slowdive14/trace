@@ -90,6 +90,33 @@ export const addExpense = async (
     }
 };
 
+export const addBatchExpenses = async (
+    userId: string,
+    expenses: Array<{
+        description: string;
+        amount: number;
+        category: ExpenseCategory;
+    }>,
+    date?: Date
+) => {
+    try {
+        const timestamp = date ? Timestamp.fromDate(date) : Timestamp.now();
+        const promises = expenses.map(expense =>
+            addDoc(collection(db, `users/${userId}/${EXPENSES_COLLECTION}`), {
+                description: expense.description,
+                amount: expense.amount,
+                category: expense.category,
+                timestamp,
+                createdAt: Timestamp.now(),
+            })
+        );
+        await Promise.all(promises);
+    } catch (e) {
+        console.error("Error adding batch expenses: ", e);
+        throw e;
+    }
+};
+
 export const getExpenses = async (userId: string, startDate?: Date, endDate?: Date) => {
     try {
         let q = query(

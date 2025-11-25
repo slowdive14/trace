@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Send, Calendar, DollarSign } from 'lucide-react';
 import { useAuth } from './AuthContext';
-import { addExpense } from '../services/firestore';
+import { addExpense, addBatchExpenses } from '../services/firestore';
 import type { ExpenseCategory } from '../types/types';
 import { EXPENSE_CATEGORIES, EXPENSE_CATEGORY_EMOJI } from '../types/types';
-import { classifyExpenseWithAI, extractAmountFromDescription } from '../utils/expenseClassifier';
+import { classifyExpenseWithAI, extractAmountFromDescription, parseBatchExpenses } from '../utils/expenseClassifier';
 import { format } from 'date-fns';
 
 interface ExpenseInputProps {
@@ -18,6 +18,12 @@ const ExpenseInput: React.FC<ExpenseInputProps> = ({ externalDate }) => {
     const [category, setCategory] = useState<ExpenseCategory>('기타');
     const [selectedDate, setSelectedDate] = useState<Date>(new Date());
     const [showDatePicker, setShowDatePicker] = useState(false);
+    const [batchParsed, setBatchParsed] = useState<Array<{
+        description: string;
+        amount: number;
+        category: ExpenseCategory;
+        rawLine: string;
+    }>>([]);
 
     const { user } = useAuth();
 
@@ -33,23 +39,43 @@ const ExpenseInput: React.FC<ExpenseInputProps> = ({ externalDate }) => {
         if (!input.trim()) {
             setDescription('');
             setAmount('');
+            setBatchParsed([]);
             return;
         }
 
         // 타이핑이 멈춘 후 800ms 뒤에 실행
-        const timer = setTimeout(() => {
-            const { description: desc, amount: extractedAmount } = extractAmountFromDescription(input);
+        const timer = setTimeout(async () => {
+            // 여러 줄인지 확인
+            const hasMultipleLines = input.includes('\n');
 
-            if (desc) {
-                setDescription(desc);
-                // 카테고리 자동 분류
-                classifyExpenseWithAI(desc).then(cat => {
-                    setCategory(cat);
-                });
-            }
+            if (hasMultipleLines) {
+                // 배치 모드: 여러 줄 파싱
+                const parsed = parseBatchExpenses(input);
+                const withCategories = await Promise.all(
+                    parsed.map(async (item) => ({
+                        ...item,
+                        category: await classifyExpenseWithAI(item.description)
+                    }))
+                );
+                setBatchParsed(withCategories);
+                setDescription('');
+                setAmount('');
+            } else {
+                // 단일 모드: 기존 로직
+                setBatchParsed([]);
+                const { description: desc, amount: extractedAmount } = extractAmountFromDescription(input);
 
-            if (extractedAmount !== null) {
-                setAmount(extractedAmount);
+                if (desc) {
+                    setDescription(desc);
+                    // 카테고리 자동 분류
+                    classifyExpenseWithAI(desc).then(cat => {
+                        setCategory(cat);
+                    });
+                }
+
+                if (extractedAmount !== null) {
+                    setAmount(extractedAmount);
+                }
             }
         }, 800);
 
@@ -57,15 +83,26 @@ const ExpenseInput: React.FC<ExpenseInputProps> = ({ externalDate }) => {
     }, [input]);
 
     const handleSubmit = async () => {
-        if (!user || typeof amount !== 'number' || amount === 0 || !description) return;
+        if (!user) return;
 
         try {
-            await addExpense(user.uid, description, Number(amount), category, selectedDate);
+            // 배치 모드인 경우
+            if (batchParsed.length > 0) {
+                await addBatchExpenses(user.uid, batchParsed, selectedDate);
+            }
+            // 단일 모드인 경우
+            else if (typeof amount === 'number' && amount !== 0 && description) {
+                await addExpense(user.uid, description, Number(amount), category, selectedDate);
+            } else {
+                return; // 유효하지 않은 입력
+            }
+
             // Reset form
             setInput('');
             setAmount('');
             setDescription('');
             setCategory('기타');
+            setBatchParsed([]);
             // externalDate가 있으면 유지, 없으면 오늘로 리셋
             if (!externalDate) {
                 setSelectedDate(new Date());
@@ -95,7 +132,24 @@ const ExpenseInput: React.FC<ExpenseInputProps> = ({ externalDate }) => {
                     )}
 
                     {/* Preview & Manual Override Section */}
-                    {(amount !== '' || description) && (
+                    {batchParsed.length > 0 ? (
+                        <div className="flex flex-col gap-1.5 text-sm max-h-32 overflow-y-auto">
+                            <div className="text-xs text-text-secondary">📋 {batchParsed.length}개 항목</div>
+                            {batchParsed.map((item, idx) => (
+                                <div key={idx} className="flex items-center gap-2 overflow-x-auto pb-1">
+                                    <div className={`flex items-center gap-1 px-2 py-1 rounded-full bg-bg-tertiary whitespace-nowrap ${item.amount < 0 ? 'text-green-500' : 'text-text-primary'}`}>
+                                        <DollarSign size={14} />
+                                        <span className="font-mono">{item.amount.toLocaleString()}원</span>
+                                    </div>
+                                    <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-bg-tertiary whitespace-nowrap text-text-primary">
+                                        <span>{EXPENSE_CATEGORY_EMOJI[item.category]}</span>
+                                        <span className="text-xs">{item.category}</span>
+                                    </div>
+                                    <span className="text-text-secondary text-xs">{item.description}</span>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (amount !== '' || description) && (
                         <div className="flex items-center gap-2 text-sm overflow-x-auto pb-1">
                             <div className={`flex items-center gap-1 px-2 py-1 rounded-full bg-bg-tertiary whitespace-nowrap ${Number(amount) < 0 ? 'text-green-500' : 'text-text-primary'}`}>
                                 <DollarSign size={14} />
@@ -117,13 +171,14 @@ const ExpenseInput: React.FC<ExpenseInputProps> = ({ externalDate }) => {
                     )}
 
                     <div className="flex items-center gap-2">
-                        <input
-                            type="text"
+                        <textarea
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
                             onKeyDown={handleKeyDown}
-                            placeholder="예: 커피 1500, 택시비 8000"
-                            className="flex-1 bg-bg-tertiary text-text-primary rounded-lg p-3 focus:outline-none focus:ring-1 focus:ring-accent"
+                            placeholder="예: 커피 1500 (한 줄로 입력)&#10;또는 여러 줄로 입력:&#10;커피 5500&#10;택시 8000&#10;점심 -12000"
+                            className="flex-1 bg-bg-tertiary text-text-primary rounded-lg p-3 focus:outline-none focus:ring-1 focus:ring-accent resize-none"
+                            style={{ minHeight: '48px', maxHeight: '120px', overflowY: 'auto' }}
+                            rows={1}
                             autoFocus
                         />
                         <button
@@ -134,7 +189,7 @@ const ExpenseInput: React.FC<ExpenseInputProps> = ({ externalDate }) => {
                         </button>
                         <button
                             onClick={handleSubmit}
-                            disabled={typeof amount !== 'number' || amount === 0}
+                            disabled={(batchParsed.length === 0) && (typeof amount !== 'number' || amount === 0)}
                             className="p-2 bg-accent text-white rounded-full hover:bg-opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                         >
                             <Send size={20} />
