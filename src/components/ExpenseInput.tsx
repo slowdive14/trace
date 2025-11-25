@@ -51,13 +51,16 @@ const ExpenseInput: React.FC<ExpenseInputProps> = ({ externalDate }) => {
             if (hasMultipleLines) {
                 // 배치 모드: 여러 줄 파싱
                 const parsed = parseBatchExpenses(input);
+                console.log('📦 Parsed batch:', parsed);
                 const withCategories = await Promise.all(
                     parsed.map(async (item) => ({
                         ...item,
                         category: await classifyExpenseWithAI(item.description)
                     }))
                 );
+                console.log('🏷️ With categories:', withCategories);
                 setBatchParsed(withCategories);
+                console.log('✅ Set batchParsed state:', withCategories.length, 'items');
                 setDescription('');
                 setAmount('');
             } else {
@@ -123,8 +126,8 @@ const ExpenseInput: React.FC<ExpenseInputProps> = ({ externalDate }) => {
 
     return (
         <>
-            <div className="fixed bottom-0 left-0 right-0 bg-bg-secondary border-t border-bg-tertiary p-4 transition-all duration-300">
-                <div className="max-w-md mx-auto flex flex-col gap-3">
+            <div className="fixed bottom-0 left-0 right-0 bg-bg-secondary border-t border-bg-tertiary transition-all duration-300 z-40" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+                <div className="max-w-md mx-auto flex flex-col gap-3 p-4 max-h-[70vh] overflow-y-auto">
                     {!isToday && (
                         <div className="text-xs text-accent text-center">
                             📅 {format(selectedDate, 'yyyy년 M월 d일')} 지출 기록
@@ -133,21 +136,24 @@ const ExpenseInput: React.FC<ExpenseInputProps> = ({ externalDate }) => {
 
                     {/* Preview & Manual Override Section */}
                     {batchParsed.length > 0 ? (
-                        <div className="flex flex-col gap-1.5 text-sm overflow-y-auto">
+                        <div className="flex flex-col gap-1.5 text-sm">
                             <div className="text-xs text-text-secondary">📋 {batchParsed.length}개 항목</div>
-                            {batchParsed.map((item, idx) => (
-                                <div key={idx} className="flex items-center gap-2 overflow-x-auto pb-1">
-                                    <div className={`flex items-center gap-1 px-2 py-1 rounded-full bg-bg-tertiary whitespace-nowrap ${item.amount < 0 ? 'text-green-500' : 'text-text-primary'}`}>
-                                        <DollarSign size={14} />
-                                        <span className="font-mono">{item.amount.toLocaleString()}원</span>
+                            {(() => {
+                                console.log('🎨 Rendering batch preview, items:', batchParsed);
+                                return batchParsed.map((item, idx) => (
+                                    <div key={idx} className="flex items-center gap-2 overflow-x-auto pb-1">
+                                        <div className={`flex items-center gap-1 px-2 py-1 rounded-full bg-bg-tertiary whitespace-nowrap ${item.amount < 0 ? 'text-green-500' : 'text-text-primary'}`}>
+                                            <DollarSign size={14} />
+                                            <span className="font-mono">{item.amount.toLocaleString()}원</span>
+                                        </div>
+                                        <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-bg-tertiary whitespace-nowrap text-text-primary">
+                                            <span>{EXPENSE_CATEGORY_EMOJI[item.category]}</span>
+                                            <span className="text-xs">{item.category}</span>
+                                        </div>
+                                        <span className="text-text-secondary text-xs">{item.description}</span>
                                     </div>
-                                    <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-bg-tertiary whitespace-nowrap text-text-primary">
-                                        <span>{EXPENSE_CATEGORY_EMOJI[item.category]}</span>
-                                        <span className="text-xs">{item.category}</span>
-                                    </div>
-                                    <span className="text-text-secondary text-xs">{item.description}</span>
-                                </div>
-                            ))}
+                                ));
+                            })()}
                         </div>
                     ) : (amount !== '' || description) && (
                         <div className="flex items-center gap-2 text-sm overflow-x-auto pb-1">
