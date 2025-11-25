@@ -4,17 +4,16 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  base: '/trace/',
   plugins: [
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
       manifest: {
-        name: 'DayLog',
-        short_name: 'DayLog',
-        description: 'A minimal daily logging app',
-        theme_color: '#0d0d0d',
-        background_color: '#0d0d0d',
+        name: 'Serein',
+        short_name: 'Serein',
+        description: 'A minimal, elegant daily journaling app',
+        theme_color: '#3B82F6',
         display: 'standalone',
         icons: [
           {
