@@ -115,7 +115,7 @@ const AppContent: React.FC = () => {
           )}
 
           {/* Category Tabs */}
-          <div className="fixed bottom-16 left-0 right-0 bg-bg-primary/95 backdrop-blur border-t border-bg-tertiary z-30 md:bottom-4">
+          <div className="fixed bottom-16 left-0 right-0 bg-bg-primary/95 backdrop-blur border-t border-bg-tertiary z-30">
             <div className="max-w-md mx-auto flex">
               <button
                 onClick={() => {
