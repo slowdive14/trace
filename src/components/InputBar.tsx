@@ -56,7 +56,7 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action' }) => {
 
     return (
         <>
-            <div className={`fixed bottom-0 left-0 right-0 bg-bg-secondary border-t border-bg-tertiary p-4 transition-all duration-300 ${isExpanded ? 'h-1/2' : 'h-auto'}`}>
+            <div className={`fixed bottom-0 left-0 right-0 bg-bg-secondary border-t border-bg-tertiary p-4 transition-all duration-300 z-40 ${isExpanded ? 'h-1/2' : 'h-auto'}`}>
                 <div className="max-w-md mx-auto flex flex-col h-full gap-2">
                     {!isToday && (
                         <div className="text-xs text-accent text-center">
@@ -98,7 +98,7 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action' }) => {
             </div>
 
             {showDatePicker && (
-                <div className="fixed inset-0 bg-black/50 z-40 flex items-center justify-center p-4" onClick={() => setShowDatePicker(false)}>
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowDatePicker(false)}>
                     <div className="bg-bg-secondary rounded-2xl p-6 max-w-xs w-full" onClick={(e) => e.stopPropagation()}>
                         <h3 className="text-lg font-bold mb-4 text-center">날짜 선택</h3>
                         <input
