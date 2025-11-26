@@ -13,7 +13,8 @@ export default defineConfig({
         name: 'Serein',
         short_name: 'Serein',
         description: 'A minimal, elegant daily journaling app',
-        theme_color: '#3B82F6',
+        theme_color: '#0d0d0d',
+        background_color: '#0d0d0d',
         display: 'standalone',
         icons: [
           {
