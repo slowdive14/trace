@@ -134,7 +134,7 @@ const TodoTab: React.FC<TodoTabProps> = ({ date = new Date() }) => {
     };
 
     return (
-        <div className="flex flex-col h-full relative pb-20">
+        <div className="flex flex-col h-[calc(100vh-64px)] relative pb-20">
             <textarea
                 ref={textareaRef}
                 value={content}
