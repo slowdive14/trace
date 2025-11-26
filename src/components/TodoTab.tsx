@@ -206,7 +206,7 @@ const TodoTab: React.FC<TodoTabProps> = ({ date = new Date() }) => {
                         onChange={handleChange}
                         onKeyDown={handleKeyDown}
                         placeholder="오늘의 할 일을 기록하세요..."
-                        className="flex-1 w-full bg-transparent text-text-primary p-4 pt-16 resize-none focus:outline-none font-mono text-sm leading-relaxed"
+                        className="flex-1 w-full max-w-md mx-auto bg-transparent text-text-primary p-4 pt-16 resize-none focus:outline-none font-mono text-sm leading-relaxed"
                         spellCheck={false}
                     />
 
@@ -235,7 +235,7 @@ const TodoTab: React.FC<TodoTabProps> = ({ date = new Date() }) => {
             ) : (
                 <>
                     {/* Reading Mode */}
-                    <div className="flex-1 overflow-y-auto p-4 pt-16 pb-4">
+                    <div className="flex-1 overflow-y-auto p-4 pt-16 pb-4 max-w-md mx-auto w-full">
                         {todos.length === 0 ? (
                             <p className="text-text-secondary text-sm">할 일이 없습니다. 편집 버튼을 눌러 추가하세요.</p>
                         ) : (
