@@ -47,30 +47,34 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action' }) => {
 
     useEffect(() => {
         if (textareaRef.current) {
-            textareaRef.current.style.height = 'auto';
-            textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+            if (isExpanded) {
+                textareaRef.current.style.height = '100%';
+            } else {
+                textareaRef.current.style.height = 'auto';
+                textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+            }
         }
-    }, [content]);
+    }, [content, isExpanded]);
 
     const isToday = format(selectedDate, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd');
 
     return (
         <>
-            <div className={`fixed bottom-0 left-0 right-0 bg-bg-secondary border-t-2 border-accent p-4 transition-all duration-300 z-40 ${isExpanded ? 'h-1/2' : 'h-auto'}`}>
+            <div className={`fixed bottom-0 left-0 right-0 bg-bg-secondary border-t border-bg-tertiary p-4 transition-all duration-300 z-40 ${isExpanded ? 'h-1/2' : 'h-auto'}`}>
                 <div className="max-w-md mx-auto flex flex-col h-full gap-2">
                     {!isToday && (
                         <div className="text-xs text-accent text-center">
                             📅 {format(selectedDate, 'yyyy년 M월 d일')} 기록
                         </div>
                     )}
-                    <div className={`flex items-end gap-2 ${isExpanded ? 'flex-1' : ''}`}>
+                    <div className="flex items-end gap-2 h-full">
                         <textarea
                             ref={textareaRef}
                             value={content}
                             onChange={(e) => setContent(e.target.value)}
                             onKeyDown={handleKeyDown}
                             placeholder="What's happening? #tag"
-                            className={`flex-1 bg-bg-tertiary text-text-primary rounded-lg p-3 resize-none focus:outline-none focus:ring-1 focus:ring-accent overflow-y-auto ${isExpanded ? 'h-full' : 'min-h-[44px] max-h-[120px]'}`}
+                            className={`flex-1 bg-bg-tertiary text-text-primary rounded-lg p-3 resize-none focus:outline-none focus:ring-1 focus:ring-accent min-h-[44px] overflow-y-auto ${isExpanded ? 'h-full max-h-full' : 'max-h-[120px]'}`}
                             rows={1}
                         />
                         <button
