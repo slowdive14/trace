@@ -252,9 +252,12 @@ const TodoTab: React.FC<TodoTabProps> = ({
                 /* History Mode */
                 <div className="flex-1 overflow-y-auto px-4 pb-32">
                     <div className="max-w-md mx-auto pt-4">
-                        {Object.entries(groupedTodos).map(([date, todo]) => (
+                        {Object.entries(groupedTodos).map(([date, todo], index) => (
                             <div key={date} className="mb-6">
-                                <h3 className="text-text-secondary text-sm font-bold mb-3 sticky top-[57px] bg-bg-primary/95 backdrop-blur py-2 border-b border-bg-tertiary">
+                                <h3
+                                    className="text-text-secondary text-sm font-bold mb-3 sticky top-[57px] bg-bg-primary/95 backdrop-blur py-2 border-b border-bg-tertiary"
+                                    style={{ zIndex: Object.keys(groupedTodos).length - index }}
+                                >
                                     {getDateLabel(date)}
                                 </h3>
                                 <div className="space-y-1">
