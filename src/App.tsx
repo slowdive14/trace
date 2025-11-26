@@ -115,14 +115,14 @@ const AppContent: React.FC = () => {
           )}
 
           {/* Category Tabs */}
-          <div className="fixed bottom-16 left-0 right-0 bg-bg-primary/95 backdrop-blur border-t border-bg-tertiary z-30">
+          <div className="fixed bottom-20 left-0 right-0 bg-bg-primary/95 backdrop-blur border-t border-bg-tertiary z-30">
             <div className="max-w-md mx-auto flex">
               <button
                 onClick={() => {
                   setActiveTab('action');
                   setSelectedTag(null);
                 }}
-                className={`flex-1 py-3 text-sm font-medium transition-colors ${activeTab === 'action'
+                className={`flex-1 py-4 text-sm font-medium transition-colors ${activeTab === 'action'
                   ? 'text-accent border-b-2 border-accent'
                   : 'text-text-secondary hover:text-text-primary'
                   }`}
@@ -134,7 +134,7 @@ const AppContent: React.FC = () => {
                   setActiveTab('thought');
                   setSelectedTag(null);
                 }}
-                className={`flex-1 py-3 text-sm font-medium transition-colors ${activeTab === 'thought'
+                className={`flex-1 py-4 text-sm font-medium transition-colors ${activeTab === 'thought'
                   ? 'text-accent border-b-2 border-accent'
                   : 'text-text-secondary hover:text-text-primary'
                   }`}
@@ -146,7 +146,7 @@ const AppContent: React.FC = () => {
                   setActiveTab('expense');
                   setSelectedTag(null);
                 }}
-                className={`flex-1 py-3 text-sm font-medium transition-colors ${activeTab === 'expense'
+                className={`flex-1 py-4 text-sm font-medium transition-colors ${activeTab === 'expense'
                   ? 'text-accent border-b-2 border-accent'
                   : 'text-text-secondary hover:text-text-primary'
                   }`}
