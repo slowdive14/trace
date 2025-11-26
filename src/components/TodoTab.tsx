@@ -1,7 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useAuth } from './AuthContext';
-import { saveTodo, getTodo } from '../services/firestore';
+import { saveTodo, getTodo, getTodos } from '../services/firestore';
 import { CheckSquare, Square, Bold, Highlighter, ArrowRight, ArrowLeft, Edit3, Check } from 'lucide-react';
+import { format, isToday, isYesterday, subDays, startOfDay, endOfDay } from 'date-fns';
+import { ko } from 'date-fns/locale';
+import type { Todo } from '../types/types';
 
 interface TodoTabProps {
     date?: Date;
@@ -16,6 +19,8 @@ interface TodoItem {
     lineIndex: number;
 }
 
+type ViewMode = 'edit' | 'history';
+
 const TodoTab: React.FC<TodoTabProps> = ({
     date = new Date(),
     collectionName = 'todos',
@@ -23,12 +28,15 @@ const TodoTab: React.FC<TodoTabProps> = ({
 }) => {
     const [content, setContent] = useState('');
     const [isEditing, setIsEditing] = useState(false);
+    const [viewMode, setViewMode] = useState<ViewMode>('edit');
+    const [historyTodos, setHistoryTodos] = useState<Todo[]>([]);
     const { user } = useAuth();
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const dateStr = useMemo(() => date.toISOString().split('T')[0], [date.getTime()]);
 
+    // Load today's todo
     useEffect(() => {
         const loadTodo = async () => {
             if (!user) return;
@@ -45,6 +53,22 @@ const TodoTab: React.FC<TodoTabProps> = ({
         };
         loadTodo();
     }, [user, dateStr, collectionName]);
+
+    // Load history (last 7 days)
+    useEffect(() => {
+        const loadHistory = async () => {
+            if (!user || viewMode !== 'history') return;
+            try {
+                const endDate = endOfDay(new Date());
+                const startDate = startOfDay(subDays(new Date(), 6));
+                const todos = await getTodos(user.uid, startDate, endDate, collectionName);
+                setHistoryTodos(todos);
+            } catch (error) {
+                console.error("Failed to load history:", error);
+            }
+        };
+        loadHistory();
+    }, [user, viewMode, collectionName]);
 
     const handleSave = useCallback((newContent: string) => {
         if (!user) return;
@@ -68,17 +92,15 @@ const TodoTab: React.FC<TodoTabProps> = ({
         handleSave(newContent);
     };
 
-    const parseTodos = (): TodoItem[] => {
+    const parseTodos = (content: string): TodoItem[] => {
         const lines = content.split('\n');
         const items: TodoItem[] = [];
 
         lines.forEach((line, index) => {
-            // Count tabs and spaces for indentation
             const indentMatch = line.match(/^(\t| )*/);
             let indent = 0;
             if (indentMatch && indentMatch[0]) {
                 const indentStr = indentMatch[0];
-                // Each tab = 1 level, 2 spaces = 1 level
                 indent = (indentStr.match(/\t/g) || []).length + Math.floor((indentStr.match(/ /g) || []).length / 2);
             }
 
@@ -112,13 +134,8 @@ const TodoTab: React.FC<TodoTabProps> = ({
 
     const renderText = (text: string) => {
         let rendered = text;
-
-        // Bold: **text**
         rendered = rendered.replace(/\*\*(.+?)\*\*/g, '<strong class="font-bold">$1</strong>');
-
-        // Highlight: ==text==
         rendered = rendered.replace(/==(.+?)==/g, '<mark class="bg-yellow-500/30 px-1">$1</mark>');
-
         return <span dangerouslySetInnerHTML={{ __html: rendered }} />;
     };
 
@@ -148,10 +165,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
             const lineEnd = content.indexOf('\n', start);
             const currentLine = content.substring(lineStart, lineEnd === -1 ? content.length : lineEnd);
 
-            // Extract indentation (tabs and spaces)
             const indentation = currentLine.match(/^[\t ]*/)?.[0] || '';
-
-            // Always add - [ ] for new line
             let nextLinePrefix = '\n' + indentation + '- [ ] ';
 
             insertText(nextLinePrefix);
@@ -190,64 +204,61 @@ const TodoTab: React.FC<TodoTabProps> = ({
         }
     };
 
-    const todos = parseTodos();
+    const getDateLabel = (dateStr: string) => {
+        const [year, month, day] = dateStr.split('-').map(Number);
+        const date = new Date(year, month - 1, day);
+        if (isToday(date)) return '오늘';
+        if (isYesterday(date)) return '어제';
+        return format(date, 'M월 d일 (eee)', { locale: ko });
+    };
+
+    const groupedTodos = historyTodos.reduce((groups: Record<string, Todo>, todo) => {
+        const dateKey = format(todo.date, 'yyyy-MM-dd');
+        if (!groups[dateKey]) {
+            groups[dateKey] = todo;
+        }
+        return groups;
+    }, {});
+
+    const todos = parseTodos(content);
 
     return (
         <div className="flex flex-col h-[calc(100vh-224px)] relative">
-            <div className="w-full max-w-md mx-auto relative flex-1 flex flex-col">
-                {/* Toggle Button */}
-                <button
-                    onClick={() => setIsEditing(!isEditing)}
-                    className="absolute top-4 right-4 z-30 p-2 bg-bg-secondary rounded-full text-text-secondary hover:text-accent transition-colors"
-                    title={isEditing ? "완료" : "편집"}
-                >
-                    {isEditing ? <Check size={20} /> : <Edit3 size={20} />}
-                </button>
+            {/* Mode Tabs */}
+            <div className="sticky top-0 bg-bg-primary/95 backdrop-blur border-b border-bg-tertiary z-20 px-4">
+                <div className="max-w-md mx-auto flex gap-2 py-2">
+                    <button
+                        onClick={() => setViewMode('edit')}
+                        className={`flex-1 py-2 px-4 text-sm font-medium rounded-md transition-colors ${viewMode === 'edit'
+                                ? 'bg-accent text-white'
+                                : 'bg-bg-secondary text-text-secondary hover:bg-bg-tertiary'
+                            }`}
+                    >
+                        편집 모드
+                    </button>
+                    <button
+                        onClick={() => setViewMode('history')}
+                        className={`flex-1 py-2 px-4 text-sm font-medium rounded-md transition-colors ${viewMode === 'history'
+                                ? 'bg-accent text-white'
+                                : 'bg-bg-secondary text-text-secondary hover:bg-bg-tertiary'
+                            }`}
+                    >
+                        히스토리
+                    </button>
+                </div>
+            </div>
 
-                {isEditing ? (
-                    <>
-                        {/* Edit Mode */}
-                        <textarea
-                            ref={textareaRef}
-                            value={content}
-                            onChange={handleChange}
-                            onKeyDown={handleKeyDown}
-                            placeholder={placeholder}
-                            className="flex-1 w-full bg-transparent text-text-primary p-4 pt-16 resize-none focus:outline-none font-mono text-sm leading-relaxed"
-                            spellCheck={false}
-                        />
-
-                        {/* Mobile Toolbar */}
-                        <div className="fixed bottom-0 left-0 right-0 bg-bg-secondary border-t border-bg-tertiary p-2 flex items-center justify-around z-20 max-w-md mx-auto">
-                            <button onClick={() => insertText('- [ ] ')} className="p-2 text-text-secondary hover:text-accent" title="Checklist">
-                                <Square size={20} />
-                            </button>
-                            <button onClick={() => insertText('- [x] ')} className="p-2 text-text-secondary hover:text-accent" title="Completed">
-                                <CheckSquare size={20} />
-                            </button>
-                            <button onClick={() => insertText('==', -2)} className="p-2 text-text-secondary hover:text-accent" title="Highlight">
-                                <Highlighter size={20} />
-                            </button>
-                            <button onClick={() => insertText('**', -2)} className="p-2 text-text-secondary hover:text-accent" title="Bold">
-                                <Bold size={20} />
-                            </button>
-                            <button onClick={() => handleIndent('out')} className="p-2 text-text-secondary hover:text-accent" title="Outdent">
-                                <ArrowLeft size={20} />
-                            </button>
-                            <button onClick={() => handleIndent('in')} className="p-2 text-text-secondary hover:text-accent" title="Indent">
-                                <ArrowRight size={20} />
-                            </button>
-                        </div>
-                    </>
-                ) : (
-                    <>
-                        {/* Reading Mode */}
-                        <div className="flex-1 overflow-y-auto p-4 pt-16 pb-4 w-full">
-                            {todos.length === 0 ? (
-                                <p className="text-text-secondary text-sm">할 일이 없습니다. 편집 버튼을 눌러 추가하세요.</p>
-                            ) : (
-                                <div className="space-y-2">
-                                    {todos.map((item, idx) => (
+            {viewMode === 'history' ? (
+                /* History Mode */
+                <div className="flex-1 overflow-y-auto px-4 pb-32">
+                    <div className="max-w-md mx-auto pt-4">
+                        {Object.entries(groupedTodos).map(([date, todo]) => (
+                            <div key={date} className="mb-6">
+                                <h3 className="text-text-secondary text-sm font-bold mb-3 sticky top-[57px] bg-bg-primary/95 backdrop-blur py-2 border-b border-bg-tertiary">
+                                    {getDateLabel(date)}
+                                </h3>
+                                <div className="space-y-1">
+                                    {parseTodos(todo.content).map((item, idx) => (
                                         <div
                                             key={idx}
                                             className="flex items-start gap-2 py-1"
@@ -256,8 +267,8 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                             <input
                                                 type="checkbox"
                                                 checked={item.checked}
-                                                onChange={() => toggleCheckbox(item.lineIndex)}
-                                                className="mt-1 w-4 h-4 rounded border-text-secondary focus:ring-accent focus:ring-2"
+                                                readOnly
+                                                className="mt-1 w-4 h-4 rounded border-text-secondary pointer-events-none"
                                             />
                                             <span className={`flex-1 text-sm leading-relaxed ${item.checked ? 'line-through text-text-secondary' : 'text-text-primary'}`}>
                                                 {renderText(item.text)}
@@ -265,11 +276,94 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                         </div>
                                     ))}
                                 </div>
-                            )}
-                        </div>
-                    </>
-                )}
-            </div>
+                            </div>
+                        ))}
+                        {historyTodos.length === 0 && (
+                            <div className="text-center text-text-secondary mt-20">
+                                <p>최근 7일간 작성된 투두가 없습니다.</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            ) : (
+                /* Edit Mode */
+                <div className="w-full max-w-md mx-auto relative flex-1 flex flex-col">
+                    {/* Toggle Button */}
+                    <button
+                        onClick={() => setIsEditing(!isEditing)}
+                        className="absolute top-4 right-4 z-30 p-2 bg-bg-secondary rounded-full text-text-secondary hover:text-accent transition-colors"
+                        title={isEditing ? "완료" : "편집"}
+                    >
+                        {isEditing ? <Check size={20} /> : <Edit3 size={20} />}
+                    </button>
+
+                    {isEditing ? (
+                        <>
+                            {/* Edit Mode */}
+                            <textarea
+                                ref={textareaRef}
+                                value={content}
+                                onChange={handleChange}
+                                onKeyDown={handleKeyDown}
+                                placeholder={placeholder}
+                                className="flex-1 w-full bg-transparent text-text-primary p-4 pt-16 resize-none focus:outline-none font-mono text-sm leading-relaxed"
+                                spellCheck={false}
+                            />
+
+                            {/* Mobile Toolbar */}
+                            <div className="fixed bottom-0 left-0 right-0 bg-bg-secondary border-t border-bg-tertiary p-2 flex items-center justify-around z-20 max-w-md mx-auto">
+                                <button onClick={() => insertText('- [ ] ')} className="p-2 text-text-secondary hover:text-accent" title="Checklist">
+                                    <Square size={20} />
+                                </button>
+                                <button onClick={() => insertText('- [x] ')} className="p-2 text-text-secondary hover:text-accent" title="Completed">
+                                    <CheckSquare size={20} />
+                                </button>
+                                <button onClick={() => insertText('==', -2)} className="p-2 text-text-secondary hover:text-accent" title="Highlight">
+                                    <Highlighter size={20} />
+                                </button>
+                                <button onClick={() => insertText('**', -2)} className="p-2 text-text-secondary hover:text-accent" title="Bold">
+                                    <Bold size={20} />
+                                </button>
+                                <button onClick={() => handleIndent('out')} className="p-2 text-text-secondary hover:text-accent" title="Outdent">
+                                    <ArrowLeft size={20} />
+                                </button>
+                                <button onClick={() => handleIndent('in')} className="p-2 text-text-secondary hover:text-accent" title="Indent">
+                                    <ArrowRight size={20} />
+                                </button>
+                            </div>
+                        </>
+                    ) : (
+                        <>
+                            {/* Reading Mode */}
+                            <div className="flex-1 overflow-y-auto p-4 pt-16 pb-4 w-full">
+                                {todos.length === 0 ? (
+                                    <p className="text-text-secondary text-sm">할 일이 없습니다. 편집 버튼을 눌러 추가하세요.</p>
+                                ) : (
+                                    <div className="space-y-2">
+                                        {todos.map((item, idx) => (
+                                            <div
+                                                key={idx}
+                                                className="flex items-start gap-2 py-1"
+                                                style={{ paddingLeft: `${item.indent * 24}px` }}
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    checked={item.checked}
+                                                    onChange={() => toggleCheckbox(item.lineIndex)}
+                                                    className="mt-1 w-4 h-4 rounded border-text-secondary focus:ring-accent focus:ring-2"
+                                                />
+                                                <span className={`flex-1 text-sm leading-relaxed ${item.checked ? 'line-through text-text-secondary' : 'text-text-primary'}`}>
+                                                    {renderText(item.text)}
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </>
+                    )}
+                </div>
+            )}
         </div>
     );
 };

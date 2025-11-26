@@ -191,3 +191,24 @@ export const getTodo = async (userId: string, date: Date, collectionName: string
         throw e;
     }
 };
+
+export const getTodos = async (userId: string, startDate: Date, endDate: Date, collectionName: string = 'todos') => {
+    try {
+        const q = query(
+            collection(db, `users/${userId}/${collectionName}`),
+            where("date", ">=", Timestamp.fromDate(startDate)),
+            where("date", "<=", Timestamp.fromDate(endDate)),
+            orderBy("date", "desc")
+        );
+
+        const querySnapshot = await getDocs(q);
+        return querySnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            date: doc.data().date.toDate(),
+        })) as Todo[];
+    } catch (e) {
+        console.error("Error getting todos: ", e);
+        throw e;
+    }
+};
