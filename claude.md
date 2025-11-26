@@ -1,6 +1,6 @@
 # Serein: AI 기반 지능형 일상 기록 & 가계부 관리
 
-✨ *"맑은 
+
 ## 📱 앱 개요
 ✨ "맑은 날 저녁에 내리는 비" - Serein
 Serein은 Firebase를 기반으로 하는 지능형 일상 기록 및 가계부 관리 앱입니다. 사용자는 시간대별로 일상 활동(action)과 생각(thought)을 기록하고 관리할 수 있으며, AI(Gemini API)를 활용한 지출 자동 분류 및 통계 분석을 통해 재정 상태를 효과적으로 파악할 수 있습니다. 통합 캘린더와 타임라인 뷰를 통해 모든 기록을 한눈에 확인하고, Obsidian 마크다운 내보내기 기능을 통해 소중한 기록을 외부에서도 유연하게 활용할 수 있습니다.
@@ -243,7 +243,7 @@ VITE_GEMINI_API_KEY=your_gemini_api_key
 
 ## �🐛 알려진 문제
 
-### 삭제 버튼 작동 문제
+### 1. ✅ [해결됨] 삭제 버튼 작동 문제
 **문제**: 모바일에서 삭제/복사 버튼이 보이지 않거나 클릭이 안 됨
 
 **원인**: EntryItem.tsx의 버튼들이 `opacity-0 group-hover:opacity-100`로 설정되어 있어 마우스 호버 시에만 표시됨. 모바일 터치 디바이스에서는 hover 이벤트가 제대로 작동하지 않음.
@@ -267,3 +267,21 @@ VITE_GEMINI_API_KEY=your_gemini_api_key
 - GitHub Pages 자동 배포
 - `.github/workflows/deploy.yml`로 구성
 - `npm run build` → `dist/` 폴더 배포
+
+
+### 2. ✅ [해결됨] 배치 입력 프리뷰 표시 문제 (2025-11-25)
+**문제**: 배치 입력 시 여러 항목을 입력했지만 첫 번째 항목만 화면에 표시됨
+- "📋 2개 항목" 텍스트는 표시되지만 실제로는 하나만 보임
+- 콘솔 로그에서는 모든 항목이 정상적으로 파싱 및 렌더링됨을 확인
+
+**원인**: z-index 충돌
+- 탭 바: `bottom-16`, `z-30`으로 설정
+- ExpenseInput: `bottom-0`, z-index 없음
+- 탭 바가 ExpenseInput 위에 겹쳐져서 프리뷰 항목들이 숨겨짐
+
+**해결**: ExpenseInput.tsx (line 129)에 `z-40` 추가
+```tsx
+<div className="... z-40">
+```
+- ExpenseInput이 탭 바 위에 표시되어 모든 프리뷰 항목 완전히 표시
+- 추가로 `max-h-[70vh] overflow-y-auto` 적용하여 많은 항목도 스크롤로 확인 가능
