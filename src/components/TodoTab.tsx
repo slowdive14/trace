@@ -67,8 +67,14 @@ const TodoTab: React.FC<TodoTabProps> = ({ date = new Date() }) => {
         const items: TodoItem[] = [];
 
         lines.forEach((line, index) => {
-            const indentMatch = line.match(/^(\t| {2,})/);
-            const indent = indentMatch ? Math.floor(indentMatch[0].length / 2) : 0;
+            // Count tabs and spaces for indentation
+            const indentMatch = line.match(/^(\t| )*/);
+            let indent = 0;
+            if (indentMatch && indentMatch[0]) {
+                const indentStr = indentMatch[0];
+                // Each tab = 1 level, 2 spaces = 1 level
+                indent = (indentStr.match(/\t/g) || []).length + Math.floor((indentStr.match(/ /g) || []).length / 2);
+            }
 
             const uncheckedMatch = line.match(/^[\t ]*- \[ \] (.+)$/);
             const checkedMatch = line.match(/^[\t ]*- \[x\] (.+)$/);
@@ -239,7 +245,7 @@ const TodoTab: React.FC<TodoTabProps> = ({ date = new Date() }) => {
             ) : (
                 <>
                     {/* Reading Mode */}
-                    <div className="flex-1 overflow-y-auto p-4 pt-16 pb-4">
+                    <div className="flex-1 overflow-y-auto p-4 pt-16 pb-24">
                         {todos.length === 0 ? (
                             <p className="text-text-secondary text-sm">할 일이 없습니다. 편집 버튼을 눌러 추가하세요.</p>
                         ) : (
