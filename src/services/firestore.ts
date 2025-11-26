@@ -14,7 +14,7 @@ import {
 import { db } from "./firebase";
 import type { Entry, Expense, ExpenseCategory, Todo } from "../types/types";
 
-const ENTRIES_COLLECTION = "entries";
+
 const EXPENSES_COLLECTION = "expenses";
 
 export const addEntry = async (

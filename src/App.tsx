@@ -26,8 +26,7 @@ const AppContent: React.FC = () => {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [todos, setTodos] = useState<Todo[]>([]);
-  const [chores, setChores] = useState<Entry[]>([]);
-  const [chores, setChores] = useState<Entry[]>([]);
+
 
   // Subscribe to entries
   useEffect(() => {
@@ -134,126 +133,124 @@ const AppContent: React.FC = () => {
             <>
               <Timeline
                 category="chore"
-          ) : (
-              <>
-                <Timeline
-                  category={activeTab}
-                  selectedTag={selectedTag}
-                  onTagClick={(tag: string) => setSelectedTag(tag)}
-                />
-                <InputBar activeCategory={activeTab} />
-              </>
-          )}
-
-              {/* Category Tabs */}
-              <div className="fixed bottom-20 left-0 right-0 bg-bg-primary/95 backdrop-blur border-t border-bg-tertiary z-30">
-                <div className="max-w-md mx-auto flex">
-                  <button
-                    onClick={() => {
-                      setActiveTab('action');
-                      setSelectedTag(null);
-                    }}
-                    className={`flex-1 py-4 text-sm font-medium transition-colors ${activeTab === 'action'
-                      ? 'text-accent border-b-2 border-accent'
-                      : 'text-text-secondary hover:text-text-primary'
-                      }`}
-                  >
-                    일상
-                  </button>
-                  <button
-                    onClick={() => {
-                      setActiveTab('thought');
-                      setSelectedTag(null);
-                    }}
-                    className={`flex-1 py-4 text-sm font-medium transition-colors ${activeTab === 'thought'
-                      ? 'text-accent border-b-2 border-accent'
-                      : 'text-text-secondary hover:text-text-primary'
-                      }`}
-                  >
-                    생각
-                  </button>
-                  <button
-                    onClick={() => {
-                      setActiveTab('chore');
-                      setSelectedTag(null);
-                    }}
-                    className={`flex-1 py-4 text-sm font-medium transition-colors ${activeTab === 'chore'
-                      ? 'text-accent border-b-2 border-accent'
-                      : 'text-text-secondary hover:text-text-primary'
-                      }`}
-                  >
-                    할일
-                  </button>
-                  <button
-                    onClick={() => {
-                      setActiveTab('todo');
-                      setSelectedTag(null);
-                    }}
-                    className={`flex-1 py-4 text-sm font-medium transition-colors ${activeTab === 'todo'
-                      ? 'text-accent border-b-2 border-accent'
-                      : 'text-text-secondary hover:text-text-primary'
-                      }`}
-                  >
-                    투두
-                  </button>
-                  <button
-                    onClick={() => {
-                      setActiveTab('expense');
-                      setSelectedTag(null);
-                    }}
-                    className={`flex-1 py-4 text-sm font-medium transition-colors ${activeTab === 'expense'
-                      ? 'text-accent border-b-2 border-accent'
-                      : 'text-text-secondary hover:text-text-primary'
-                      }`}
-                  >
-                    💰 가계부
-                  </button>
-                </div>
-              </div>
-
-              {showCalendar && (
-                <CalendarView
-                  onClose={() => setShowCalendar(false)}
-                  onSelectDate={(date) => {
-                    console.log("Selected date:", date);
-                    setShowCalendar(false);
-                    // TODO: Scroll to date or filter timeline
-                  }}
-                />
-              )}
-              {showSearch && (
-                <SearchBar onClose={() => setShowSearch(false)} />
-              )}
-
-              {showUnifiedCalendar && (
-                <UnifiedCalendarModal
-                  onClose={() => setShowUnifiedCalendar(false)}
-                  entries={entries}
-                  expenses={expenses}
-                  todos={todos}
-                />
-              )}
+                selectedTag={selectedTag}
+                onTagClick={(tag: string) => setSelectedTag(tag)}
+                collectionName="chores"
+              />
+              <InputBar activeCategory="chore" collectionName="chores" />
             </>
           ) : (
-            <div className="flex flex-col items-center justify-center min-h-[80vh] px-4 text-center">
-              <h2 className="text-2xl font-bold mb-4">Welcome to Serein</h2>
-              <p className="text-text-secondary mb-8">
-                A minimal, elegant daily logging app.
-                <br />
-                Sign in to start capturing your day.
-              </p>
-            </div>
-          )}
-        </Layout>
-      );
+
+            {/* Category Tabs */ }
+            < div className="fixed bottom-20 left-0 right-0 bg-bg-primary/95 backdrop-blur border-t border-bg-tertiary z-30">
+          <div className="max-w-md mx-auto flex">
+            <button
+              onClick={() => {
+                setActiveTab('action');
+                setSelectedTag(null);
+              }}
+              className={`flex-1 py-4 text-sm font-medium transition-colors ${activeTab === 'action'
+                ? 'text-accent border-b-2 border-accent'
+                : 'text-text-secondary hover:text-text-primary'
+                }`}
+            >
+              일상
+            </button>
+            <button
+              onClick={() => {
+                setActiveTab('thought');
+                setSelectedTag(null);
+              }}
+              className={`flex-1 py-4 text-sm font-medium transition-colors ${activeTab === 'thought'
+                ? 'text-accent border-b-2 border-accent'
+                : 'text-text-secondary hover:text-text-primary'
+                }`}
+            >
+              생각
+            </button>
+            <button
+              onClick={() => {
+                setActiveTab('chore');
+                setSelectedTag(null);
+              }}
+              className={`flex-1 py-4 text-sm font-medium transition-colors ${activeTab === 'chore'
+                ? 'text-accent border-b-2 border-accent'
+                : 'text-text-secondary hover:text-text-primary'
+                }`}
+            >
+              할일
+            </button>
+            <button
+              onClick={() => {
+                setActiveTab('todo');
+                setSelectedTag(null);
+              }}
+              className={`flex-1 py-4 text-sm font-medium transition-colors ${activeTab === 'todo'
+                ? 'text-accent border-b-2 border-accent'
+                : 'text-text-secondary hover:text-text-primary'
+                }`}
+            >
+              투두
+            </button>
+            <button
+              onClick={() => {
+                setActiveTab('expense');
+                setSelectedTag(null);
+              }}
+              className={`flex-1 py-4 text-sm font-medium transition-colors ${activeTab === 'expense'
+                ? 'text-accent border-b-2 border-accent'
+                : 'text-text-secondary hover:text-text-primary'
+                }`}
+            >
+              💰 가계부
+            </button>
+          </div>
+        </div>
+
+      {showCalendar && (
+        <CalendarView
+          onClose={() => setShowCalendar(false)}
+          onSelectDate={(date) => {
+            console.log("Selected date:", date);
+            setShowCalendar(false);
+            // TODO: Scroll to date or filter timeline
+          }}
+        />
+      )}
+      {showSearch && (
+        <SearchBar onClose={() => setShowSearch(false)} />
+      )}
+
+      {showUnifiedCalendar && (
+        <UnifiedCalendarModal
+          onClose={() => setShowUnifiedCalendar(false)}
+          entries={entries}
+          expenses={expenses}
+          todos={todos}
+        />
+      )}
+    </>
+  ) : (
+    <div className="flex flex-col items-center justify-center min-h-[80vh] px-4 text-center">
+      <h2 className="text-2xl font-bold mb-4">Welcome to Serein</h2>
+      <p className="text-text-secondary mb-8">
+        A minimal, elegant daily logging app.
+        <br />
+        Sign in to start capturing your day.
+      </p>
+    </div>
+  )
+}
+    </Layout >
+  );
 };
 
 const App: React.FC = () => {
   return (
-      <AuthProvider>
-        <AppContent />
-      </AuthProvider>
-      );
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
+  );
 };
 
-      export default App;
+export default App;
