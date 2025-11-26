@@ -5,7 +5,7 @@ import type { Entry } from '../types/types';
 import { deleteEntry } from '../services/firestore';
 import { useAuth } from './AuthContext';
 import EntryItem from './EntryItem';
-import { onSnapshot, collection, query, orderBy, limit } from 'firebase/firestore';
+import { onSnapshot, collection, query, orderBy } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { Share, Check } from 'lucide-react';
 import { generateMarkdown, copyToClipboard } from '../utils/exportUtils';
@@ -146,8 +146,8 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
                     <button
                         onClick={() => setDateFilter('today')}
                         className={`flex-1 py-1.5 px-3 text-xs font-medium rounded-md transition-colors ${dateFilter === 'today'
-                                ? 'bg-accent text-white'
-                                : 'bg-bg-secondary text-text-secondary hover:bg-bg-tertiary'
+                            ? 'bg-accent text-white'
+                            : 'bg-bg-secondary text-text-secondary hover:bg-bg-tertiary'
                             }`}
                     >
                         오늘만
@@ -155,8 +155,8 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
                     <button
                         onClick={() => setDateFilter('7days')}
                         className={`flex-1 py-1.5 px-3 text-xs font-medium rounded-md transition-colors ${dateFilter === '7days'
-                                ? 'bg-accent text-white'
-                                : 'bg-bg-secondary text-text-secondary hover:bg-bg-tertiary'
+                            ? 'bg-accent text-white'
+                            : 'bg-bg-secondary text-text-secondary hover:bg-bg-tertiary'
                             }`}
                     >
                         7일
@@ -164,8 +164,8 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
                     <button
                         onClick={() => setDateFilter('30days')}
                         className={`flex-1 py-1.5 px-3 text-xs font-medium rounded-md transition-colors ${dateFilter === '30days'
-                                ? 'bg-accent text-white'
-                                : 'bg-bg-secondary text-text-secondary hover:bg-bg-tertiary'
+                            ? 'bg-accent text-white'
+                            : 'bg-bg-secondary text-text-secondary hover:bg-bg-tertiary'
                             }`}
                     >
                         30일
@@ -173,8 +173,8 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
                     <button
                         onClick={() => setDateFilter('all')}
                         className={`flex-1 py-1.5 px-3 text-xs font-medium rounded-md transition-colors ${dateFilter === 'all'
-                                ? 'bg-accent text-white'
-                                : 'bg-bg-secondary text-text-secondary hover:bg-bg-tertiary'
+                            ? 'bg-accent text-white'
+                            : 'bg-bg-secondary text-text-secondary hover:bg-bg-tertiary'
                             }`}
                     >
                         전체
