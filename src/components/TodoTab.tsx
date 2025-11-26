@@ -135,7 +135,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
     const renderText = (text: string) => {
         let rendered = text;
         rendered = rendered.replace(/\*\*(.+?)\*\*/g, '<strong class="font-bold">$1</strong>');
-        rendered = rendered.replace(/==(.+?)==/g, '<mark class="bg-yellow-500/30 px-1">$1</mark>');
+        rendered = rendered.replace(/==(.+?)==/g, '<mark class="bg-yellow-300 px-1">$1</mark>');
         return <span dangerouslySetInnerHTML={{ __html: rendered }} />;
     };
 
