@@ -187,7 +187,7 @@ const TodoTab: React.FC<TodoTabProps> = ({ date = new Date() }) => {
     const todos = parseTodos();
 
     return (
-        <div className="flex flex-col h-[calc(100vh-64px)] relative">
+        <div className="flex flex-col h-[calc(100vh-224px)] relative">
             {/* Toggle Button */}
             <button
                 onClick={() => setIsEditing(!isEditing)}
@@ -235,7 +235,7 @@ const TodoTab: React.FC<TodoTabProps> = ({ date = new Date() }) => {
             ) : (
                 <>
                     {/* Reading Mode */}
-                    <div className="flex-1 overflow-y-auto p-4 pt-16 pb-24">
+                    <div className="flex-1 overflow-y-auto p-4 pt-16 pb-4">
                         {todos.length === 0 ? (
                             <p className="text-text-secondary text-sm">할 일이 없습니다. 편집 버튼을 눌러 추가하세요.</p>
                         ) : (
