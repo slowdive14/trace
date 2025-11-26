@@ -142,21 +142,11 @@ const TodoTab: React.FC<TodoTabProps> = ({ date = new Date() }) => {
             const lineEnd = content.indexOf('\n', start);
             const currentLine = content.substring(lineStart, lineEnd === -1 ? content.length : lineEnd);
 
-            let nextLinePrefix = '\n';
-            if (currentLine.trim().startsWith('- [ ] ')) {
-                nextLinePrefix += '- [ ] ';
-            } else if (currentLine.trim().startsWith('- [x] ')) {
-                nextLinePrefix += '- [ ] ';
-            } else if (currentLine.trim().startsWith('- ')) {
-                nextLinePrefix += '- ';
-            }
+            // Extract indentation (tabs and spaces)
+            const indentation = currentLine.match(/^[\t ]*/)?.[0] || '';
 
-            const indentation = currentLine.match(/^\s*/)?.[0] || '';
-            if (nextLinePrefix !== '\n') {
-                nextLinePrefix = '\n' + indentation + nextLinePrefix.trimStart();
-            } else {
-                nextLinePrefix += indentation;
-            }
+            // Always add - [ ] for new line
+            let nextLinePrefix = '\n' + indentation + '- [ ] ';
 
             insertText(nextLinePrefix);
         }
