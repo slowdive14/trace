@@ -255,8 +255,8 @@ const TodoTab: React.FC<TodoTabProps> = ({
                         {Object.entries(groupedTodos).map(([date, todo], index) => (
                             <div key={date} className="mb-6">
                                 <h3
-                                    className="text-text-secondary text-sm font-bold mb-3 sticky top-[57px] bg-bg-primary/95 backdrop-blur py-2 border-b border-bg-tertiary"
-                                    style={{ zIndex: Object.keys(groupedTodos).length - index }}
+                                    className="text-text-secondary text-sm font-bold mb-3 sticky top-[57px] bg-bg-primary backdrop-blur py-2 border-b border-bg-tertiary"
+                                    style={{ zIndex: 20 - index }}
                                 >
                                     {getDateLabel(date)}
                                 </h3>
