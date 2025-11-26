@@ -63,14 +63,14 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action' }) => {
                             📅 {format(selectedDate, 'yyyy년 M월 d일')} 기록
                         </div>
                     )}
-                    <div className="flex items-end gap-2 h-full">
+                    <div className={`flex items-end gap-2 ${isExpanded ? 'flex-1' : ''}`}>
                         <textarea
                             ref={textareaRef}
                             value={content}
                             onChange={(e) => setContent(e.target.value)}
                             onKeyDown={handleKeyDown}
                             placeholder="What's happening? #tag"
-                            className={`flex-1 bg-bg-tertiary text-text-primary rounded-lg p-3 resize-none focus:outline-none focus:ring-1 focus:ring-accent min-h-[44px] overflow-y-auto ${isExpanded ? 'h-full max-h-full' : 'max-h-[120px]'}`}
+                            className={`flex-1 bg-bg-tertiary text-text-primary rounded-lg p-3 resize-none focus:outline-none focus:ring-1 focus:ring-accent overflow-y-auto ${isExpanded ? 'h-full' : 'min-h-[44px] max-h-[120px]'}`}
                             rows={1}
                         />
                         <button
