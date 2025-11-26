@@ -26,6 +26,7 @@ const AppContent: React.FC = () => {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [todos, setTodos] = useState<Todo[]>([]);
+  const [chores, setChores] = useState<Entry[]>([]);
 
   // Subscribe to entries
   useEffect(() => {
@@ -129,7 +130,15 @@ const AppContent: React.FC = () => {
           ) : activeTab === 'todo' ? (
             <TodoTab />
           ) : activeTab === 'chore' ? (
-            <TodoTab collectionName="chores" placeholder="소소한 할 일을 기록하세요..." />
+            <>
+              <Timeline
+                category="chore"
+                selectedTag={selectedTag}
+                onTagClick={(tag: string) => setSelectedTag(tag)}
+                collectionName="chores"
+              />
+              <InputBar activeCategory="chore" collectionName="chores" />
+            </>
           ) : (
             <>
               <Timeline

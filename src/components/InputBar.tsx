@@ -6,10 +6,11 @@ import { useAuth } from './AuthContext';
 import { format } from 'date-fns';
 
 interface InputBarProps {
-    activeCategory?: 'action' | 'thought';
+    activeCategory?: 'action' | 'thought' | 'chore';
+    collectionName?: string;
 }
 
-const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action' }) => {
+const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collectionName = 'entries' }) => {
     const [content, setContent] = useState('');
     const [isExpanded, setIsExpanded] = useState(false);
     const [selectedDate, setSelectedDate] = useState<Date>(new Date());
@@ -28,7 +29,7 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action' }) => {
             // If selected date is today, don't pass a date so it uses current time
             // Otherwise, use the selected date with midnight time
             const dateToUse = isToday ? undefined : selectedDate;
-            await addEntry(user.uid, content, tags, category, dateToUse);
+            await addEntry(user.uid, content, tags, category, dateToUse, collectionName);
             setContent('');
             setIsExpanded(false);
             setSelectedDate(new Date()); // Reset to today

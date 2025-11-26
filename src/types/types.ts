@@ -2,7 +2,7 @@ export interface Entry {
     id: string;
     content: string;
     tags: string[];
-    category: 'action' | 'thought';
+    category: 'action' | 'thought' | 'chore';
     timestamp: Date;
     createdAt: Date;
     updatedAt: Date;

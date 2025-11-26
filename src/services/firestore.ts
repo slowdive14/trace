@@ -21,12 +21,13 @@ export const addEntry = async (
     userId: string,
     content: string,
     tags: string[],
-    category: 'action' | 'thought',
-    date?: Date
+    category: 'action' | 'thought' | 'chore',
+    date?: Date,
+    collectionName: string = 'entries'
 ) => {
     try {
         const timestamp = date ? Timestamp.fromDate(date) : Timestamp.now();
-        const docRef = await addDoc(collection(db, `users/${userId}/${ENTRIES_COLLECTION}`), {
+        const docRef = await addDoc(collection(db, `users/${userId}/${collectionName}`), {
             content,
             tags,
             category,
@@ -41,10 +42,10 @@ export const addEntry = async (
     }
 };
 
-export const getEntries = async (userId: string) => {
+export const getEntries = async (userId: string, collectionName: string = 'entries') => {
     try {
         const q = query(
-            collection(db, `users/${userId}/${ENTRIES_COLLECTION}`),
+            collection(db, `users/${userId}/${collectionName}`),
             orderBy("timestamp", "desc")
         );
         const querySnapshot = await getDocs(q);
@@ -59,9 +60,9 @@ export const getEntries = async (userId: string) => {
     }
 };
 
-export const deleteEntry = async (userId: string, entryId: string) => {
+export const deleteEntry = async (userId: string, entryId: string, collectionName: string = 'entries') => {
     try {
-        await deleteDoc(doc(db, `users/${userId}/${ENTRIES_COLLECTION}`, entryId));
+        await deleteDoc(doc(db, `users/${userId}/${collectionName}`, entryId));
     } catch (e) {
         console.error("Error deleting document: ", e);
         throw e;

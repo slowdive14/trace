@@ -11,12 +11,13 @@ import { Share, Check } from 'lucide-react';
 import { generateMarkdown, copyToClipboard } from '../utils/exportUtils';
 
 interface TimelineProps {
-    category?: 'action' | 'thought' | 'all';
+    category?: 'action' | 'thought' | 'chore' | 'all';
     selectedTag?: string | null;
     onTagClick?: (tag: string) => void;
+    collectionName?: string;
 }
 
-const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, onTagClick }) => {
+const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, onTagClick, collectionName = 'entries' }) => {
     const [entries, setEntries] = useState<Entry[]>([]);
     const [showToast, setShowToast] = useState(false);
     const { user } = useAuth();
@@ -25,7 +26,7 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
         if (!user) return;
 
         const q = query(
-            collection(db, `users/${user.uid}/entries`),
+            collection(db, `users/${user.uid}/${collectionName}`),
             orderBy("timestamp", "desc")
         );
 
@@ -43,7 +44,7 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
 
     const handleDelete = async (id: string) => {
         if (!user) return;
-        await deleteEntry(user.uid, id);
+        await deleteEntry(user.uid, id, collectionName);
     };
 
     const handleExport = async (dateStr: string) => {
