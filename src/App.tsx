@@ -8,7 +8,8 @@ import SearchBar from './components/SearchBar';
 import ExpenseTimeline from './components/ExpenseTimeline';
 import ExpenseInput from './components/ExpenseInput';
 import UnifiedCalendarModal from './components/UnifiedCalendarModal';
-import type { Entry, Expense } from './types/types';
+import TodoTab from './components/TodoTab';
+import type { Entry, Expense, Todo } from './types/types';
 import { onSnapshot, collection, query, orderBy } from 'firebase/firestore';
 import { db } from './services/firebase';
 
@@ -17,13 +18,14 @@ const AppContent: React.FC = () => {
   const [showCalendar, setShowCalendar] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [showUnifiedCalendar, setShowUnifiedCalendar] = useState(false);
-  const [activeTab, setActiveTab] = useState<'action' | 'thought' | 'expense'>('action');
+  const [activeTab, setActiveTab] = useState<'action' | 'thought' | 'todo' | 'expense'>('action');
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [selectedExpenseDate, setSelectedExpenseDate] = useState<Date | undefined>(undefined);
 
   // Data for unified calendar
   const [entries, setEntries] = useState<Entry[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [todos, setTodos] = useState<Todo[]>([]);
 
   // Subscribe to entries
   useEffect(() => {
@@ -67,6 +69,27 @@ const AppContent: React.FC = () => {
     return () => unsubscribe();
   }, [user]);
 
+  // Subscribe to todos
+  useEffect(() => {
+    if (!user) return;
+
+    const q = query(
+      collection(db, `users/${user.uid}/todos`),
+      orderBy("date", "desc")
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const newTodos = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        date: doc.data().date.toDate(),
+      })) as Todo[];
+      setTodos(newTodos);
+    });
+
+    return () => unsubscribe();
+  }, [user]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-bg-primary flex items-center justify-center text-text-secondary">
@@ -82,7 +105,7 @@ const AppContent: React.FC = () => {
     >
       {user ? (
         <>
-          {selectedTag && activeTab !== 'expense' && (
+          {selectedTag && activeTab !== 'expense' && activeTab !== 'todo' && (
             <div className="sticky top-0 bg-bg-secondary/95 backdrop-blur border-b border-bg-tertiary py-2 px-4 z-20">
               <div className="max-w-md mx-auto flex items-center justify-between">
                 <span className="text-sm text-text-secondary">
@@ -103,6 +126,8 @@ const AppContent: React.FC = () => {
               <ExpenseTimeline onDateSelect={setSelectedExpenseDate} />
               <ExpenseInput externalDate={selectedExpenseDate} />
             </>
+          ) : activeTab === 'todo' ? (
+            <TodoTab />
           ) : (
             <>
               <Timeline
@@ -143,6 +168,18 @@ const AppContent: React.FC = () => {
               </button>
               <button
                 onClick={() => {
+                  setActiveTab('todo');
+                  setSelectedTag(null);
+                }}
+                className={`flex-1 py-4 text-sm font-medium transition-colors ${activeTab === 'todo'
+                  ? 'text-accent border-b-2 border-accent'
+                  : 'text-text-secondary hover:text-text-primary'
+                  }`}
+              >
+                투두
+              </button>
+              <button
+                onClick={() => {
                   setActiveTab('expense');
                   setSelectedTag(null);
                 }}
@@ -175,6 +212,7 @@ const AppContent: React.FC = () => {
               onClose={() => setShowUnifiedCalendar(false)}
               entries={entries}
               expenses={expenses}
+              todos={todos}
             />
           )}
         </>

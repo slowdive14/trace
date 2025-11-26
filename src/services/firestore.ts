@@ -7,10 +7,12 @@ import {
     deleteDoc,
     doc,
     Timestamp,
-    where
+    where,
+    setDoc,
+    getDoc
 } from "firebase/firestore";
 import { db } from "./firebase";
-import type { Entry, Expense, ExpenseCategory } from "../types/types";
+import type { Entry, Expense, ExpenseCategory, Todo } from "../types/types";
 
 const ENTRIES_COLLECTION = "entries";
 const EXPENSES_COLLECTION = "expenses";
@@ -148,6 +150,43 @@ export const deleteExpense = async (userId: string, expenseId: string) => {
         await deleteDoc(doc(db, `users/${userId}/${EXPENSES_COLLECTION}`, expenseId));
     } catch (e) {
         console.error("Error deleting expense: ", e);
+        throw e;
+    }
+};
+
+// Todo functions
+export const saveTodo = async (userId: string, date: Date, content: string) => {
+    try {
+        const dateStr = date.toISOString().split('T')[0]; // YYYY-MM-DD
+        const docRef = doc(db, `users/${userId}/todos`, dateStr);
+
+        await setDoc(docRef, {
+            content,
+            date: Timestamp.fromDate(date),
+            updatedAt: Timestamp.now()
+        }, { merge: true });
+    } catch (e) {
+        console.error("Error saving todo: ", e);
+        throw e;
+    }
+};
+
+export const getTodo = async (userId: string, date: Date) => {
+    try {
+        const dateStr = date.toISOString().split('T')[0];
+        const docRef = doc(db, `users/${userId}/todos`, dateStr);
+        const docSnap = await getDoc(docRef);
+
+        if (docSnap.exists()) {
+            return {
+                id: docSnap.id,
+                ...docSnap.data(),
+                date: docSnap.data().date.toDate(),
+            } as Todo;
+        }
+        return null;
+    } catch (e) {
+        console.error("Error getting todo: ", e);
         throw e;
     }
 };

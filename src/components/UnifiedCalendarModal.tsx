@@ -2,16 +2,17 @@ import React, { useState } from 'react';
 import { X, Copy, Check } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isToday, isSameDay } from 'date-fns';
 import { ko } from 'date-fns/locale';
-import type { Entry, Expense } from '../types/types';
+import type { Entry, Expense, Todo } from '../types/types';
 import { exportDailyMarkdown } from '../utils/exportUtils';
 
 interface UnifiedCalendarModalProps {
     onClose: () => void;
     entries: Entry[];
     expenses: Expense[];
+    todos: Todo[];
 }
 
-const UnifiedCalendarModal: React.FC<UnifiedCalendarModalProps> = ({ onClose, entries, expenses }) => {
+const UnifiedCalendarModal: React.FC<UnifiedCalendarModalProps> = ({ onClose, entries, expenses, todos }) => {
     const [currentMonth, setCurrentMonth] = useState(new Date());
     const [selectedDate, setSelectedDate] = useState<Date | null>(null);
     const [copied, setCopied] = useState(false);
@@ -25,7 +26,9 @@ const UnifiedCalendarModal: React.FC<UnifiedCalendarModalProps> = ({ onClose, en
     const handleCopy = () => {
         if (!selectedDate) return;
 
-        const markdown = exportDailyMarkdown(selectedDate, entries, expenses);
+        const dateStr = format(selectedDate, 'yyyy-MM-dd');
+        const todo = todos.find(t => format(t.date, 'yyyy-MM-dd') === dateStr);
+        const markdown = exportDailyMarkdown(selectedDate, entries, expenses, todo);
         navigator.clipboard.writeText(markdown);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
@@ -35,16 +38,18 @@ const UnifiedCalendarModal: React.FC<UnifiedCalendarModalProps> = ({ onClose, en
         const dateStr = format(date, 'yyyy-MM-dd');
         const dayEntries = entries.filter(e => format(e.timestamp, 'yyyy-MM-dd') === dateStr);
         const dayExpenses = expenses.filter(e => format(e.timestamp, 'yyyy-MM-dd') === dateStr);
+        const dayTodo = todos.find(t => format(t.date, 'yyyy-MM-dd') === dateStr);
         const total = dayExpenses.reduce((sum, e) => sum + e.amount, 0);
 
         return {
-            count: dayEntries.length + dayExpenses.length,
+            count: dayEntries.length + dayExpenses.length + (dayTodo ? 1 : 0),
             total,
-            hasData: dayEntries.length > 0 || dayExpenses.length > 0
+            hasData: dayEntries.length > 0 || dayExpenses.length > 0 || !!dayTodo
         };
     };
 
-    const selectedMarkdown = selectedDate ? exportDailyMarkdown(selectedDate, entries, expenses) : '';
+    const selectedTodo = selectedDate ? todos.find(t => format(t.date, 'yyyy-MM-dd') === format(selectedDate, 'yyyy-MM-dd')) : undefined;
+    const selectedMarkdown = selectedDate ? exportDailyMarkdown(selectedDate, entries, expenses, selectedTodo) : '';
 
     return (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>

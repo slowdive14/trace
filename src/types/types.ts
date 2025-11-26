@@ -17,6 +17,13 @@ export interface Expense {
     createdAt: Date;
 }
 
+export interface Todo {
+    id: string;
+    content: string;
+    date: Date;
+    updatedAt: Date;
+}
+
 export type ExpenseCategory =
     | '커피/음료'
     | '식사'

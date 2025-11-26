@@ -1,5 +1,5 @@
 import { format } from 'date-fns';
-import type { Entry, Expense } from '../types/types';
+import type { Entry, Expense, Todo } from '../types/types';
 import { EXPENSE_CATEGORY_EMOJI } from '../types/types';
 
 export const generateMarkdown = (entries: Entry[], date: Date): string => {
@@ -37,7 +37,8 @@ export const generateMarkdown = (entries: Entry[], date: Date): string => {
 export function exportDailyMarkdown(
     date: Date,
     entries: Entry[],
-    expenses: Expense[]
+    expenses: Expense[],
+    todo?: Todo
 ): string {
     const dateStr = format(date, 'yyyy-MM-dd');
 
@@ -50,6 +51,14 @@ export function exportDailyMarkdown(
     );
 
     let markdown = '';
+
+    // Todo Section (Top)
+    if (todo && todo.content.trim()) {
+        markdown += '## 🎯 오늘의 목표\n';
+        markdown += todo.content.trim() + '\n\n';
+    }
+
+    markdown += '## 🤔 What happened today?\n';
 
     // 일상 섹션
     const actionEntries = dayEntries.filter(e => e.category === 'action');
