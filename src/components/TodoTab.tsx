@@ -9,7 +9,6 @@ interface TodoTabProps {
 
 const TodoTab: React.FC<TodoTabProps> = ({ date = new Date() }) => {
     const [content, setContent] = useState('');
-    const [isLoading, setIsLoading] = useState(true);
     const { user } = useAuth();
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -17,7 +16,6 @@ const TodoTab: React.FC<TodoTabProps> = ({ date = new Date() }) => {
     useEffect(() => {
         const loadTodo = async () => {
             if (!user) return;
-            setIsLoading(true);
             try {
                 const todo = await getTodo(user.uid, date);
                 if (todo) {
@@ -27,8 +25,6 @@ const TodoTab: React.FC<TodoTabProps> = ({ date = new Date() }) => {
                 }
             } catch (error) {
                 console.error("Failed to load todo:", error);
-            } finally {
-                setIsLoading(false);
             }
         };
         loadTodo();
