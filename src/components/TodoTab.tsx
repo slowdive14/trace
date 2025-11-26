@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useAuth } from './AuthContext';
 import { saveTodo, getTodo } from '../services/firestore';
 import { CheckSquare, Square, Bold, Highlighter, ArrowRight, ArrowLeft } from 'lucide-react';
@@ -12,6 +12,9 @@ const TodoTab: React.FC<TodoTabProps> = ({ date = new Date() }) => {
     const { user } = useAuth();
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // Memoize date string to prevent unnecessary re-renders
+    const dateStr = useMemo(() => date.toISOString().split('T')[0], [date.getTime()]);
 
     useEffect(() => {
         const loadTodo = async () => {
@@ -28,9 +31,9 @@ const TodoTab: React.FC<TodoTabProps> = ({ date = new Date() }) => {
             }
         };
         loadTodo();
-    }, [user, date]);
+    }, [user, dateStr]);
 
-    const handleSave = (newContent: string) => {
+    const handleSave = useCallback((newContent: string) => {
         if (!user) return;
 
         if (saveTimeoutRef.current) {
@@ -44,7 +47,7 @@ const TodoTab: React.FC<TodoTabProps> = ({ date = new Date() }) => {
                 console.error("Failed to save todo:", error);
             }
         }, 1000);
-    };
+    }, [user, date]);
 
     const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
         const newContent = e.target.value;
@@ -146,7 +149,7 @@ const TodoTab: React.FC<TodoTabProps> = ({ date = new Date() }) => {
             />
 
             {/* Mobile Toolbar */}
-            <div className="fixed bottom-20 left-0 right-0 bg-bg-secondary border-t border-bg-tertiary p-2 flex items-center justify-around z-20 max-w-md mx-auto">
+            <div className="fixed bottom-0 left-0 right-0 bg-bg-secondary border-t border-bg-tertiary p-2 flex items-center justify-around z-20 max-w-md mx-auto">
                 <button onClick={() => insertText('- [ ] ')} className="p-2 text-text-secondary hover:text-accent" title="Checklist">
                     <Square size={20} />
                 </button>
