@@ -187,7 +187,6 @@ const TodoTab: React.FC<TodoTabProps> = ({ date = new Date() }) => {
     const todos = parseTodos();
 
     return (
-    return (
         <div className="flex flex-col h-[calc(100vh-224px)] relative">
             <div className="w-full max-w-md mx-auto relative flex-1 flex flex-col">
                 {/* Toggle Button */}
