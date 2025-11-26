@@ -18,7 +18,7 @@ const AppContent: React.FC = () => {
   const [showCalendar, setShowCalendar] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [showUnifiedCalendar, setShowUnifiedCalendar] = useState(false);
-  const [activeTab, setActiveTab] = useState<'action' | 'thought' | 'todo' | 'expense'>('action');
+  const [activeTab, setActiveTab] = useState<'action' | 'thought' | 'chore' | 'todo' | 'expense'>('action');
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [selectedExpenseDate, setSelectedExpenseDate] = useState<Date | undefined>(undefined);
 
@@ -128,6 +128,8 @@ const AppContent: React.FC = () => {
             </>
           ) : activeTab === 'todo' ? (
             <TodoTab />
+          ) : activeTab === 'chore' ? (
+            <TodoTab collectionName="chores" placeholder="소소한 할 일을 기록하세요..." />
           ) : (
             <>
               <Timeline
@@ -165,6 +167,18 @@ const AppContent: React.FC = () => {
                   }`}
               >
                 생각
+              </button>
+              <button
+                onClick={() => {
+                  setActiveTab('chore');
+                  setSelectedTag(null);
+                }}
+                className={`flex-1 py-4 text-sm font-medium transition-colors ${activeTab === 'chore'
+                  ? 'text-accent border-b-2 border-accent'
+                  : 'text-text-secondary hover:text-text-primary'
+                  }`}
+              >
+                할일
               </button>
               <button
                 onClick={() => {

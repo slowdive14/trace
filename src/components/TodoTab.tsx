@@ -5,6 +5,8 @@ import { CheckSquare, Square, Bold, Highlighter, ArrowRight, ArrowLeft, Edit3, C
 
 interface TodoTabProps {
     date?: Date;
+    collectionName?: string;
+    placeholder?: string;
 }
 
 interface TodoItem {
@@ -14,7 +16,11 @@ interface TodoItem {
     lineIndex: number;
 }
 
-const TodoTab: React.FC<TodoTabProps> = ({ date = new Date() }) => {
+const TodoTab: React.FC<TodoTabProps> = ({
+    date = new Date(),
+    collectionName = 'todos',
+    placeholder = "오늘의 할 일을 기록하세요..."
+}) => {
     const [content, setContent] = useState('');
     const [isEditing, setIsEditing] = useState(false);
     const { user } = useAuth();
@@ -27,7 +33,7 @@ const TodoTab: React.FC<TodoTabProps> = ({ date = new Date() }) => {
         const loadTodo = async () => {
             if (!user) return;
             try {
-                const todo = await getTodo(user.uid, date);
+                const todo = await getTodo(user.uid, date, collectionName);
                 if (todo) {
                     setContent(todo.content);
                 } else {
@@ -38,7 +44,7 @@ const TodoTab: React.FC<TodoTabProps> = ({ date = new Date() }) => {
             }
         };
         loadTodo();
-    }, [user, dateStr]);
+    }, [user, dateStr, collectionName]);
 
     const handleSave = useCallback((newContent: string) => {
         if (!user) return;
@@ -49,12 +55,12 @@ const TodoTab: React.FC<TodoTabProps> = ({ date = new Date() }) => {
 
         saveTimeoutRef.current = setTimeout(async () => {
             try {
-                await saveTodo(user.uid, date, newContent);
+                await saveTodo(user.uid, date, newContent, collectionName);
             } catch (error) {
                 console.error("Failed to save todo:", error);
             }
         }, 500);
-    }, [user, date]);
+    }, [user, date, collectionName]);
 
     const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
         const newContent = e.target.value;
@@ -206,7 +212,7 @@ const TodoTab: React.FC<TodoTabProps> = ({ date = new Date() }) => {
                             value={content}
                             onChange={handleChange}
                             onKeyDown={handleKeyDown}
-                            placeholder="오늘의 할 일을 기록하세요..."
+                            placeholder={placeholder}
                             className="flex-1 w-full bg-transparent text-text-primary p-4 pt-16 resize-none focus:outline-none font-mono text-sm leading-relaxed"
                             spellCheck={false}
                         />

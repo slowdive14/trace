@@ -155,10 +155,10 @@ export const deleteExpense = async (userId: string, expenseId: string) => {
 };
 
 // Todo functions
-export const saveTodo = async (userId: string, date: Date, content: string) => {
+export const saveTodo = async (userId: string, date: Date, content: string, collectionName: string = 'todos') => {
     try {
         const dateStr = date.toISOString().split('T')[0]; // YYYY-MM-DD
-        const docRef = doc(db, `users/${userId}/todos`, dateStr);
+        const docRef = doc(db, `users/${userId}/${collectionName}`, dateStr);
 
         await setDoc(docRef, {
             content,
@@ -171,10 +171,10 @@ export const saveTodo = async (userId: string, date: Date, content: string) => {
     }
 };
 
-export const getTodo = async (userId: string, date: Date) => {
+export const getTodo = async (userId: string, date: Date, collectionName: string = 'todos') => {
     try {
         const dateStr = date.toISOString().split('T')[0];
-        const docRef = doc(db, `users/${userId}/todos`, dateStr);
+        const docRef = doc(db, `users/${userId}/${collectionName}`, dateStr);
         const docSnap = await getDoc(docRef);
 
         if (docSnap.exists()) {
