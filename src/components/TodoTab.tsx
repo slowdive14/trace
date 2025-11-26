@@ -31,12 +31,7 @@ const TodoTab: React.FC<TodoTabProps> = ({ date = new Date() }) => {
     }, [user, date]);
 
     const handleSave = (newContent: string) => {
-        if (!user) {
-            console.log("❌ TodoTab: No user, cannot save");
-            return;
-        }
-
-        console.log("⏳ TodoTab: Scheduling save for content:", newContent.substring(0, 50));
+        if (!user) return;
 
         if (saveTimeoutRef.current) {
             clearTimeout(saveTimeoutRef.current);
@@ -44,14 +39,9 @@ const TodoTab: React.FC<TodoTabProps> = ({ date = new Date() }) => {
 
         saveTimeoutRef.current = setTimeout(async () => {
             try {
-                console.log("💾 TodoTab: Attempting to save to Firestore...");
-                console.log("  - User ID:", user.uid);
-                console.log("  - Date:", date.toISOString());
-                console.log("  - Content length:", newContent.length);
                 await saveTodo(user.uid, date, newContent);
-                console.log("✅ TodoTab: Save successful!");
             } catch (error) {
-                console.error("❌ TodoTab: Failed to save todo:", error);
+                console.error("Failed to save todo:", error);
             }
         }, 1000);
     };
