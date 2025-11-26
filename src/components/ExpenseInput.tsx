@@ -89,13 +89,24 @@ const ExpenseInput: React.FC<ExpenseInputProps> = ({ externalDate }) => {
         if (!user) return;
 
         try {
+            // Determine the date to use
+            let dateToUse: Date | undefined;
+            if (isToday) {
+                dateToUse = undefined; // Uses Timestamp.now() in firestore
+            } else {
+                // Use selected date but with current time
+                const now = new Date();
+                dateToUse = new Date(selectedDate);
+                dateToUse.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds());
+            }
+
             // 배치 모드인 경우
             if (batchParsed.length > 0) {
-                await addBatchExpenses(user.uid, batchParsed, selectedDate);
+                await addBatchExpenses(user.uid, batchParsed, dateToUse);
             }
             // 단일 모드인 경우
             else if (typeof amount === 'number' && amount !== 0 && description) {
-                await addExpense(user.uid, description, Number(amount), category, selectedDate);
+                await addExpense(user.uid, description, Number(amount), category, dateToUse);
             } else {
                 return; // 유효하지 않은 입력
             }

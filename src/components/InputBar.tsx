@@ -25,9 +25,17 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action' }) => {
         const category = activeCategory;
 
         try {
-            // If selected date is today, don't pass a date so it uses current time
-            // Otherwise, use the selected date with midnight time
-            const dateToUse = isToday ? undefined : selectedDate;
+            // If selected date is today, use current time (don't pass a date)
+            // Otherwise, use the selected date with current time
+            let dateToUse: Date | undefined;
+            if (isToday) {
+                dateToUse = undefined; // Uses Timestamp.now() in firestore
+            } else {
+                // Use selected date but with current time
+                const now = new Date();
+                dateToUse = new Date(selectedDate);
+                dateToUse.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), now.getMilliseconds());
+            }
             await addEntry(user.uid, content, tags, category, dateToUse);
             setContent('');
             setIsExpanded(false);
