@@ -56,7 +56,7 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action' }) => {
 
     return (
         <>
-            <div className={`fixed bottom-0 left-0 right-0 bg-bg-secondary border-t border-bg-tertiary p-4 transition-all duration-300 z-40 ${isExpanded ? 'h-1/2' : 'h-auto'}`}>
+            <div className={`fixed bottom-0 left-0 right-0 bg-bg-secondary border-t-2 border-accent p-4 transition-all duration-300 z-40 ${isExpanded ? 'h-1/2' : 'h-auto'}`}>
                 <div className="max-w-md mx-auto flex flex-col h-full gap-2">
                     {!isToday && (
                         <div className="text-xs text-accent text-center">
