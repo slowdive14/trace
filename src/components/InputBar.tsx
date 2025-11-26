@@ -25,7 +25,10 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action' }) => {
         const category = activeCategory;
 
         try {
-            await addEntry(user.uid, content, tags, category, selectedDate);
+            // If selected date is today, don't pass a date so it uses current time
+            // Otherwise, use the selected date with midnight time
+            const dateToUse = isToday ? undefined : selectedDate;
+            await addEntry(user.uid, content, tags, category, dateToUse);
             setContent('');
             setIsExpanded(false);
             setSelectedDate(new Date()); // Reset to today
