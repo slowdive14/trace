@@ -338,7 +338,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
                     ) : (
                         <>
                             {/* Reading Mode */}
-                            <div className="flex-1 overflow-y-auto p-4 pt-16 pb-4 w-full">
+                            <div className="flex-1 overflow-y-auto p-4 pt-16 pb-32 w-full">
                                 {todos.length === 0 ? (
                                     <p className="text-text-secondary text-sm">할 일이 없습니다. 편집 버튼을 눌러 추가하세요.</p>
                                 ) : (

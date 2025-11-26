@@ -158,7 +158,11 @@ export const deleteExpense = async (userId: string, expenseId: string) => {
 // Todo functions
 export const saveTodo = async (userId: string, date: Date, content: string, collectionName: string = 'todos') => {
     try {
-        const dateStr = date.toISOString().split('T')[0]; // YYYY-MM-DD
+        // Use local date to avoid timezone issues
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const dateStr = `${year}-${month}-${day}`; // YYYY-MM-DD
         const docRef = doc(db, `users/${userId}/${collectionName}`, dateStr);
 
         await setDoc(docRef, {
@@ -174,7 +178,11 @@ export const saveTodo = async (userId: string, date: Date, content: string, coll
 
 export const getTodo = async (userId: string, date: Date, collectionName: string = 'todos') => {
     try {
-        const dateStr = date.toISOString().split('T')[0];
+        // Use local date to avoid timezone issues
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const dateStr = `${year}-${month}-${day}`; // YYYY-MM-DD
         const docRef = doc(db, `users/${userId}/${collectionName}`, dateStr);
         const docSnap = await getDoc(docRef);
 
