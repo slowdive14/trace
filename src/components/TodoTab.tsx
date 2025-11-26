@@ -7,7 +7,6 @@ import { ko } from 'date-fns/locale';
 import type { Todo } from '../types/types';
 
 interface TodoTabProps {
-    date?: Date;
     collectionName?: string;
     placeholder?: string;
 }
@@ -22,7 +21,6 @@ interface TodoItem {
 type ViewMode = 'edit' | 'history';
 
 const TodoTab: React.FC<TodoTabProps> = ({
-    date = new Date(),
     collectionName = 'todos',
     placeholder = "오늘의 할 일을 기록하세요..."
 }) => {
@@ -34,14 +32,14 @@ const TodoTab: React.FC<TodoTabProps> = ({
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    const dateStr = useMemo(() => date.toISOString().split('T')[0], [date.getTime()]);
-
     // Load today's todo
     useEffect(() => {
         const loadTodo = async () => {
             if (!user) return;
             try {
-                const todo = await getTodo(user.uid, date, collectionName);
+                // Always use current date for edit mode
+                const today = new Date();
+                const todo = await getTodo(user.uid, today, collectionName);
                 if (todo) {
                     setContent(todo.content);
                 } else {
@@ -52,7 +50,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
             }
         };
         loadTodo();
-    }, [user, dateStr, collectionName]);
+    }, [user, collectionName]);
 
     // Load history (last 7 days)
     useEffect(() => {
@@ -79,12 +77,14 @@ const TodoTab: React.FC<TodoTabProps> = ({
 
         saveTimeoutRef.current = setTimeout(async () => {
             try {
-                await saveTodo(user.uid, date, newContent, collectionName);
+                // Always save to today's date
+                const today = new Date();
+                await saveTodo(user.uid, today, newContent, collectionName);
             } catch (error) {
                 console.error("Failed to save todo:", error);
             }
         }, 500);
-    }, [user, date, collectionName]);
+    }, [user, collectionName]);
 
     const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
         const newContent = e.target.value;
@@ -230,8 +230,8 @@ const TodoTab: React.FC<TodoTabProps> = ({
                     <button
                         onClick={() => setViewMode('edit')}
                         className={`flex-1 py-2 px-4 text-sm font-medium rounded-md transition-colors ${viewMode === 'edit'
-                                ? 'bg-accent text-white'
-                                : 'bg-bg-secondary text-text-secondary hover:bg-bg-tertiary'
+                            ? 'bg-accent text-white'
+                            : 'bg-bg-secondary text-text-secondary hover:bg-bg-tertiary'
                             }`}
                     >
                         편집 모드
@@ -239,8 +239,8 @@ const TodoTab: React.FC<TodoTabProps> = ({
                     <button
                         onClick={() => setViewMode('history')}
                         className={`flex-1 py-2 px-4 text-sm font-medium rounded-md transition-colors ${viewMode === 'history'
-                                ? 'bg-accent text-white'
-                                : 'bg-bg-secondary text-text-secondary hover:bg-bg-tertiary'
+                            ? 'bg-accent text-white'
+                            : 'bg-bg-secondary text-text-secondary hover:bg-bg-tertiary'
                             }`}
                     >
                         히스토리
