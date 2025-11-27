@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { format, isToday, isYesterday, subDays, startOfDay } from 'date-fns';
+import { format, subDays, startOfDay, isSameDay } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import type { Entry } from '../types/types';
 import { deleteEntry } from '../services/firestore';
@@ -9,6 +9,7 @@ import { onSnapshot, collection, query, orderBy } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { Share, Check } from 'lucide-react';
 import { generateMarkdown, copyToClipboard } from '../utils/exportUtils';
+import { getLogicalDate } from '../utils/dateUtils';
 
 interface TimelineProps {
     category?: 'action' | 'thought' | 'chore' | 'all';
@@ -85,18 +86,21 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
 
         // Apply date filter
         const now = new Date();
+        const logicalNow = getLogicalDate(now);
+
         switch (dateFilter) {
             case 'today':
-                const todayStart = startOfDay(now);
-                filtered = filtered.filter(entry => entry.timestamp >= todayStart);
+                filtered = filtered.filter(entry =>
+                    isSameDay(getLogicalDate(entry.timestamp), logicalNow)
+                );
                 break;
             case '7days':
-                const sevenDaysAgo = subDays(startOfDay(now), 6);
-                filtered = filtered.filter(entry => entry.timestamp >= sevenDaysAgo);
+                const sevenDaysAgo = subDays(startOfDay(logicalNow), 6);
+                filtered = filtered.filter(entry => getLogicalDate(entry.timestamp) >= sevenDaysAgo);
                 break;
             case '30days':
-                const thirtyDaysAgo = subDays(startOfDay(now), 29);
-                filtered = filtered.filter(entry => entry.timestamp >= thirtyDaysAgo);
+                const thirtyDaysAgo = subDays(startOfDay(logicalNow), 29);
+                filtered = filtered.filter(entry => getLogicalDate(entry.timestamp) >= thirtyDaysAgo);
                 break;
             case 'all':
             default:
@@ -114,7 +118,7 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
     const entries = getFilteredEntries();
 
     const groupedEntries = entries.reduce((groups: Record<string, Entry[]>, entry: Entry) => {
-        const dateKey = format(entry.timestamp, 'yyyy-MM-dd');
+        const dateKey = format(getLogicalDate(entry.timestamp), 'yyyy-MM-dd');
         if (!groups[dateKey]) {
             groups[dateKey] = [];
         }
@@ -125,8 +129,10 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
     const getDateLabel = (dateStr: string) => {
         const [year, month, day] = dateStr.split('-').map(Number);
         const date = new Date(year, month - 1, day);
-        if (isToday(date)) return '오늘';
-        if (isYesterday(date)) return '어제';
+        const logicalNow = getLogicalDate();
+
+        if (isSameDay(date, logicalNow)) return '오늘';
+        if (isSameDay(date, subDays(logicalNow, 1))) return '어제';
         return format(date, 'M월 d일 (eee)', { locale: ko });
     };
 

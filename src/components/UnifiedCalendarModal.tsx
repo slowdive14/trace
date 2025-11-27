@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { X, Copy, Check } from 'lucide-react';
-import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isToday, isSameDay } from 'date-fns';
+import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import type { Entry, Expense, Todo } from '../types/types';
 import { exportDailyMarkdown } from '../utils/exportUtils';
+import { getLogicalDate } from '../utils/dateUtils';
 
 interface UnifiedCalendarModalProps {
     onClose: () => void;
@@ -36,8 +37,8 @@ const UnifiedCalendarModal: React.FC<UnifiedCalendarModalProps> = ({ onClose, en
 
     const getDayData = (date: Date) => {
         const dateStr = format(date, 'yyyy-MM-dd');
-        const dayEntries = entries.filter(e => format(e.timestamp, 'yyyy-MM-dd') === dateStr);
-        const dayExpenses = expenses.filter(e => format(e.timestamp, 'yyyy-MM-dd') === dateStr);
+        const dayEntries = entries.filter(e => format(getLogicalDate(e.timestamp), 'yyyy-MM-dd') === dateStr);
+        const dayExpenses = expenses.filter(e => format(getLogicalDate(e.timestamp), 'yyyy-MM-dd') === dateStr);
         const dayTodo = todos.find(t => format(t.date, 'yyyy-MM-dd') === dateStr);
         const total = dayExpenses.reduce((sum, e) => sum + e.amount, 0);
 
@@ -91,6 +92,7 @@ const UnifiedCalendarModal: React.FC<UnifiedCalendarModalProps> = ({ onClose, en
                             {days.map(day => {
                                 const dayData = getDayData(day);
                                 const isSelected = selectedDate && isSameDay(day, selectedDate);
+                                const isLogicalToday = isSameDay(day, getLogicalDate());
 
                                 return (
                                     <button
@@ -99,7 +101,7 @@ const UnifiedCalendarModal: React.FC<UnifiedCalendarModalProps> = ({ onClose, en
                                         className={`
                                             p-2 rounded-lg text-sm transition-all relative
                                             ${isSelected ? 'bg-accent text-white' : 'hover:bg-bg-tertiary'}
-                                            ${isToday(day) ? 'ring-2 ring-accent' : ''}
+                                            ${isLogicalToday ? 'ring-2 ring-accent' : ''}
                                             ${!isSameMonth(day, currentMonth) ? 'text-text-secondary/30' : 'text-text-primary'}
                                         `}
                                     >

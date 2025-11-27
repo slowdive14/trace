@@ -2,9 +2,10 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from './AuthContext';
 import { saveTodo, getTodo, getTodos, saveTemplate, getTemplate } from '../services/firestore';
 import { CheckSquare, Square, Bold, Highlighter, ArrowRight, ArrowLeft, Edit3, Check } from 'lucide-react';
-import { format, isToday, isYesterday, subDays, startOfDay, endOfDay } from 'date-fns';
+import { format, subDays, startOfDay, endOfDay } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import type { Todo } from '../types/types';
+import { getLogicalDate } from '../utils/dateUtils';
 
 interface TodoTabProps {
     collectionName?: string;
@@ -42,8 +43,8 @@ const TodoTab: React.FC<TodoTabProps> = ({
 
             try {
                 if (viewMode === 'edit') {
-                    // Load today's todo
-                    const today = new Date();
+                    // Load logical today's todo (5AM cutoff)
+                    const today = getLogicalDate();
                     const todo = await getTodo(user.uid, today, collectionName);
                     if (todo) {
                         setContent(todo.content);
@@ -76,8 +77,10 @@ const TodoTab: React.FC<TodoTabProps> = ({
         const loadHistory = async () => {
             if (!user || viewMode !== 'history') return;
             try {
-                const endDate = endOfDay(new Date());
-                const startDate = startOfDay(subDays(new Date(), 6));
+                // Use logical date for history range
+                const logicalToday = getLogicalDate();
+                const endDate = endOfDay(logicalToday);
+                const startDate = startOfDay(subDays(logicalToday, 6));
                 const todos = await getTodos(user.uid, startDate, endDate, collectionName);
                 setHistoryTodos(todos);
             } catch (error) {
@@ -98,8 +101,8 @@ const TodoTab: React.FC<TodoTabProps> = ({
         saveTimeoutRef.current = setTimeout(async () => {
             try {
                 if (viewMode === 'edit') {
-                    // Save to today's date
-                    const today = new Date();
+                    // Save to logical today's date
+                    const today = getLogicalDate();
                     await saveTodo(user.uid, today, newContent, collectionName);
                 } else if (viewMode === 'template') {
                     // Save as template
@@ -235,8 +238,12 @@ const TodoTab: React.FC<TodoTabProps> = ({
     const getDateLabel = (dateStr: string) => {
         const [year, month, day] = dateStr.split('-').map(Number);
         const date = new Date(year, month - 1, day);
-        if (isToday(date)) return '오늘';
-        if (isYesterday(date)) return '어제';
+        const logicalToday = getLogicalDate();
+
+        // Compare with logical today
+        if (format(date, 'yyyy-MM-dd') === format(logicalToday, 'yyyy-MM-dd')) return '오늘';
+        if (format(date, 'yyyy-MM-dd') === format(subDays(logicalToday, 1), 'yyyy-MM-dd')) return '어제';
+
         return format(date, 'M월 d일 (eee)', { locale: ko });
     };
 

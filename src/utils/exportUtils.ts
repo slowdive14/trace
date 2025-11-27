@@ -1,11 +1,12 @@
 import { format } from 'date-fns';
 import type { Entry, Expense, Todo } from '../types/types';
 import { EXPENSE_CATEGORY_EMOJI } from '../types/types';
+import { getLogicalDate } from './dateUtils';
 
 export const generateMarkdown = (entries: Entry[], date: Date): string => {
     const dateStr = format(date, 'yyyy-MM-dd');
     const dayEntries = entries.filter(entry =>
-        format(entry.timestamp, 'yyyy-MM-dd') === dateStr
+        format(getLogicalDate(entry.timestamp), 'yyyy-MM-dd') === dateStr
     ).sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
 
     const actions = dayEntries.filter(e => e.category === 'action');
@@ -26,6 +27,7 @@ export const generateMarkdown = (entries: Entry[], date: Date): string => {
         thoughts.forEach(entry => {
             markdown += `- ${format(entry.timestamp, 'HH:mm')} ${entry.content}\n`;
         });
+        markdown += `\n`;
     }
 
     return markdown;
@@ -44,10 +46,10 @@ export function exportDailyMarkdown(
 
     // Filter entries and expenses for the selected date
     const dayEntries = entries.filter(e =>
-        format(e.timestamp, 'yyyy-MM-dd') === dateStr
+        format(getLogicalDate(e.timestamp), 'yyyy-MM-dd') === dateStr
     );
     const dayExpenses = expenses.filter(e =>
-        format(e.timestamp, 'yyyy-MM-dd') === dateStr
+        format(getLogicalDate(e.timestamp), 'yyyy-MM-dd') === dateStr
     );
 
     let markdown = '';
