@@ -12,6 +12,7 @@ import {
     getDoc
 } from "firebase/firestore";
 import { db } from "./firebase";
+import { startOfDay } from 'date-fns';
 import type { Entry, Expense, ExpenseCategory, Todo } from "../types/types";
 
 
@@ -158,16 +159,19 @@ export const deleteExpense = async (userId: string, expenseId: string) => {
 // Todo functions
 export const saveTodo = async (userId: string, date: Date, content: string, collectionName: string = 'todos') => {
     try {
+        // Normalize to start of day to ensure consistent date storage
+        const normalizedDate = startOfDay(date);
+
         // Use local date to avoid timezone issues
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
+        const year = normalizedDate.getFullYear();
+        const month = String(normalizedDate.getMonth() + 1).padStart(2, '0');
+        const day = String(normalizedDate.getDate()).padStart(2, '0');
         const dateStr = `${year}-${month}-${day}`; // YYYY-MM-DD
         const docRef = doc(db, `users/${userId}/${collectionName}`, dateStr);
 
         await setDoc(docRef, {
             content,
-            date: Timestamp.fromDate(date),
+            date: Timestamp.fromDate(normalizedDate),
             updatedAt: Timestamp.now()
         }, { merge: true });
     } catch (e) {
