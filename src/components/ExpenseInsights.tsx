@@ -29,24 +29,6 @@ const ExpenseInsights: React.FC<ExpenseInsightsProps> = ({ expenses }) => {
         } else if (selectedPeriod === 'month') {
             setCurrentDate(prev => addMonths(prev, 1));
         }
-    };
-
-    const periodLabel = useMemo(() => {
-        if (selectedPeriod === 'all') return '전체 기간';
-
-        if (selectedPeriod === 'week') {
-            const weekNum = getWeekOfMonth(currentDate, { weekStartsOn: 1 });
-            const month = format(currentDate, 'M월');
-            return `${month} ${weekNum}주차`;
-        }
-
-        return format(currentDate, 'yyyy년 M월');
-    }, [selectedPeriod, currentDate]);
-
-    const stats = useMemo(() => {
-        // Determine period filters
-        let filteredExpenses: Expense[];
-
         if (selectedPeriod === 'week') {
             const startOfThisWeek = startOfWeek(currentDate, { weekStartsOn: 1 });
             const endOfThisWeek = endOfWeek(currentDate, { weekStartsOn: 1 });
