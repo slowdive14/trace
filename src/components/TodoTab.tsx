@@ -47,7 +47,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
                     const todo = await getTodo(user.uid, today, collectionName);
                     if (todo) {
                         setContent(todo.content);
-                        setLastSaved(todo.updatedAt?.toDate() || new Date());
+                        setLastSaved(todo.updatedAt || new Date());
                     } else {
                         // If no todo for today, try to load template
                         const template = await getTemplate(user.uid, collectionName);

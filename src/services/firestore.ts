@@ -191,6 +191,7 @@ export const getTodo = async (userId: string, date: Date, collectionName: string
                 id: docSnap.id,
                 ...docSnap.data(),
                 date: docSnap.data().date.toDate(),
+                updatedAt: docSnap.data().updatedAt?.toDate() || new Date(),
             } as Todo;
         }
         return null;
