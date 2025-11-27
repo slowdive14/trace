@@ -28,6 +28,9 @@ const TodoTab: React.FC<TodoTabProps> = ({
     const [isEditing, setIsEditing] = useState(false);
     const [viewMode, setViewMode] = useState<ViewMode>('edit');
     const [historyTodos, setHistoryTodos] = useState<Todo[]>([]);
+    const [isSaving, setIsSaving] = useState(false);
+    const [lastSaved, setLastSaved] = useState<Date | null>(null);
+
     const { user } = useAuth();
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -44,6 +47,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
                     const todo = await getTodo(user.uid, today, collectionName);
                     if (todo) {
                         setContent(todo.content);
+                        setLastSaved(todo.updatedAt?.toDate() || new Date());
                     } else {
                         // If no todo for today, try to load template
                         const template = await getTemplate(user.uid, collectionName);
@@ -86,6 +90,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
     const handleSave = useCallback((newContent: string) => {
         if (!user) return;
 
+        setIsSaving(true);
         if (saveTimeoutRef.current) {
             clearTimeout(saveTimeoutRef.current);
         }
@@ -100,8 +105,11 @@ const TodoTab: React.FC<TodoTabProps> = ({
                     // Save as template
                     await saveTemplate(user.uid, newContent, collectionName);
                 }
+                setLastSaved(new Date());
             } catch (error) {
                 console.error("Failed to save content:", error);
+            } finally {
+                setIsSaving(false);
             }
         }, 500);
     }, [user, collectionName, viewMode]);
@@ -322,6 +330,18 @@ const TodoTab: React.FC<TodoTabProps> = ({
             ) : (
                 /* Edit Mode & Template Mode */
                 <div className="w-full max-w-md mx-auto relative flex-1 flex flex-col">
+                    {/* Saving Indicator */}
+                    <div className="absolute top-4 right-16 z-30 flex items-center gap-2 pointer-events-none">
+                        <span className={`text-xs font-medium transition-opacity duration-300 ${isSaving ? 'text-accent opacity-100' : 'opacity-0'}`}>
+                            저장 중...
+                        </span>
+                        {!isSaving && lastSaved && (
+                            <span className="text-xs text-text-tertiary transition-opacity duration-500 opacity-100">
+                                저장됨
+                            </span>
+                        )}
+                    </div>
+
                     {/* Toggle Button (Only for Edit Mode) */}
                     {viewMode === 'edit' && (
                         <button
