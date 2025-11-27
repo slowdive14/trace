@@ -253,13 +253,15 @@ const TodoTab: React.FC<TodoTabProps> = ({
                 <div className="flex-1 overflow-y-auto px-4 pb-32">
                     <div className="max-w-md mx-auto pt-4">
                         {Object.entries(groupedTodos).map(([date, todo], index) => (
-                            <div key={date} className="mb-6">
-                                <h3
-                                    className="text-text-secondary text-sm font-bold mb-4 sticky top-[57px] bg-bg-primary py-3 border-b border-bg-tertiary"
+                            <div key={date} className="mb-8">
+                                <div
+                                    className="sticky top-[57px] bg-bg-primary py-3 border-b border-bg-tertiary mb-4"
                                     style={{ zIndex: 20 - index }}
                                 >
-                                    {getDateLabel(date)}
-                                </h3>
+                                    <h2 className="text-text-secondary text-sm font-bold">
+                                        {getDateLabel(date)}
+                                    </h2>
+                                </div>
                                 <div className="space-y-1">
                                     {parseTodos(todo.content).map((item, idx) => (
                                         <div
