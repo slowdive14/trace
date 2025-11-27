@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from './AuthContext';
 import { saveTodo, getTodo, getTodos, saveTemplate, getTemplate } from '../services/firestore';
-import { CheckSquare, Square, Bold, Highlighter, ArrowRight, ArrowLeft, Edit3, Check, Settings } from 'lucide-react';
+import { CheckSquare, Square, Bold, Highlighter, ArrowRight, ArrowLeft, Edit3, Check } from 'lucide-react';
 import { format, isToday, isYesterday, subDays, startOfDay, endOfDay } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import type { Todo } from '../types/types';
