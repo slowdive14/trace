@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from './AuthContext';
-import { saveTodo, getTodo, getTodos } from '../services/firestore';
-import { CheckSquare, Square, Bold, Highlighter, ArrowRight, ArrowLeft, Edit3, Check } from 'lucide-react';
+import { saveTodo, getTodo, getTodos, saveTemplate, getTemplate } from '../services/firestore';
+import { CheckSquare, Square, Bold, Highlighter, ArrowRight, ArrowLeft, Edit3, Check, Settings } from 'lucide-react';
 import { format, isToday, isYesterday, subDays, startOfDay, endOfDay } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import type { Todo } from '../types/types';
@@ -18,7 +18,7 @@ interface TodoItem {
     lineIndex: number;
 }
 
-type ViewMode = 'edit' | 'history';
+type ViewMode = 'edit' | 'history' | 'template';
 
 const TodoTab: React.FC<TodoTabProps> = ({
     collectionName = 'todos',
@@ -32,25 +32,40 @@ const TodoTab: React.FC<TodoTabProps> = ({
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    // Load today's todo
+    // Load content based on view mode
     useEffect(() => {
-        const loadTodo = async () => {
+        const loadContent = async () => {
             if (!user) return;
+
             try {
-                // Always use current date for edit mode
-                const today = new Date();
-                const todo = await getTodo(user.uid, today, collectionName);
-                if (todo) {
-                    setContent(todo.content);
-                } else {
-                    setContent('');
+                if (viewMode === 'edit') {
+                    // Load today's todo
+                    const today = new Date();
+                    const todo = await getTodo(user.uid, today, collectionName);
+                    if (todo) {
+                        setContent(todo.content);
+                    } else {
+                        // If no todo for today, try to load template
+                        const template = await getTemplate(user.uid, collectionName);
+                        if (template) {
+                            setContent(template);
+                            // Optional: Auto-save the template as today's todo immediately?
+                            // For now, we just pre-fill it. It will be saved when user edits.
+                        } else {
+                            setContent('');
+                        }
+                    }
+                } else if (viewMode === 'template') {
+                    // Load template
+                    const template = await getTemplate(user.uid, collectionName);
+                    setContent(template || '');
                 }
             } catch (error) {
-                console.error("Failed to load todo:", error);
+                console.error("Failed to load content:", error);
             }
         };
-        loadTodo();
-    }, [user, collectionName]);
+        loadContent();
+    }, [user, collectionName, viewMode]);
 
     // Load history (last 7 days)
     useEffect(() => {
@@ -77,14 +92,19 @@ const TodoTab: React.FC<TodoTabProps> = ({
 
         saveTimeoutRef.current = setTimeout(async () => {
             try {
-                // Always save to today's date
-                const today = new Date();
-                await saveTodo(user.uid, today, newContent, collectionName);
+                if (viewMode === 'edit') {
+                    // Save to today's date
+                    const today = new Date();
+                    await saveTodo(user.uid, today, newContent, collectionName);
+                } else if (viewMode === 'template') {
+                    // Save as template
+                    await saveTemplate(user.uid, newContent, collectionName);
+                }
             } catch (error) {
-                console.error("Failed to save todo:", error);
+                console.error("Failed to save content:", error);
             }
         }, 500);
-    }, [user, collectionName]);
+    }, [user, collectionName, viewMode]);
 
     const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
         const newContent = e.target.value;
@@ -245,6 +265,15 @@ const TodoTab: React.FC<TodoTabProps> = ({
                     >
                         히스토리
                     </button>
+                    <button
+                        onClick={() => setViewMode('template')}
+                        className={`flex-1 py-2 px-4 text-sm font-medium rounded-md transition-colors ${viewMode === 'template'
+                            ? 'bg-accent text-white'
+                            : 'bg-bg-secondary text-text-secondary hover:bg-bg-tertiary'
+                            }`}
+                    >
+                        루틴 설정
+                    </button>
                 </div>
             </div>
 
@@ -291,26 +320,35 @@ const TodoTab: React.FC<TodoTabProps> = ({
                     </div>
                 </div>
             ) : (
-                /* Edit Mode */
+                /* Edit Mode & Template Mode */
                 <div className="w-full max-w-md mx-auto relative flex-1 flex flex-col">
-                    {/* Toggle Button */}
-                    <button
-                        onClick={() => setIsEditing(!isEditing)}
-                        className="absolute top-4 right-4 z-30 p-2 bg-bg-secondary rounded-full text-text-secondary hover:text-accent transition-colors"
-                        title={isEditing ? "완료" : "편집"}
-                    >
-                        {isEditing ? <Check size={20} /> : <Edit3 size={20} />}
-                    </button>
+                    {/* Toggle Button (Only for Edit Mode) */}
+                    {viewMode === 'edit' && (
+                        <button
+                            onClick={() => setIsEditing(!isEditing)}
+                            className="absolute top-4 right-4 z-30 p-2 bg-bg-secondary rounded-full text-text-secondary hover:text-accent transition-colors"
+                            title={isEditing ? "완료" : "편집"}
+                        >
+                            {isEditing ? <Check size={20} /> : <Edit3 size={20} />}
+                        </button>
+                    )}
 
-                    {isEditing ? (
+                    {/* Template Mode Indicator */}
+                    {viewMode === 'template' && (
+                        <div className="absolute top-4 right-4 z-30 px-3 py-1 bg-accent/10 text-accent text-xs font-bold rounded-full border border-accent/20">
+                            매일 반복되는 루틴을 입력하세요
+                        </div>
+                    )}
+
+                    {isEditing || viewMode === 'template' ? (
                         <>
-                            {/* Edit Mode */}
+                            {/* Editor */}
                             <textarea
                                 ref={textareaRef}
                                 value={content}
                                 onChange={handleChange}
                                 onKeyDown={handleKeyDown}
-                                placeholder={placeholder}
+                                placeholder={viewMode === 'template' ? "매일 반복할 루틴을 입력하세요..." : placeholder}
                                 className="flex-1 w-full bg-transparent text-text-primary p-4 pt-16 resize-none focus:outline-none font-mono text-sm leading-relaxed"
                                 spellCheck={false}
                             />
@@ -339,7 +377,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
                         </>
                     ) : (
                         <>
-                            {/* Reading Mode */}
+                            {/* Reading Mode (Only for Edit Mode) */}
                             <div className="flex-1 overflow-y-auto p-4 pt-16 pb-32 w-full">
                                 {todos.length === 0 ? (
                                     <p className="text-text-secondary text-sm">할 일이 없습니다. 편집 버튼을 눌러 추가하세요.</p>

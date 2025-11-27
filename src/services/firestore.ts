@@ -220,3 +220,31 @@ export const getTodos = async (userId: string, startDate: Date, endDate: Date, c
         throw e;
     }
 };
+
+export const saveTemplate = async (userId: string, content: string, collectionName: string = 'todos') => {
+    try {
+        const docRef = doc(db, `users/${userId}/${collectionName}`, 'template_default');
+        await setDoc(docRef, {
+            content,
+            updatedAt: Timestamp.now()
+        }, { merge: true });
+    } catch (e) {
+        console.error("Error saving template: ", e);
+        throw e;
+    }
+};
+
+export const getTemplate = async (userId: string, collectionName: string = 'todos') => {
+    try {
+        const docRef = doc(db, `users/${userId}/${collectionName}`, 'template_default');
+        const docSnap = await getDoc(docRef);
+
+        if (docSnap.exists()) {
+            return docSnap.data().content as string;
+        }
+        return null;
+    } catch (e) {
+        console.error("Error getting template: ", e);
+        throw e;
+    }
+};
