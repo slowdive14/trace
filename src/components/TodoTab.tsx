@@ -252,7 +252,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
                 /* History Mode */
                 <div className="flex-1 overflow-y-auto px-4 pb-32">
                     <div className="max-w-md mx-auto pt-4">
-                        {Object.entries(groupedTodos).map(([date, todo], index) => (
+                        {Object.entries(groupedTodos).map(([date, todo]) => (
                             <div key={date} className="mb-8">
                                 <div
                                     className="sticky top-0 bg-bg-primary/95 backdrop-blur py-3 border-b border-bg-tertiary mb-4"
