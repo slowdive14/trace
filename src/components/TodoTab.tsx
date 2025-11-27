@@ -247,110 +247,129 @@ const TodoTab: React.FC<TodoTabProps> = ({
                     </button>
                 </div>
             </div>
-            <input
-                type="checkbox"
-                checked={item.checked}
-                readOnly
-                className="mt-1 w-4 h-4 rounded border-text-secondary pointer-events-none"
-            />
-            <span className={`flex-1 leading-relaxed ${item.checked ? 'line-through text-text-secondary' : 'text-text-primary'}`}>
-                {renderText(item.text)}
-            </span>
-        </div>
-    ))
-}
-                                </div >
-                            </div >
-                        ))}
-{
-    historyTodos.length === 0 && (
-        <div className="text-center text-text-secondary mt-20">
-            <p>최근 7일간 작성된 투두가 없습니다.</p>
-        </div>
-    )
-}
-                    </div >
-                </div >
-            ) : (
-    /* Edit Mode */
-    <div className="w-full max-w-md mx-auto relative flex-1 flex flex-col">
-        {/* Toggle Button */}
-        <button
-            onClick={() => setIsEditing(!isEditing)}
-            className="absolute top-4 right-4 z-30 p-2 bg-bg-secondary rounded-full text-text-secondary hover:text-accent transition-colors"
-            title={isEditing ? "완료" : "편집"}
-        >
-            {isEditing ? <Check size={20} /> : <Edit3 size={20} />}
-        </button>
 
-        {isEditing ? (
-            <>
-                {/* Edit Mode */}
-                <textarea
-                    ref={textareaRef}
-                    value={content}
-                    onChange={handleChange}
-                    onKeyDown={handleKeyDown}
-                    placeholder={placeholder}
-                    className="flex-1 w-full bg-transparent text-text-primary p-4 pt-16 resize-none focus:outline-none font-mono text-sm leading-relaxed"
-                    spellCheck={false}
-                />
-
-                {/* Mobile Toolbar */}
-                <div className="fixed bottom-0 left-0 right-0 bg-bg-secondary border-t border-bg-tertiary p-2 flex items-center justify-around z-20 max-w-md mx-auto">
-                    <button onClick={() => insertText('- [ ] ')} className="p-2 text-text-secondary hover:text-accent" title="Checklist">
-                        <Square size={20} />
-                    </button>
-                    <button onClick={() => insertText('- [x] ')} className="p-2 text-text-secondary hover:text-accent" title="Completed">
-                        <CheckSquare size={20} />
-                    </button>
-                    <button onClick={() => insertText('==', -2)} className="p-2 text-text-secondary hover:text-accent" title="Highlight">
-                        <Highlighter size={20} />
-                    </button>
-                    <button onClick={() => insertText('**', -2)} className="p-2 text-text-secondary hover:text-accent" title="Bold">
-                        <Bold size={20} />
-                    </button>
-                    <button onClick={() => handleIndent('out')} className="p-2 text-text-secondary hover:text-accent" title="Outdent">
-                        <ArrowLeft size={20} />
-                    </button>
-                    <button onClick={() => handleIndent('in')} className="p-2 text-text-secondary hover:text-accent" title="Indent">
-                        <ArrowRight size={20} />
-                    </button>
-                </div>
-            </>
-        ) : (
-            <>
-                {/* Reading Mode */}
-                <div className="flex-1 overflow-y-auto p-4 pt-16 pb-32 w-full">
-                    {todos.length === 0 ? (
-                        <p className="text-text-secondary text-sm">할 일이 없습니다. 편집 버튼을 눌러 추가하세요.</p>
-                    ) : (
-                        <div className="space-y-2">
-                            {todos.map((item, idx) => (
+            {viewMode === 'history' ? (
+                /* History Mode */
+                <div className="flex-1 overflow-y-auto px-4 pb-32">
+                    <div className="max-w-md mx-auto pt-4">
+                        {Object.entries(groupedTodos).map(([date, todo], index) => (
+                            <div key={date} className="mb-8">
                                 <div
-                                    key={idx}
-                                    className="flex items-start gap-2 py-1"
-                                    style={{ paddingLeft: `${item.indent * 24}px` }}
+                                    className="sticky top-0 bg-bg-primary/95 backdrop-blur py-3 border-b border-bg-tertiary mb-4"
+                                    style={{ zIndex: 10 }}
                                 >
-                                    <input
-                                        type="checkbox"
-                                        checked={item.checked}
-                                        onChange={() => toggleCheckbox(item.lineIndex)}
-                                        className="mt-1 w-4 h-4 rounded border-text-secondary focus:ring-accent focus:ring-2"
-                                    />
-                                    <span className={`flex-1 leading-relaxed ${item.checked ? 'line-through text-text-secondary' : 'text-text-primary'}`}>
-                                        {renderText(item.text)}
-                                    </span>
+                                    <h2 className="text-text-secondary text-sm font-bold">
+                                        {getDateLabel(date)}
+                                    </h2>
                                 </div>
-                            ))}
-                        </div>
+                                <div className="space-y-1">
+                                    {parseTodos(todo.content).map((item, idx) => (
+                                        <div
+                                            key={idx}
+                                            className="flex items-start gap-2 py-1"
+                                            style={{ paddingLeft: `${item.indent * 24}px` }}
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={item.checked}
+                                                readOnly
+                                                className="mt-1 w-4 h-4 rounded border-text-secondary pointer-events-none"
+                                            />
+                                            <span className={`flex-1 leading-relaxed ${item.checked ? 'line-through text-text-secondary' : 'text-text-primary'}`}>
+                                                {renderText(item.text)}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        ))}
+                        {historyTodos.length === 0 && (
+                            <div className="text-center text-text-secondary mt-20">
+                                <p>최근 7일간 작성된 투두가 없습니다.</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            ) : (
+                /* Edit Mode */
+                <div className="w-full max-w-md mx-auto relative flex-1 flex flex-col">
+                    {/* Toggle Button */}
+                    <button
+                        onClick={() => setIsEditing(!isEditing)}
+                        className="absolute top-4 right-4 z-30 p-2 bg-bg-secondary rounded-full text-text-secondary hover:text-accent transition-colors"
+                        title={isEditing ? "완료" : "편집"}
+                    >
+                        {isEditing ? <Check size={20} /> : <Edit3 size={20} />}
+                    </button>
+
+                    {isEditing ? (
+                        <>
+                            {/* Edit Mode */}
+                            <textarea
+                                ref={textareaRef}
+                                value={content}
+                                onChange={handleChange}
+                                onKeyDown={handleKeyDown}
+                                placeholder={placeholder}
+                                className="flex-1 w-full bg-transparent text-text-primary p-4 pt-16 resize-none focus:outline-none font-mono text-sm leading-relaxed"
+                                spellCheck={false}
+                            />
+
+                            {/* Mobile Toolbar */}
+                            <div className="fixed bottom-0 left-0 right-0 bg-bg-secondary border-t border-bg-tertiary p-2 flex items-center justify-around z-20 max-w-md mx-auto">
+                                <button onClick={() => insertText('- [ ] ')} className="p-2 text-text-secondary hover:text-accent" title="Checklist">
+                                    <Square size={20} />
+                                </button>
+                                <button onClick={() => insertText('- [x] ')} className="p-2 text-text-secondary hover:text-accent" title="Completed">
+                                    <CheckSquare size={20} />
+                                </button>
+                                <button onClick={() => insertText('==', -2)} className="p-2 text-text-secondary hover:text-accent" title="Highlight">
+                                    <Highlighter size={20} />
+                                </button>
+                                <button onClick={() => insertText('**', -2)} className="p-2 text-text-secondary hover:text-accent" title="Bold">
+                                    <Bold size={20} />
+                                </button>
+                                <button onClick={() => handleIndent('out')} className="p-2 text-text-secondary hover:text-accent" title="Outdent">
+                                    <ArrowLeft size={20} />
+                                </button>
+                                <button onClick={() => handleIndent('in')} className="p-2 text-text-secondary hover:text-accent" title="Indent">
+                                    <ArrowRight size={20} />
+                                </button>
+                            </div>
+                        </>
+                    ) : (
+                        <>
+                            {/* Reading Mode */}
+                            <div className="flex-1 overflow-y-auto p-4 pt-16 pb-32 w-full">
+                                {todos.length === 0 ? (
+                                    <p className="text-text-secondary text-sm">할 일이 없습니다. 편집 버튼을 눌러 추가하세요.</p>
+                                ) : (
+                                    <div className="space-y-2">
+                                        {todos.map((item, idx) => (
+                                            <div
+                                                key={idx}
+                                                className="flex items-start gap-2 py-1"
+                                                style={{ paddingLeft: `${item.indent * 24}px` }}
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    checked={item.checked}
+                                                    onChange={() => toggleCheckbox(item.lineIndex)}
+                                                    className="mt-1 w-4 h-4 rounded border-text-secondary focus:ring-accent focus:ring-2"
+                                                />
+                                                <span className={`flex-1 leading-relaxed ${item.checked ? 'line-through text-text-secondary' : 'text-text-primary'}`}>
+                                                    {renderText(item.text)}
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </>
                     )}
                 </div>
-            </>
-        )}
-    </div>
-)}
-        </div >
+            )}
+        </div>
     );
 };
 
