@@ -275,7 +275,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                                 readOnly
                                                 className="mt-1 w-4 h-4 rounded border-text-secondary pointer-events-none"
                                             />
-                                            <span className={`flex-1 text-sm leading-relaxed ${item.checked ? 'line-through text-text-secondary' : 'text-text-primary'}`}>
+                                            <span className={`flex-1 leading-relaxed ${item.checked ? 'line-through text-text-secondary' : 'text-text-primary'}`}>
                                                 {renderText(item.text)}
                                             </span>
                                         </div>
@@ -357,7 +357,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                                     onChange={() => toggleCheckbox(item.lineIndex)}
                                                     className="mt-1 w-4 h-4 rounded border-text-secondary focus:ring-accent focus:ring-2"
                                                 />
-                                                <span className={`flex-1 text-sm leading-relaxed ${item.checked ? 'line-through text-text-secondary' : 'text-text-primary'}`}>
+                                                <span className={`flex-1 leading-relaxed ${item.checked ? 'line-through text-text-secondary' : 'text-text-primary'}`}>
                                                     {renderText(item.text)}
                                                 </span>
                                             </div>
