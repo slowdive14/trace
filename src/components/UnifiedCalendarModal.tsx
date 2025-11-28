@@ -28,7 +28,7 @@ const UnifiedCalendarModal: React.FC<UnifiedCalendarModalProps> = ({ onClose, en
         if (!selectedDate) return;
 
         const dateStr = format(selectedDate, 'yyyy-MM-dd');
-        const todo = todos.find(t => format(t.date, 'yyyy-MM-dd') === dateStr);
+        const todo = todos.find(t => t.id === dateStr);
         const markdown = exportDailyMarkdown(selectedDate, entries, expenses, todo);
         navigator.clipboard.writeText(markdown);
         setCopied(true);
