@@ -70,6 +70,19 @@ export const deleteEntry = async (userId: string, entryId: string, collectionNam
     }
 };
 
+export const toggleEntryPin = async (userId: string, entryId: string, currentStatus: boolean, collectionName: string = 'entries') => {
+    try {
+        const docRef = doc(db, `users/${userId}/${collectionName}`, entryId);
+        await setDoc(docRef, {
+            isPinned: !currentStatus,
+            updatedAt: Timestamp.now()
+        }, { merge: true });
+    } catch (e) {
+        console.error("Error toggling pin status: ", e);
+        throw e;
+    }
+};
+
 // Expense functions
 export const addExpense = async (
     userId: string,

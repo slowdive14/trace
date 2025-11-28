@@ -1,16 +1,17 @@
 import React, { useState } from 'react';
 import { format } from 'date-fns';
 import type { Entry } from '../types/types';
-import { Trash2, Copy, Check } from 'lucide-react';
+import { Trash2, Copy, Check, Pin } from 'lucide-react';
 
 interface EntryItemProps {
     entry: Entry;
     onDelete: (id: string) => void;
     highlightQuery?: string;
     onTagClick?: (tag: string) => void;
+    onPin?: (id: string, currentStatus: boolean) => void;
 }
 
-const EntryItem: React.FC<EntryItemProps> = ({ entry, onDelete, highlightQuery, onTagClick }) => {
+const EntryItem: React.FC<EntryItemProps> = ({ entry, onDelete, highlightQuery, onTagClick, onPin }) => {
     const [showCopyToast, setShowCopyToast] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const formattedTime = format(entry.timestamp, 'HH:mm');
@@ -23,6 +24,13 @@ const EntryItem: React.FC<EntryItemProps> = ({ entry, onDelete, highlightQuery, 
             setTimeout(() => setShowCopyToast(false), 1500);
         } catch (err) {
             console.error('Failed to copy:', err);
+        }
+    };
+
+    const handlePinClick = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (onPin) {
+            onPin(entry.id, entry.isPinned || false);
         }
     };
 
@@ -99,22 +107,23 @@ const EntryItem: React.FC<EntryItemProps> = ({ entry, onDelete, highlightQuery, 
     };
 
     return (
-        <div className="flex gap-4 py-3 group relative">
+        <div className={`flex gap-4 py-3 group relative transition-colors rounded-lg px-2 -mx-2 ${entry.isPinned ? 'bg-accent/5' : 'hover:bg-bg-secondary/50'}`}>
             {showCopyToast && (
                 <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-accent text-white px-3 py-1 rounded text-xs flex items-center gap-1 z-10">
                     <Check size={12} />
                     복사됨
                 </div>
             )}
-            <div className="w-12 text-right text-text-secondary font-mono text-sm pt-1 shrink-0">
-                {formattedTime}
+            <div className="w-12 text-right text-text-secondary font-mono text-sm pt-1 shrink-0 flex flex-col items-end gap-1">
+                <span>{formattedTime}</span>
+                {entry.isPinned && <Pin size={12} className="text-accent fill-accent" />}
             </div>
             <div className="flex-1 min-w-0">
                 <div className="text-text-primary break-words whitespace-pre-wrap">
                     {renderContent()}
                 </div>
             </div>
-            <div className="flex gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-all shrink-0 items-start">
+            <div className={`flex gap-1 transition-all shrink-0 items-start ${isDeleting ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
                 {isDeleting ? (
                     <>
                         <button
@@ -136,6 +145,16 @@ const EntryItem: React.FC<EntryItemProps> = ({ entry, onDelete, highlightQuery, 
                     </>
                 ) : (
                     <>
+                        {onPin && (
+                            <button
+                                type="button"
+                                onClick={handlePinClick}
+                                className={`transition-colors p-1 ${entry.isPinned ? 'text-accent' : 'text-text-secondary hover:text-accent'}`}
+                                aria-label={entry.isPinned ? "Unpin entry" : "Pin entry"}
+                            >
+                                <Pin size={16} className={entry.isPinned ? "fill-accent" : ""} />
+                            </button>
+                        )}
                         <button
                             type="button"
                             onClick={handleCopy}

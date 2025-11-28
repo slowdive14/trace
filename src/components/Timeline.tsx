@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { format, subDays, startOfDay, isSameDay } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import type { Entry } from '../types/types';
-import { deleteEntry } from '../services/firestore';
+import { deleteEntry, toggleEntryPin } from '../services/firestore';
 import { useAuth } from './AuthContext';
 import EntryItem from './EntryItem';
 import { onSnapshot, collection, query, orderBy } from 'firebase/firestore';
@@ -71,6 +71,11 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
         await deleteEntry(user.uid, id, collectionName);
     };
 
+    const handlePin = async (id: string, currentStatus: boolean) => {
+        if (!user) return;
+        await toggleEntryPin(user.uid, id, currentStatus, collectionName);
+    };
+
     const handleExport = async (dateStr: string) => {
         const date = new Date(dateStr);
         const markdown = generateMarkdown(allEntries, date);
@@ -108,10 +113,16 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
                 break;
         }
 
-        // Apply category and tag filters
+        // Apply category and tag filters, then sort by pinned status
         return filtered
             .filter(entry => category === 'all' || entry.category === category)
             .filter(entry => !selectedTag || entry.tags.some(tag => tag.startsWith(selectedTag)))
+            .sort((a, b) => {
+                // Pinned items first
+                if (a.isPinned && !b.isPinned) return -1;
+                if (!a.isPinned && b.isPinned) return 1;
+                return 0; // Keep existing order (timestamp desc)
+            })
             .slice(0, displayLimit);
     }, [allEntries, dateFilter, category, selectedTag, displayLimit]);
 
@@ -205,7 +216,13 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
                         </div>
                         <div className="space-y-1">
                             {dayEntries.map(entry => (
-                                <EntryItem key={entry.id} entry={entry} onDelete={handleDelete} onTagClick={onTagClick} />
+                                <EntryItem
+                                    key={entry.id}
+                                    entry={entry}
+                                    onDelete={handleDelete}
+                                    onTagClick={onTagClick}
+                                    onPin={handlePin}
+                                />
                             ))}
                         </div>
                     </div>

@@ -6,6 +6,7 @@ export interface Entry {
     timestamp: Date;
     createdAt: Date;
     updatedAt: Date;
+    isPinned?: boolean;
 }
 
 export interface Expense {
