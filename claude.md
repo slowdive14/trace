@@ -155,21 +155,6 @@ interface Expense {
     category: ExpenseCategory;
     timestamp: Date;
     createdAt: Date;
-}
-
-const EXPENSE_CATEGORY_EMOJI: Record<ExpenseCategory, string> = {
-    '식비': '🍽️',
-    '교통': '🚗',
-    '쇼핑': '🛍️',
-    '문화': '🎬',
-    '건강': '💊',
-    '주거': '🏠',
-    '기타': '📝'
-};
-```
-
-### Firestore 경로
-```
 users/{userId}/entries/{entryId}
 users/{userId}/expenses/{expenseId}
 ```
