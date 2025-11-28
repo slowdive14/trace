@@ -24,6 +24,7 @@ const ExpenseCalendar: React.FC<ExpenseCalendarProps> = ({ expenses, selectedDat
         const dateStr = format(date, 'yyyy-MM-dd');
         return expenses
             .filter(e => format(e.timestamp, 'yyyy-MM-dd') === dateStr)
+            .filter(e => e.amount > 0)
             .reduce((sum, e) => sum + e.amount, 0);
     };
 
@@ -31,6 +32,7 @@ const ExpenseCalendar: React.FC<ExpenseCalendarProps> = ({ expenses, selectedDat
     const getMonthTotal = (): number => {
         return expenses
             .filter(e => isSameMonth(e.timestamp, currentMonth))
+            .filter(e => e.amount > 0)
             .reduce((sum, e) => sum + e.amount, 0);
     };
 

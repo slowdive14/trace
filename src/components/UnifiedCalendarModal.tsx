@@ -41,7 +41,9 @@ const UnifiedCalendarModal: React.FC<UnifiedCalendarModalProps> = ({ onClose, en
         const dayExpenses = expenses.filter(e => format(getLogicalDate(e.timestamp), 'yyyy-MM-dd') === dateStr);
         // Lookup by ID (YYYY-MM-DD) instead of date field for robustness
         const dayTodo = todos.find(t => t.id === dateStr);
-        const total = dayExpenses.reduce((sum, e) => sum + e.amount, 0);
+        const total = dayExpenses
+            .filter(e => e.amount > 0)
+            .reduce((sum, e) => sum + e.amount, 0);
 
         return {
             count: dayEntries.length + dayExpenses.length + (dayTodo ? 1 : 0),

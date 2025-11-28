@@ -95,8 +95,10 @@ export function exportDailyMarkdown(
             }
         });
 
-        // 합계 계산
-        const total = dayExpenses.reduce((sum, e) => sum + e.amount, 0);
+        // 합계 계산 (지출만 합산, 절약 제외)
+        const total = dayExpenses
+            .filter(e => e.amount > 0)
+            .reduce((sum, e) => sum + e.amount, 0);
         markdown += `**합계**: ${total.toLocaleString()}원\n`;
     }
 

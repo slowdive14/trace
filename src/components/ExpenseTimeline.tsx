@@ -72,7 +72,9 @@ const ExpenseTimeline: React.FC<ExpenseTimelineProps> = ({ onDateSelect }) => {
     };
 
     const getDailyTotal = (dailyExpenses: Expense[]) => {
-        return dailyExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+        return dailyExpenses
+            .filter(expense => expense.amount > 0)
+            .reduce((sum, expense) => sum + expense.amount, 0);
     };
 
     return (
