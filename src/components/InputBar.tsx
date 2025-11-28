@@ -3,7 +3,7 @@ import { Send, Maximize2, Minimize2, Calendar } from 'lucide-react';
 import { extractTags } from '../utils/tagUtils';
 import { addEntry } from '../services/firestore';
 import { useAuth } from './AuthContext';
-import { format } from 'date-fns';
+import { format, isSameDay } from 'date-fns';
 
 interface InputBarProps {
     activeCategory?: 'action' | 'thought' | 'chore';
@@ -13,7 +13,8 @@ interface InputBarProps {
 const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collectionName = 'entries' }) => {
     const [content, setContent] = useState('');
     const [isExpanded, setIsExpanded] = useState(false);
-    const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+    // Use null to represent "Now/Today". This prevents stale timestamps when the app is left open.
+    const [selectedDate, setSelectedDate] = useState<Date | null>(null);
     const [showDatePicker, setShowDatePicker] = useState(false);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const { user } = useAuth();
@@ -22,18 +23,19 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
         if (!content.trim() || !user) return;
 
         const tags = extractTags(content);
-        // Use activeCategory from props instead of determining from tags
         const category = activeCategory;
 
         try {
-            // If selected date is today, don't pass a date so it uses current time
-            // Otherwise, use the selected date with midnight time
-            const dateToUse = isToday ? undefined : selectedDate;
+            // If selectedDate is null, it means "Now".
+            // If selectedDate is set, check if it's today. If it is today, we still use "Now" (undefined).
+            // This preserves the behavior of using current time for today's entries.
+            const isToday = selectedDate && isSameDay(selectedDate, new Date());
+            const dateToUse = (selectedDate && !isToday) ? selectedDate : undefined;
+
             await addEntry(user.uid, content, tags, category, dateToUse, collectionName);
             setContent('');
             setIsExpanded(false);
-            setSelectedDate(new Date()); // Reset to today
-            // Optional: Scroll to top or show success feedback
+            setSelectedDate(null); // Reset to "Now"
         } catch (error) {
             console.error("Failed to add entry:", error);
         }
@@ -57,15 +59,17 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
         }
     }, [content, isExpanded]);
 
-    const isToday = format(selectedDate, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd');
+    // For display purposes, default to today if null
+    const displayDate = selectedDate || new Date();
+    const isDisplayDateToday = isSameDay(displayDate, new Date());
 
     return (
         <>
             <div className={`fixed bottom-0 left-0 right-0 bg-bg-secondary border-t border-bg-tertiary p-4 transition-all duration-300 z-40 ${isExpanded ? 'h-1/2' : 'h-auto'}`}>
                 <div className="max-w-md mx-auto flex flex-col h-full gap-2">
-                    {!isToday && (
+                    {!isDisplayDateToday && (
                         <div className="text-xs text-accent text-center">
-                            📅 {format(selectedDate, 'yyyy년 M월 d일')} 기록
+                            📅 {format(displayDate, 'yyyy년 M월 d일')} 기록
                         </div>
                     )}
                     <div className="flex items-end gap-2 h-full">
@@ -80,7 +84,7 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
                         />
                         <button
                             onClick={() => setShowDatePicker(true)}
-                            className={`p-2 transition-colors ${isToday ? 'text-text-secondary hover:text-text-primary' : 'text-accent'}`}
+                            className={`p-2 transition-colors ${isDisplayDateToday ? 'text-text-secondary hover:text-text-primary' : 'text-accent'}`}
                             title="날짜 선택"
                         >
                             <Calendar size={20} />
@@ -108,7 +112,7 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
                         <h3 className="text-lg font-bold mb-4 text-center">날짜 선택</h3>
                         <input
                             type="date"
-                            value={format(selectedDate, 'yyyy-MM-dd')}
+                            value={format(displayDate, 'yyyy-MM-dd')}
                             onChange={(e) => {
                                 setSelectedDate(new Date(e.target.value + 'T00:00:00'));
                                 setShowDatePicker(false);
@@ -118,7 +122,7 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
                         <div className="flex gap-2 mt-4">
                             <button
                                 onClick={() => {
-                                    setSelectedDate(new Date());
+                                    setSelectedDate(null); // Set to "Now"
                                     setShowDatePicker(false);
                                 }}
                                 className="flex-1 py-2 px-4 bg-accent text-white rounded-lg hover:bg-opacity-90"
