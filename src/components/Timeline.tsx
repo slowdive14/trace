@@ -7,7 +7,7 @@ import { useAuth } from './AuthContext';
 import EntryItem from './EntryItem';
 import { onSnapshot, collection, query, orderBy } from 'firebase/firestore';
 import { db } from '../services/firebase';
-import { Share, Check } from 'lucide-react';
+import { Share, Check, Pin } from 'lucide-react';
 import { generateMarkdown, copyToClipboard } from '../utils/exportUtils';
 import { getLogicalDate } from '../utils/dateUtils';
 
@@ -210,7 +210,7 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
                     <div className="mb-8">
                         <div className="sticky top-[57px] bg-bg-primary/95 backdrop-blur py-2 z-10 border-b border-bg-tertiary flex justify-between items-center mb-4">
                             <h2 className="text-accent text-sm font-bold flex items-center gap-2">
-                                <Check size={14} /> 고정된 할일
+                                <Pin size={14} className="fill-accent" /> 고정된 할일
                             </h2>
                         </div>
                         <div className="space-y-1">
