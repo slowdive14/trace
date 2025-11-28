@@ -86,8 +86,18 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
         }
     };
 
+    const getPinnedEntries = useCallback(() => {
+        return allEntries.filter(entry => {
+            // Basic filters
+            if (category !== 'all' && entry.category !== category) return false;
+            if (selectedTag && !entry.tags.some(tag => tag.startsWith(selectedTag))) return false;
+
+            return entry.isPinned;
+        });
+    }, [allEntries, category, selectedTag]);
+
     const getFilteredEntries = useCallback(() => {
-        let filtered = allEntries;
+        let filtered = allEntries.filter(entry => !entry.isPinned); // Exclude pinned items from main list
 
         // Apply date filter
         const now = new Date();
@@ -113,19 +123,14 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
                 break;
         }
 
-        // Apply category and tag filters, then sort by pinned status
+        // Apply category and tag filters
         return filtered
             .filter(entry => category === 'all' || entry.category === category)
             .filter(entry => !selectedTag || entry.tags.some(tag => tag.startsWith(selectedTag)))
-            .sort((a, b) => {
-                // Pinned items first
-                if (a.isPinned && !b.isPinned) return -1;
-                if (!a.isPinned && b.isPinned) return 1;
-                return 0; // Keep existing order (timestamp desc)
-            })
             .slice(0, displayLimit);
     }, [allEntries, dateFilter, category, selectedTag, displayLimit]);
 
+    const pinnedEntries = getPinnedEntries();
     const entries = getFilteredEntries();
 
     const groupedEntries = entries.reduce((groups: Record<string, Entry[]>, entry: Entry) => {
@@ -200,6 +205,28 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
             </div>
 
             <div className="pb-32 px-4 max-w-md mx-auto">
+                {/* Pinned Entries Section */}
+                {pinnedEntries.length > 0 && (
+                    <div className="mb-8">
+                        <div className="sticky top-[57px] bg-bg-primary/95 backdrop-blur py-2 z-10 border-b border-bg-tertiary flex justify-between items-center mb-4">
+                            <h2 className="text-accent text-sm font-bold flex items-center gap-2">
+                                <Check size={14} /> 고정된 할일
+                            </h2>
+                        </div>
+                        <div className="space-y-1">
+                            {pinnedEntries.map(entry => (
+                                <EntryItem
+                                    key={entry.id}
+                                    entry={entry}
+                                    onDelete={handleDelete}
+                                    onTagClick={onTagClick}
+                                    onPin={handlePin}
+                                />
+                            ))}
+                        </div>
+                    </div>
+                )}
+
                 {Object.entries(groupedEntries).map(([date, dayEntries]) => (
                     <div key={date} className="mb-8">
                         <div className="sticky top-[57px] bg-bg-primary/95 backdrop-blur py-2 z-10 border-b border-bg-tertiary flex justify-between items-center mb-4">
