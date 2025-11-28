@@ -39,7 +39,8 @@ const UnifiedCalendarModal: React.FC<UnifiedCalendarModalProps> = ({ onClose, en
         const dateStr = format(date, 'yyyy-MM-dd');
         const dayEntries = entries.filter(e => format(getLogicalDate(e.timestamp), 'yyyy-MM-dd') === dateStr);
         const dayExpenses = expenses.filter(e => format(getLogicalDate(e.timestamp), 'yyyy-MM-dd') === dateStr);
-        const dayTodo = todos.find(t => format(t.date, 'yyyy-MM-dd') === dateStr);
+        // Lookup by ID (YYYY-MM-DD) instead of date field for robustness
+        const dayTodo = todos.find(t => t.id === dateStr);
         const total = dayExpenses.reduce((sum, e) => sum + e.amount, 0);
 
         return {
@@ -49,7 +50,7 @@ const UnifiedCalendarModal: React.FC<UnifiedCalendarModalProps> = ({ onClose, en
         };
     };
 
-    const selectedTodo = selectedDate ? todos.find(t => format(t.date, 'yyyy-MM-dd') === format(selectedDate, 'yyyy-MM-dd')) : undefined;
+    const selectedTodo = selectedDate ? todos.find(t => t.id === format(selectedDate, 'yyyy-MM-dd')) : undefined;
     const selectedMarkdown = selectedDate ? exportDailyMarkdown(selectedDate, entries, expenses, selectedTodo) : '';
 
     return (
