@@ -114,12 +114,16 @@ const EntryItem: React.FC<EntryItemProps> = ({ entry, onDelete, highlightQuery, 
                     복사됨
                 </div>
             )}
-            <div className="w-12 text-right text-text-secondary font-mono text-sm pt-1 shrink-0 flex flex-col items-end gap-1">
+            <div className={`w-12 text-right font-mono text-sm pt-1 shrink-0 flex flex-col items-end gap-1 ${entry.category === 'thought' ? 'text-purple-500' :
+                    entry.category === 'chore' ? 'text-orange-500' :
+                        'text-blue-500'
+                }`}>
                 <span>{formattedTime}</span>
                 {entry.isPinned && <Pin size={12} className="text-accent fill-accent" />}
             </div>
             <div className="flex-1 min-w-0">
-                <div className="text-text-primary break-words whitespace-pre-wrap">
+                <div className={`text-text-primary break-words whitespace-pre-wrap ${entry.category === 'thought' ? 'font-serif leading-relaxed' : ''
+                    }`}>
                     {renderContent()}
                 </div>
             </div>

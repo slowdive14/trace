@@ -159,7 +159,7 @@ const AppContent: React.FC = () => {
                   setSelectedTag(null);
                 }}
                 className={`flex-1 py-4 text-sm font-medium transition-colors ${activeTab === 'action'
-                  ? 'text-accent border-b-2 border-accent'
+                  ? 'text-blue-500 border-b-2 border-blue-500'
                   : 'text-text-secondary hover:text-text-primary'
                   }`}
               >
@@ -171,7 +171,7 @@ const AppContent: React.FC = () => {
                   setSelectedTag(null);
                 }}
                 className={`flex-1 py-4 text-sm font-medium transition-colors ${activeTab === 'thought'
-                  ? 'text-accent border-b-2 border-accent'
+                  ? 'text-purple-500 border-b-2 border-purple-500'
                   : 'text-text-secondary hover:text-text-primary'
                   }`}
               >
@@ -183,7 +183,7 @@ const AppContent: React.FC = () => {
                   setSelectedTag(null);
                 }}
                 className={`flex-1 py-4 text-sm font-medium transition-colors ${activeTab === 'chore'
-                  ? 'text-accent border-b-2 border-accent'
+                  ? 'text-orange-500 border-b-2 border-orange-500'
                   : 'text-text-secondary hover:text-text-primary'
                   }`}
               >
@@ -199,7 +199,7 @@ const AppContent: React.FC = () => {
                   : 'text-text-secondary hover:text-text-primary'
                   }`}
               >
-                투두
+                루틴
               </button>
               <button
                 onClick={() => {

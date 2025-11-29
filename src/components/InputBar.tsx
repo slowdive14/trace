@@ -98,7 +98,10 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
                         <button
                             onClick={handleSubmit}
                             disabled={!content.trim()}
-                            className="p-2 bg-accent text-white rounded-full hover:bg-opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                            className={`p-2 text-white rounded-full hover:bg-opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all ${activeCategory === 'thought' ? 'bg-purple-500' :
+                                    activeCategory === 'chore' ? 'bg-orange-500' :
+                                        'bg-blue-500'
+                                }`}
                         >
                             <Send size={20} />
                         </button>
