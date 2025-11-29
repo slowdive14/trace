@@ -115,21 +115,7 @@ const EntryItem: React.FC<EntryItemProps> = ({ entry, onDelete, highlightQuery, 
                 </div>
             )}
             <div className={`w-12 text-right font-mono text-sm pt-1 shrink-0 flex flex-col items-end gap-1 ${entry.category === 'thought' ? 'text-purple-500' :
-                    entry.category === 'chore' ? 'text-orange-500' :
-                        'text-blue-500'
-                }`}>
-                <span>{formattedTime}</span>
-                {entry.isPinned && <Pin size={12} className="text-accent fill-accent" />}
-            </div>
-            <div className="flex-1 min-w-0">
-                <div className={`text-text-primary break-words whitespace-pre-wrap ${entry.category === 'thought' ? 'font-serif leading-relaxed' : ''
-                    }`}>
-                    {renderContent()}
-                </div>
-            </div>
-            <div className={`flex gap-1 transition-all shrink-0 items-start ${isDeleting ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
-                {isDeleting ? (
-                    <>
+                entry.category === 'chore' ? 'text-orange-500' :
                         <button
                             type="button"
                             onClick={handleCancelDelete}
@@ -147,38 +133,39 @@ const EntryItem: React.FC<EntryItemProps> = ({ entry, onDelete, highlightQuery, 
                             삭제
                         </button>
                     </>
-                ) : (
-                    <>
-                        {onPin && (
-                            <button
-                                type="button"
-                                onClick={handlePinClick}
-                                className={`transition-colors p-1 ${entry.isPinned ? 'text-accent' : 'text-text-secondary hover:text-accent'}`}
-                                aria-label={entry.isPinned ? "Unpin entry" : "Pin entry"}
-                            >
-                                <Pin size={16} className={entry.isPinned ? "fill-accent" : ""} />
-                            </button>
-                        )}
-                        <button
-                            type="button"
-                            onClick={handleCopy}
-                            className="text-text-secondary hover:text-accent transition-colors p-1"
-                            aria-label="Copy entry"
-                        >
-                            <Copy size={16} />
-                        </button>
-                        <button
-                            type="button"
-                            onClick={handleDeleteClick}
-                            className="text-text-secondary hover:text-red-400 transition-colors p-1"
-                            aria-label="Delete entry"
-                        >
-                            <Trash2 size={16} />
-                        </button>
-                    </>
-                )}
-            </div>
-        </div>
+    ) : (
+        <>
+            {onPin && (
+                <button
+                    type="button"
+                    onClick={handlePinClick}
+                    className={`transition-colors p-1 ${entry.isPinned ? 'text-accent' : 'text-text-secondary hover:text-accent'}`}
+                    aria-label={entry.isPinned ? "Unpin entry" : "Pin entry"}
+                >
+                    <Pin size={16} className={entry.isPinned ? "fill-accent" : ""} />
+                </button>
+            )}
+            <button
+                type="button"
+                onClick={handleCopy}
+                className="text-text-secondary hover:text-accent transition-colors p-1"
+                aria-label="Copy entry"
+            >
+                <Copy size={16} />
+            </button>
+            <button
+                type="button"
+                onClick={handleDeleteClick}
+                className="text-text-secondary hover:text-red-400 transition-colors p-1"
+                aria-label="Delete entry"
+            >
+                <Trash2 size={16} />
+            </button>
+        </>
+    )
+}
+            </div >
+        </div >
     );
 };
 
