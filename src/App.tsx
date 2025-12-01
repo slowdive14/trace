@@ -199,7 +199,7 @@ const AppContent: React.FC = () => {
                   : 'text-text-secondary hover:text-text-primary'
                   }`}
               >
-                루틴
+                투두
               </button>
               <button
                 onClick={() => {
