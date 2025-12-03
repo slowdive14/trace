@@ -93,6 +93,28 @@ const AppContent: React.FC = () => {
     return () => unsubscribe();
   }, [user]);
 
+  // Subscribe to worry entries
+  useEffect(() => {
+    if (!user) return;
+
+    const q = query(
+      collection(db, `users/${user.uid}/worryEntries`),
+      orderBy("timestamp", "desc")
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const newWorryEntries = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        timestamp: doc.data().timestamp.toDate(),
+        createdAt: doc.data().createdAt.toDate(),
+      })) as WorryEntry[];
+      setWorryEntries(newWorryEntries);
+    });
+
+    return () => unsubscribe();
+  }, [user]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-bg-primary flex items-center justify-center text-text-secondary">
