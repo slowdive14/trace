@@ -400,7 +400,8 @@ export const addWorryEntry = async (
     worryId: string,
     type: WorryEntry['type'],
     content: string,
-    week: number
+    week: number,
+    parentId?: string
 ): Promise<string> => {
     const entryRef = collection(db, 'users', userId, 'worryEntries');
     const docRef = await addDoc(entryRef, {
@@ -408,6 +409,7 @@ export const addWorryEntry = async (
         type,
         content,
         week,
+        parentId: parentId || null,
         timestamp: Timestamp.now(),
         createdAt: Timestamp.now(),
     });

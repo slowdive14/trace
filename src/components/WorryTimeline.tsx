@@ -7,9 +7,10 @@ interface WorryTimelineProps {
     entries: WorryEntry[];
     onUpdate: (id: string, content: string) => void;
     onDelete: (id: string) => void;
+    onReply: (id: string, type: 'action' | 'result', content?: string) => void;
 }
 
-const WorryTimeline: React.FC<WorryTimelineProps> = ({ entries, onUpdate, onDelete }) => {
+const WorryTimeline: React.FC<WorryTimelineProps> = ({ entries, onUpdate, onDelete, onReply }) => {
     const groupedEntries = useMemo(() => {
         const groups: Record<number, WorryEntry[]> = {};
         entries.forEach(entry => {
@@ -25,20 +26,68 @@ const WorryTimeline: React.FC<WorryTimelineProps> = ({ entries, onUpdate, onDele
         .map(Number)
         .sort((a, b) => b - a);
 
-    const sortEntries = (weekEntries: WorryEntry[]) => {
-        const typeOrder = { worry: 0, action: 1, result: 2 };
-        return [...weekEntries].sort((a, b) => {
-            const typeDiff = typeOrder[a.type] - typeOrder[b.type];
-            if (typeDiff !== 0) return typeDiff;
-            return b.timestamp.getTime() - a.timestamp.getTime();
+    const renderThreadedEntries = (weekEntries: WorryEntry[]) => {
+        // 1. Map entries by ID for easy lookup
+        const entryMap = new Map(weekEntries.map(e => [e.id, e]));
+
+        // 2. Separate roots and children
+        const roots: WorryEntry[] = [];
+        const childrenMap: Record<string, WorryEntry[]> = {};
+
+        weekEntries.forEach(entry => {
+            const isChild = entry.parentId && entryMap.has(entry.parentId);
+            if (isChild) {
+                if (!childrenMap[entry.parentId!]) {
+                    childrenMap[entry.parentId!] = [];
+                }
+                childrenMap[entry.parentId!].push(entry);
+            } else {
+                roots.push(entry);
+            }
         });
+
+        // 3. Sort roots by timestamp DESC (Newest first)
+        roots.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+
+        // 4. Sort children by timestamp ASC (Oldest first - story flow)
+        Object.values(childrenMap).forEach(list => {
+            list.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+        });
+
+        return (
+            <div className="space-y-4">
+                {roots.map(root => (
+                    <div key={root.id} className="relative">
+                        <WorryCard
+                            entry={root}
+                            onUpdate={onUpdate}
+                            onDelete={onDelete}
+                            onReply={onReply}
+                        />
+                        {/* Render Children */}
+                        {childrenMap[root.id] && (
+                            <div className="ml-6 pl-4 border-l-2 border-bg-tertiary space-y-3 mt-2">
+                                {childrenMap[root.id].map(child => (
+                                    <WorryCard
+                                        key={child.id}
+                                        entry={child}
+                                        onUpdate={onUpdate}
+                                        onDelete={onDelete}
+                                        onReply={onReply}
+                                    />
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                ))}
+            </div>
+        );
     };
 
     return (
         <div className="pb-4">
             {sortedWeeks.map(week => {
                 const weekEntries = groupedEntries[week];
-                const sortedWeekEntries = sortEntries(weekEntries);
                 const firstEntryDate = weekEntries[0]?.timestamp;
 
                 return (
@@ -51,16 +100,7 @@ const WorryTimeline: React.FC<WorryTimelineProps> = ({ entries, onUpdate, onDele
                                 </span>
                             )}
                         </div>
-                        <div className="space-y-2">
-                            {sortedWeekEntries.map(entry => (
-                                <WorryCard
-                                    key={entry.id}
-                                    entry={entry}
-                                    onUpdate={onUpdate}
-                                    onDelete={onDelete}
-                                />
-                            ))}
-                        </div>
+                        {renderThreadedEntries(weekEntries)}
                     </div>
                 );
             })}

@@ -103,4 +103,5 @@ export interface WorryEntry {
     content: string;
     timestamp: Date;
     createdAt: Date;
+    parentId?: string;
 }

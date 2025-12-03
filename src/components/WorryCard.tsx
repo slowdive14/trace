@@ -1,17 +1,20 @@
 import React, { useState, useRef, useEffect } from 'react';
 import type { WorryEntry } from '../types/types';
 import { format } from 'date-fns';
-import { MoreVertical, Edit2, Trash2, X, Check } from 'lucide-react';
+import { MoreVertical, Edit2, Trash2, X, Check, Wand2 } from 'lucide-react';
+import WorryActionGenerator from './WorryActionGenerator';
 
 interface WorryCardProps {
     entry: WorryEntry;
     onUpdate: (id: string, content: string) => void;
     onDelete: (id: string) => void;
+    onReply: (id: string, type: 'action' | 'result', content?: string) => void;
 }
 
-const WorryCard: React.FC<WorryCardProps> = ({ entry, onUpdate, onDelete }) => {
+const WorryCard: React.FC<WorryCardProps> = ({ entry, onUpdate, onDelete, onReply }) => {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
+    const [showAiGenerator, setShowAiGenerator] = useState(false);
     const [editContent, setEditContent] = useState(entry.content);
     const menuRef = useRef<HTMLDivElement>(null);
 
@@ -98,9 +101,54 @@ const WorryCard: React.FC<WorryCardProps> = ({ entry, onUpdate, onDelete }) => {
                             <p className="text-text-primary whitespace-pre-wrap text-sm leading-relaxed break-words pr-6">
                                 {entry.content}
                             </p>
-                            <p className="text-xs text-text-secondary mt-1 text-right">
-                                {format(entry.timestamp, 'M/d HH:mm')}
-                            </p>
+
+                            {showAiGenerator && (
+                                <div className="mt-3">
+                                    <WorryActionGenerator
+                                        worryContent={entry.content}
+                                        onSelectAction={(actionContent) => {
+                                            onReply(entry.id, 'action', actionContent);
+                                            setShowAiGenerator(false);
+                                        }}
+                                        onClose={() => setShowAiGenerator(false)}
+                                    />
+                                </div>
+                            )}
+
+                            <div className="flex items-center justify-between mt-2">
+                                <p className="text-xs text-text-secondary">
+                                    {format(entry.timestamp, 'M/d HH:mm')}
+                                </p>
+                                <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    {entry.type === 'worry' && (
+                                        <>
+                                            <button
+                                                onClick={() => setShowAiGenerator(!showAiGenerator)}
+                                                className="flex items-center gap-1 text-xs text-text-secondary hover:text-purple-400 px-2 py-1 rounded hover:bg-purple-900/20"
+                                                title="AI 액션 추천"
+                                            >
+                                                <span className="text-purple-400">✨</span> AI 추천
+                                            </button>
+                                            <button
+                                                onClick={() => onReply(entry.id, 'action')}
+                                                className="flex items-center gap-1 text-xs text-text-secondary hover:text-amber-400 px-2 py-1 rounded hover:bg-amber-900/20"
+                                                title="이 고민에 대한 액션 추가"
+                                            >
+                                                <span className="text-amber-400">⚡</span> 액션 추가
+                                            </button>
+                                        </>
+                                    )}
+                                    {entry.type === 'action' && (
+                                        <button
+                                            onClick={() => onReply(entry.id, 'result')}
+                                            className="flex items-center gap-1 text-xs text-text-secondary hover:text-green-400 px-2 py-1 rounded hover:bg-green-900/20"
+                                            title="이 액션에 대한 결과 추가"
+                                        >
+                                            <span className="text-green-400">✅</span> 결과 추가
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
                         </>
                     )}
                 </div>

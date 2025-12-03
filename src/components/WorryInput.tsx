@@ -4,12 +4,23 @@ import { differenceInCalendarDays } from 'date-fns';
 interface WorryInputProps {
     activeWorryId: string | null;
     worryStartDate: Date | null;
-    onSubmit: (entry: { type: 'worry' | 'action' | 'result', content: string, week: number }) => void;
+    replyingToId: string | null;
+    replyType?: 'action' | 'result';
+    onCancelReply: () => void;
+    onSubmit: (entry: { type: 'worry' | 'action' | 'result', content: string, week: number, parentId?: string }) => void;
+    isEmbedded?: boolean;
 }
 
-const WorryInput: React.FC<WorryInputProps> = ({ activeWorryId, worryStartDate, onSubmit }) => {
+const WorryInput: React.FC<WorryInputProps> = ({ activeWorryId, worryStartDate, replyingToId, replyType, onCancelReply, onSubmit, isEmbedded = false }) => {
     const [content, setContent] = useState('');
     const [type, setType] = useState<'worry' | 'action' | 'result'>('worry');
+
+    // Automatically switch to 'action' or 'result' when replying
+    React.useEffect(() => {
+        if (replyingToId && replyType) {
+            setType(replyType);
+        }
+    }, [replyingToId, replyType]);
 
     const calculateWeek = (startDate: Date): number => {
         const today = new Date();
@@ -22,11 +33,20 @@ const WorryInput: React.FC<WorryInputProps> = ({ activeWorryId, worryStartDate, 
         if (!content.trim() || !activeWorryId || !worryStartDate) return;
 
         const week = calculateWeek(worryStartDate);
-        onSubmit({ type, content: content.trim(), week });
+        onSubmit({
+            type,
+            content: content.trim(),
+            week,
+            parentId: replyingToId || undefined
+        });
         setContent('');
+        if (replyingToId) {
+            onCancelReply();
+        }
     };
 
     if (!activeWorryId) {
+        if (isEmbedded) return null;
         return (
             <div className="fixed bottom-20 left-0 right-0 bg-bg-secondary border-t border-bg-tertiary p-4 z-10">
                 <div className="max-w-md mx-auto text-center text-text-secondary text-sm">
@@ -36,9 +56,30 @@ const WorryInput: React.FC<WorryInputProps> = ({ activeWorryId, worryStartDate, 
         );
     }
 
+    const containerClasses = isEmbedded
+        ? "mt-4 bg-bg-secondary border border-bg-tertiary rounded-xl p-4"
+        : "fixed bottom-20 left-0 right-0 bg-bg-secondary border-t border-bg-tertiary p-4 z-10";
+
     return (
-        <div className="fixed bottom-20 left-0 right-0 bg-bg-secondary border-t border-bg-tertiary p-4 z-10">
-            <div className="max-w-md mx-auto">
+        <div className={containerClasses}>
+            <div className={isEmbedded ? "w-full" : "max-w-md mx-auto"}>
+                {replyingToId && (
+                    <div className="flex items-center justify-between bg-bg-tertiary px-3 py-2 rounded-lg mb-3 text-sm">
+                        <span className="text-text-secondary">
+                            <span className={`${replyType === 'action' ? 'text-amber-400' : 'text-green-400'} mr-1`}>
+                                {replyType === 'action' ? '⚡' : '✅'}
+                            </span>
+                            이전 기록에 {replyType === 'action' ? '액션' : '결과'} 추가 중...
+                        </span>
+                        <button
+                            onClick={onCancelReply}
+                            className="text-text-secondary hover:text-text-primary"
+                        >
+                            취소
+                        </button>
+                    </div>
+                )}
+
                 <div className="flex gap-2 mb-3">
                     <button
                         type="button"
@@ -79,6 +120,7 @@ const WorryInput: React.FC<WorryInputProps> = ({ activeWorryId, worryStartDate, 
                         onChange={(e) => setContent(e.target.value)}
                         placeholder={`${type === 'worry' ? '고민되는 점' : type === 'action' ? '실행할 계획' : '실행 결과'}을 입력하세요`}
                         className="flex-1 bg-bg-tertiary text-text-primary placeholder-text-secondary border border-bg-tertiary rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-green-500 focus:bg-bg-secondary transition-all"
+                        autoFocus={!!replyingToId}
                     />
                     <button
                         type="submit"
