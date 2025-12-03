@@ -9,7 +9,8 @@ import ExpenseTimeline from './components/ExpenseTimeline';
 import ExpenseInput from './components/ExpenseInput';
 import UnifiedCalendarModal from './components/UnifiedCalendarModal';
 import TodoTab from './components/TodoTab';
-import type { Entry, Expense, Todo } from './types/types';
+import WorryTab from './components/WorryTab';
+import type { Entry, Expense, Todo, WorryEntry } from './types/types';
 import { onSnapshot, collection, query, orderBy } from 'firebase/firestore';
 import { db } from './services/firebase';
 
@@ -18,7 +19,7 @@ const AppContent: React.FC = () => {
   const [showCalendar, setShowCalendar] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [showUnifiedCalendar, setShowUnifiedCalendar] = useState(false);
-  const [activeTab, setActiveTab] = useState<'action' | 'thought' | 'chore' | 'todo' | 'expense'>('action');
+  const [activeTab, setActiveTab] = useState<'action' | 'thought' | 'chore' | 'todo' | 'expense' | 'worry'>('action');
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [selectedExpenseDate, setSelectedExpenseDate] = useState<Date | undefined>(undefined);
 
@@ -26,6 +27,7 @@ const AppContent: React.FC = () => {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [todos, setTodos] = useState<Todo[]>([]);
+  const [worryEntries, setWorryEntries] = useState<WorryEntry[]>([]);
 
 
   // Subscribe to entries
@@ -122,7 +124,9 @@ const AppContent: React.FC = () => {
             </div>
           )}
 
-          {activeTab === 'expense' ? (
+          {activeTab === 'worry' ? (
+            <WorryTab />
+          ) : activeTab === 'expense' ? (
             <>
               <ExpenseTimeline onDateSelect={setSelectedExpenseDate} />
               <ExpenseInput externalDate={selectedExpenseDate} />
@@ -151,7 +155,8 @@ const AppContent: React.FC = () => {
           )}
 
           {/* Category Tabs */}
-          <div className="fixed bottom-20 left-0 right-0 bg-bg-primary/95 backdrop-blur border-t border-bg-tertiary z-30">
+          <div className={`fixed left-0 right-0 bg-bg-primary/95 backdrop-blur border-t border-bg-tertiary z-30 ${['worry'].includes(activeTab) ? 'bottom-0' : 'bottom-20'
+            }`}>
             <div className="max-w-md mx-auto flex">
               <button
                 onClick={() => {
@@ -213,6 +218,18 @@ const AppContent: React.FC = () => {
               >
                 💰 가계부
               </button>
+              <button
+                onClick={() => {
+                  setActiveTab('worry');
+                  setSelectedTag(null);
+                }}
+                className={`flex-1 py-4 text-sm font-medium transition-colors ${activeTab === 'worry'
+                  ? 'text-green-500 border-b-2 border-green-500'
+                  : 'text-text-secondary hover:text-text-primary'
+                  }`}
+              >
+                🌱 고민
+              </button>
             </div>
           </div>
 
@@ -236,6 +253,7 @@ const AppContent: React.FC = () => {
               entries={entries}
               expenses={expenses}
               todos={todos}
+              worryEntries={worryEntries}
             />
           )}
         </>

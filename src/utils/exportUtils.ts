@@ -1,5 +1,5 @@
 import { format } from 'date-fns';
-import type { Entry, Expense, Todo } from '../types/types';
+import type { Entry, Expense, Todo, Worry, WorryEntry } from '../types/types';
 import { EXPENSE_CATEGORY_EMOJI } from '../types/types';
 import { getLogicalDate } from './dateUtils';
 
@@ -40,7 +40,8 @@ export function exportDailyMarkdown(
     date: Date,
     entries: Entry[],
     expenses: Expense[],
-    todo?: Todo
+    todo?: Todo,
+    worryEntries?: WorryEntry[]
 ): string {
     const dateStr = format(date, 'yyyy-MM-dd');
 
@@ -100,9 +101,109 @@ export function exportDailyMarkdown(
             .filter(e => e.amount > 0)
             .reduce((sum, e) => sum + e.amount, 0);
         markdown += `**합계**: ${total.toLocaleString()}원\n`;
+        markdown += `**합계**: ${total.toLocaleString()}원\n`;
+    }
+
+    // 고민 섹션 (Worry)
+    if (worryEntries && worryEntries.length > 0) {
+        // Filter for the specific day
+        const dayWorryEntries = worryEntries.filter(e =>
+            format(getLogicalDate(e.timestamp), 'yyyy-MM-dd') === dateStr
+        );
+
+        if (dayWorryEntries.length > 0) {
+            markdown += '\n#### 고민\n';
+
+            // Group by worryId to show context if needed, or just list them
+            // For daily view, simple list might be better, or grouped by worry title if available.
+            // Since we only have entries here, we'll list them. 
+            // Ideally we might want the worry title, but for now let's just show the entries.
+
+            // Sort by type: worry -> action -> result
+            const typeOrder = { worry: 0, action: 1, result: 2 };
+            const sorted = dayWorryEntries.sort((a, b) => {
+                const typeDiff = typeOrder[a.type] - typeOrder[b.type];
+                if (typeDiff !== 0) return typeDiff;
+                return a.timestamp.getTime() - b.timestamp.getTime();
+            });
+
+            sorted.forEach(entry => {
+                const icon = entry.type === 'worry' ? '💭'
+                    : entry.type === 'action' ? '⚡'
+                        : '✅';
+                markdown += `- ${icon} ${entry.content}\n`;
+            });
+            markdown += '\n';
+        }
     }
 
     return markdown.trim();
+};
+
+
+
+export const generateWorryMarkdown = (
+    worry: Worry,
+    entries: WorryEntry[]
+): string => {
+    const lines: string[] = [];
+
+    // Header
+    lines.push(`## 고민: ${worry.title}`);
+
+    const startStr = format(worry.startDate, 'yyyy-MM-dd');
+    const endStr = worry.closedAt
+        ? format(worry.closedAt, 'yyyy-MM-dd')
+        : '진행 중';
+    lines.push(`**기간**: ${startStr} ~ ${endStr}`);
+    lines.push('');
+
+    // Group entries by week
+    const byWeek = entries.reduce((acc, entry) => {
+        if (!acc[entry.week]) acc[entry.week] = [];
+        acc[entry.week].push(entry);
+        return acc;
+    }, {} as Record<number, WorryEntry[]>);
+
+    // Sort weeks ascending for export
+    const weeks = Object.keys(byWeek).map(Number).sort((a, b) => a - b);
+
+    for (const week of weeks) {
+        const weekEntries = byWeek[week];
+        const firstEntry = weekEntries[0];
+        const dateStr = format(firstEntry.timestamp, 'M/d');
+
+        lines.push(`### Week ${week} (${dateStr})`);
+
+        // Sort by type order: worry -> action -> result
+        const typeOrder = { worry: 0, action: 1, result: 2 };
+        const sorted = weekEntries.sort((a, b) => {
+            const typeDiff = typeOrder[a.type] - typeOrder[b.type];
+            if (typeDiff !== 0) return typeDiff;
+            return a.timestamp.getTime() - b.timestamp.getTime();
+        });
+
+        for (const entry of sorted) {
+            const icon = entry.type === 'worry' ? '💭'
+                : entry.type === 'action' ? '⚡'
+                    : '✅';
+            lines.push(`- ${icon} ${entry.content}`);
+        }
+        lines.push('');
+    }
+
+    // Reflection (if closed)
+    if (worry.reflection) {
+        lines.push('---');
+        lines.push('');
+        lines.push('### 마무리 회고');
+        lines.push(`- **처음 의도를 이루었는가**: ${worry.reflection.intentAchieved}`);
+        lines.push(`- **의도가 변화했는가**: ${worry.reflection.intentChanged}`);
+        lines.push(`- **결과가 마음에 드는가**: ${worry.reflection.satisfiedWithResult}`);
+        lines.push(`- **어떤 변화가 일어났는가**: ${worry.reflection.whatChanged}`);
+    }
+
+    return lines.join('\n');
 };
 
 export const copyToClipboard = async (text: string) => {

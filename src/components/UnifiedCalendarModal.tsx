@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { X, Copy, Check } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay } from 'date-fns';
 import { ko } from 'date-fns/locale';
-import type { Entry, Expense, Todo } from '../types/types';
+import type { Entry, Expense, Todo, WorryEntry } from '../types/types';
 import { exportDailyMarkdown } from '../utils/exportUtils';
 import { getLogicalDate } from '../utils/dateUtils';
 
@@ -11,9 +11,10 @@ interface UnifiedCalendarModalProps {
     entries: Entry[];
     expenses: Expense[];
     todos: Todo[];
+    worryEntries: WorryEntry[];
 }
 
-const UnifiedCalendarModal: React.FC<UnifiedCalendarModalProps> = ({ onClose, entries, expenses, todos }) => {
+const UnifiedCalendarModal: React.FC<UnifiedCalendarModalProps> = ({ onClose, entries, expenses, todos, worryEntries }) => {
     const [currentMonth, setCurrentMonth] = useState(new Date());
     const [selectedDate, setSelectedDate] = useState<Date | null>(null);
     const [copied, setCopied] = useState(false);
@@ -29,7 +30,7 @@ const UnifiedCalendarModal: React.FC<UnifiedCalendarModalProps> = ({ onClose, en
 
         const dateStr = format(selectedDate, 'yyyy-MM-dd');
         const todo = todos.find(t => t.id === dateStr);
-        const markdown = exportDailyMarkdown(selectedDate, entries, expenses, todo);
+        const markdown = exportDailyMarkdown(selectedDate, entries, expenses, todo, worryEntries);
         navigator.clipboard.writeText(markdown);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
@@ -39,6 +40,7 @@ const UnifiedCalendarModal: React.FC<UnifiedCalendarModalProps> = ({ onClose, en
         const dateStr = format(date, 'yyyy-MM-dd');
         const dayEntries = entries.filter(e => format(getLogicalDate(e.timestamp), 'yyyy-MM-dd') === dateStr);
         const dayExpenses = expenses.filter(e => format(getLogicalDate(e.timestamp), 'yyyy-MM-dd') === dateStr);
+        const dayWorryEntries = worryEntries.filter(e => format(getLogicalDate(e.timestamp), 'yyyy-MM-dd') === dateStr);
         // Lookup by ID (YYYY-MM-DD) instead of date field for robustness
         const dayTodo = todos.find(t => t.id === dateStr);
         const total = dayExpenses
@@ -46,14 +48,14 @@ const UnifiedCalendarModal: React.FC<UnifiedCalendarModalProps> = ({ onClose, en
             .reduce((sum, e) => sum + e.amount, 0);
 
         return {
-            count: dayEntries.length + dayExpenses.length + (dayTodo ? 1 : 0),
+            count: dayEntries.length + dayExpenses.length + dayWorryEntries.length + (dayTodo ? 1 : 0),
             total,
-            hasData: dayEntries.length > 0 || dayExpenses.length > 0 || !!dayTodo
+            hasData: dayEntries.length > 0 || dayExpenses.length > 0 || dayWorryEntries.length > 0 || !!dayTodo
         };
     };
 
     const selectedTodo = selectedDate ? todos.find(t => t.id === format(selectedDate, 'yyyy-MM-dd')) : undefined;
-    const selectedMarkdown = selectedDate ? exportDailyMarkdown(selectedDate, entries, expenses, selectedTodo) : '';
+    const selectedMarkdown = selectedDate ? exportDailyMarkdown(selectedDate, entries, expenses, selectedTodo, worryEntries) : '';
 
     return (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>

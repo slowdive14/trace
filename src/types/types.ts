@@ -71,3 +71,36 @@ export const EXPENSE_CATEGORY_EMOJI: Record<ExpenseCategory, string> = {
     '공간 사용료': '🏢',
     '기타': '🏷️'
 };
+
+export type WorryStatus = 'active' | 'closed';
+
+export type WorryEntryType = 'worry' | 'action' | 'result';
+
+export interface WorryReflection {
+    intentAchieved: string;
+    intentChanged: string;
+    satisfiedWithResult: string;
+    whatChanged: string;
+}
+
+export interface Worry {
+    id: string;
+    userId: string;
+    title: string;
+    status: WorryStatus;
+    startDate: Date;
+    closedAt?: Date;
+    reflection?: WorryReflection;
+    createdAt: Date;
+    updatedAt: Date;
+}
+
+export interface WorryEntry {
+    id: string;
+    worryId: string;
+    week: number;
+    type: WorryEntryType;
+    content: string;
+    timestamp: Date;
+    createdAt: Date;
+}

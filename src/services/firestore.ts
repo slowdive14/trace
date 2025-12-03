@@ -1,87 +1,23 @@
 import {
     collection,
-    addDoc,
-    query,
-    orderBy,
-    getDocs,
-    deleteDoc,
     doc,
-    Timestamp,
+    getDocs,
+    getDoc,
+    addDoc,
+    updateDoc,
+    deleteDoc,
+    query,
     where,
-    setDoc,
-    getDoc
-} from "firebase/firestore";
-import { db } from "./firebase";
+    orderBy,
+    limit,
+    Timestamp,
+    setDoc
+} from 'firebase/firestore';
+import { db } from './firebase';
 import { startOfDay } from 'date-fns';
-import type { Entry, Expense, ExpenseCategory, Todo } from "../types/types";
+import type { Expense, ExpenseCategory, Todo, Worry, WorryEntry } from '../types/types';
 
-
-const EXPENSES_COLLECTION = "expenses";
-
-export const addEntry = async (
-    userId: string,
-    content: string,
-    tags: string[],
-    category: 'action' | 'thought' | 'chore',
-    date?: Date,
-    collectionName: string = 'entries'
-) => {
-    try {
-        const timestamp = date ? Timestamp.fromDate(date) : Timestamp.now();
-        const docRef = await addDoc(collection(db, `users/${userId}/${collectionName}`), {
-            content,
-            tags,
-            category,
-            timestamp,
-            createdAt: Timestamp.now(),
-            updatedAt: Timestamp.now(),
-        });
-        return docRef.id;
-    } catch (e) {
-        console.error("Error adding document: ", e);
-        throw e;
-    }
-};
-
-export const getEntries = async (userId: string, collectionName: string = 'entries') => {
-    try {
-        const q = query(
-            collection(db, `users/${userId}/${collectionName}`),
-            orderBy("timestamp", "desc")
-        );
-        const querySnapshot = await getDocs(q);
-        return querySnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-            timestamp: doc.data().timestamp.toDate(),
-        })) as Entry[];
-    } catch (e) {
-        console.error("Error getting documents: ", e);
-        throw e;
-    }
-};
-
-export const deleteEntry = async (userId: string, entryId: string, collectionName: string = 'entries') => {
-    try {
-        await deleteDoc(doc(db, `users/${userId}/${collectionName}`, entryId));
-    } catch (e) {
-        console.error("Error deleting document: ", e);
-        throw e;
-    }
-};
-
-export const toggleEntryPin = async (userId: string, entryId: string, currentStatus: boolean, collectionName: string = 'entries') => {
-    try {
-        const docRef = doc(db, `users/${userId}/${collectionName}`, entryId);
-        await setDoc(docRef, {
-            isPinned: !currentStatus,
-            updatedAt: Timestamp.now()
-        }, { merge: true });
-    } catch (e) {
-        console.error("Error toggling pin status: ", e);
-        throw e;
-    }
-};
+const EXPENSES_COLLECTION = 'expenses';
 
 // Expense functions
 export const addExpense = async (
@@ -165,6 +101,85 @@ export const deleteExpense = async (userId: string, expenseId: string) => {
         await deleteDoc(doc(db, `users/${userId}/${EXPENSES_COLLECTION}`, expenseId));
     } catch (e) {
         console.error("Error deleting expense: ", e);
+        throw e;
+    }
+};
+
+// Generic Entry functions
+export const deleteEntry = async (userId: string, entryId: string, collectionName: string) => {
+    try {
+        await deleteDoc(doc(db, `users/${userId}/${collectionName}`, entryId));
+    } catch (e) {
+        console.error("Error deleting entry: ", e);
+        throw e;
+    }
+};
+
+export const toggleEntryPin = async (userId: string, entryId: string, currentStatus: boolean, collectionName: string) => {
+    try {
+        const docRef = doc(db, `users/${userId}/${collectionName}`, entryId);
+        await updateDoc(docRef, {
+            isPinned: !currentStatus,
+            updatedAt: Timestamp.now()
+        });
+    } catch (e) {
+        console.error("Error toggling pin: ", e);
+        throw e;
+    }
+};
+
+export const addEntry = async (
+    userId: string,
+    content: string,
+    tags: string[],
+    category: string,
+    date?: Date,
+    collectionName: string = 'entries'
+) => {
+    try {
+        const timestamp = date ? Timestamp.fromDate(date) : Timestamp.now();
+        const docRef = await addDoc(collection(db, `users/${userId}/${collectionName}`), {
+            content,
+            tags,
+            category,
+            timestamp,
+            isPinned: false,
+            createdAt: Timestamp.now(),
+        });
+        return docRef.id;
+    } catch (e) {
+        console.error("Error adding entry: ", e);
+        throw e;
+    }
+};
+
+export const getEntries = async (userId: string, collectionName: string = 'entries') => {
+    try {
+        const q = query(
+            collection(db, `users/${userId}/${collectionName}`),
+            orderBy("timestamp", "desc")
+        );
+        const querySnapshot = await getDocs(q);
+        return querySnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            timestamp: doc.data().timestamp.toDate(),
+        })) as any[]; // Using any[] to avoid circular dependency issues if Entry type isn't perfectly aligned
+    } catch (e) {
+        console.error("Error getting entries: ", e);
+        throw e;
+    }
+};
+
+export const updateEntry = async (userId: string, entryId: string, content: string, collectionName: string = 'entries') => {
+    try {
+        const entryRef = doc(db, `users/${userId}/${collectionName}`, entryId);
+        await updateDoc(entryRef, {
+            content,
+            updatedAt: Timestamp.now()
+        });
+    } catch (e) {
+        console.error("Error updating entry: ", e);
         throw e;
     }
 };
@@ -265,4 +280,182 @@ export const getTemplate = async (userId: string, collectionName: string = 'todo
         console.error("Error getting template: ", e);
         throw e;
     }
+};
+
+// ============ Worry Functions ============
+
+// Create new worry
+export const createWorry = async (
+    userId: string,
+    title: string
+): Promise<string> => {
+    // Check if user already has an active worry - REMOVED to allow multiple
+    // const activeWorry = await getActiveWorry(userId);
+    // if (activeWorry) {
+    //     throw new Error('이미 진행 중인 고민이 있습니다. 먼저 마무리해주세요.');
+    // }
+
+    const worryRef = collection(db, 'users', userId, 'worries');
+    const docRef = await addDoc(worryRef, {
+        title,
+        status: 'active',
+        startDate: Timestamp.now(),
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
+    });
+    return docRef.id;
+};
+
+// Get active worry (only one allowed) - DEPRECATED but kept for compatibility
+export const getActiveWorry = async (userId: string): Promise<Worry | null> => {
+    const worryRef = collection(db, 'users', userId, 'worries');
+    const q = query(worryRef, where('status', '==', 'active'), limit(1));
+    const snapshot = await getDocs(q);
+
+    if (snapshot.empty) return null;
+
+    const doc = snapshot.docs[0];
+    return {
+        id: doc.id,
+        ...doc.data(),
+        startDate: doc.data().startDate.toDate(),
+        createdAt: doc.data().createdAt.toDate(),
+        updatedAt: doc.data().updatedAt.toDate()
+    } as Worry;
+};
+
+// Get all active worries
+export const getActiveWorries = async (userId: string): Promise<Worry[]> => {
+    const worryRef = collection(db, 'users', userId, 'worries');
+    // Removed orderBy to avoid needing a composite index
+    const q = query(worryRef, where('status', '==', 'active'));
+    const snapshot = await getDocs(q);
+
+    const worries = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        startDate: doc.data().startDate.toDate(),
+        createdAt: doc.data().createdAt.toDate(),
+        updatedAt: doc.data().updatedAt.toDate()
+    } as Worry));
+
+    // Client-side sort
+    return worries.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+};
+
+// Close worry with reflection
+export const closeWorry = async (
+    userId: string,
+    worryId: string,
+    reflection: Worry['reflection']
+): Promise<void> => {
+    const worryRef = doc(db, 'users', userId, 'worries', worryId);
+    await updateDoc(worryRef, {
+        status: 'closed',
+        closedAt: Timestamp.now(),
+        reflection,
+        updatedAt: Timestamp.now(),
+    });
+};
+
+// Delete worry and all its entries
+export const deleteWorry = async (userId: string, worryId: string): Promise<void> => {
+    // 1. Delete all entries in subcollection
+    const entriesRef = collection(db, 'users', userId, 'worryEntries');
+    const q = query(entriesRef, where('worryId', '==', worryId));
+    const snapshot = await getDocs(q);
+
+    const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
+    await Promise.all(deletePromises);
+
+    // 2. Delete the worry document
+    const worryRef = doc(db, 'users', userId, 'worries', worryId);
+    await deleteDoc(worryRef);
+};
+
+// Get all closed worries (for history/insights)
+export const getClosedWorries = async (userId: string): Promise<Worry[]> => {
+    const worryRef = collection(db, 'users', userId, 'worries');
+    const q = query(
+        worryRef,
+        where('status', '==', 'closed'),
+        orderBy('closedAt', 'desc')
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        startDate: doc.data().startDate.toDate(),
+        closedAt: doc.data().closedAt?.toDate(),
+        createdAt: doc.data().createdAt.toDate(),
+        updatedAt: doc.data().updatedAt.toDate()
+    } as Worry));
+};
+
+// ============ WorryEntry Functions ============
+
+// Add worry entry
+export const addWorryEntry = async (
+    userId: string,
+    worryId: string,
+    type: WorryEntry['type'],
+    content: string,
+    week: number
+): Promise<string> => {
+    const entryRef = collection(db, 'users', userId, 'worryEntries');
+    const docRef = await addDoc(entryRef, {
+        worryId,
+        type,
+        content,
+        week,
+        timestamp: Timestamp.now(),
+        createdAt: Timestamp.now(),
+    });
+    return docRef.id;
+};
+
+// Get entries for a specific worry
+export const getWorryEntries = async (
+    userId: string,
+    worryId: string
+): Promise<WorryEntry[]> => {
+    const entryRef = collection(db, 'users', userId, 'worryEntries');
+    const q = query(
+        entryRef,
+        where('worryId', '==', worryId)
+    );
+    const snapshot = await getDocs(q);
+    const entries = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        timestamp: doc.data().timestamp.toDate(),
+        createdAt: doc.data().createdAt.toDate()
+    } as WorryEntry));
+
+    return entries.sort((a, b) => {
+        if (b.week !== a.week) return b.week - a.week;
+        return b.timestamp.getTime() - a.timestamp.getTime();
+    });
+};
+
+// Update worry entry
+export const updateWorryEntry = async (
+    userId: string,
+    entryId: string,
+    content: string
+): Promise<void> => {
+    const entryRef = doc(db, 'users', userId, 'worryEntries', entryId);
+    await updateDoc(entryRef, {
+        content,
+        updatedAt: Timestamp.now()
+    });
+};
+
+// Delete worry entry
+export const deleteWorryEntry = async (
+    userId: string,
+    entryId: string
+): Promise<void> => {
+    const entryRef = doc(db, 'users', userId, 'worryEntries', entryId);
+    await deleteDoc(entryRef);
 };
