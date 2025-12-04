@@ -28,6 +28,7 @@ const AppContent: React.FC = () => {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [todos, setTodos] = useState<Todo[]>([]);
   const [worryEntries, setWorryEntries] = useState<WorryEntry[]>([]);
+  const [activeWorries, setActiveWorries] = useState<Worry[]>([]);
 
 
   // Subscribe to entries
@@ -110,6 +111,28 @@ const AppContent: React.FC = () => {
         createdAt: doc.data().createdAt.toDate(),
       })) as WorryEntry[];
       setWorryEntries(newWorryEntries);
+    });
+
+    return () => unsubscribe();
+  }, [user]);
+
+  // Subscribe to active worries (for export context)
+  useEffect(() => {
+    if (!user) return;
+
+    const q = query(
+      collection(db, `users/${user.uid}/worries`),
+      orderBy("startDate", "desc")
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const newWorries = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        startDate: doc.data().startDate.toDate(),
+        closedAt: doc.data().closedAt ? doc.data().closedAt.toDate() : undefined,
+      })) as Worry[];
+      setActiveWorries(newWorries);
     });
 
     return () => unsubscribe();
@@ -276,6 +299,7 @@ const AppContent: React.FC = () => {
               expenses={expenses}
               todos={todos}
               worryEntries={worryEntries}
+              worries={activeWorries}
             />
           )}
         </>

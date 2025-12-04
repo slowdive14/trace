@@ -41,7 +41,8 @@ export function exportDailyMarkdown(
     entries: Entry[],
     expenses: Expense[],
     todo?: Todo,
-    worryEntries?: WorryEntry[]
+    worryEntries?: WorryEntry[],
+    worries?: Worry[]
 ): string {
     const dateStr = format(date, 'yyyy-MM-dd');
 
@@ -101,7 +102,6 @@ export function exportDailyMarkdown(
             .filter(e => e.amount > 0)
             .reduce((sum, e) => sum + e.amount, 0);
         markdown += `**합계**: ${total.toLocaleString()}원\n`;
-        markdown += `**합계**: ${total.toLocaleString()}원\n`;
     }
 
     // 고민 섹션 (Worry)
@@ -114,50 +114,69 @@ export function exportDailyMarkdown(
         if (dayWorryEntries.length > 0) {
             markdown += '\n#### 고민\n';
 
-            // Build hierarchy for display
-            const entryMap = new Map(dayWorryEntries.map(e => [e.id, e]));
-            const childrenMap: Record<string, WorryEntry[]> = {};
-            const roots: WorryEntry[] = [];
-
+            // Group by worryId
+            const groupedByWorry: Record<string, WorryEntry[]> = {};
             dayWorryEntries.forEach(entry => {
-                if (entry.parentId && entryMap.has(entry.parentId)) {
-                    if (!childrenMap[entry.parentId]) {
-                        childrenMap[entry.parentId] = [];
-                    }
-                    childrenMap[entry.parentId].push(entry);
-                } else {
-                    roots.push(entry);
+                const worryId = entry.worryId;
+                if (!groupedByWorry[worryId]) {
+                    groupedByWorry[worryId] = [];
                 }
+                groupedByWorry[worryId].push(entry);
             });
 
-            // Sort roots: Worry -> Action -> Result, then time
-            const typeOrder = { worry: 0, action: 1, result: 2 };
-            const sortEntries = (list: WorryEntry[]) => {
-                return list.sort((a, b) => {
-                    const typeDiff = typeOrder[a.type] - typeOrder[b.type];
-                    if (typeDiff !== 0) return typeDiff;
-                    return a.timestamp.getTime() - b.timestamp.getTime();
+            // Render each worry group
+            Object.entries(groupedByWorry).forEach(([worryId, entries]) => {
+                // Find worry title
+                const worry = worries?.find(w => w.id === worryId);
+                const title = worry ? worry.title : '알 수 없는 고민';
+
+                markdown += `##### ${title}\n`;
+
+                // Build hierarchy for display
+                const entryMap = new Map(entries.map(e => [e.id, e]));
+                const childrenMap: Record<string, WorryEntry[]> = {};
+                const roots: WorryEntry[] = [];
+
+                entries.forEach(entry => {
+                    if (entry.parentId && entryMap.has(entry.parentId)) {
+                        if (!childrenMap[entry.parentId]) {
+                            childrenMap[entry.parentId] = [];
+                        }
+                        childrenMap[entry.parentId].push(entry);
+                    } else {
+                        roots.push(entry);
+                    }
                 });
-            };
 
-            sortEntries(roots);
-            Object.values(childrenMap).forEach(list => sortEntries(list));
+                // Sort roots: Worry -> Action -> Result, then time
+                const typeOrder = { worry: 0, action: 1, result: 2 };
+                const sortEntries = (list: WorryEntry[]) => {
+                    return list.sort((a, b) => {
+                        const typeDiff = typeOrder[a.type] - typeOrder[b.type];
+                        if (typeDiff !== 0) return typeDiff;
+                        return a.timestamp.getTime() - b.timestamp.getTime();
+                    });
+                };
 
-            // Recursive render
-            const renderEntry = (entry: WorryEntry, depth: number = 0) => {
-                const indent = '  '.repeat(depth);
-                const icon = entry.type === 'worry' ? '💭'
-                    : entry.type === 'action' ? '⚡'
-                        : '✅';
-                markdown += `${indent}- ${icon} ${entry.content}\n`;
+                sortEntries(roots);
+                Object.values(childrenMap).forEach(list => sortEntries(list));
 
-                if (childrenMap[entry.id]) {
-                    childrenMap[entry.id].forEach(child => renderEntry(child, depth + 1));
-                }
-            };
+                // Recursive render
+                const renderEntry = (entry: WorryEntry, depth: number = 0) => {
+                    const indent = '  '.repeat(depth);
+                    const icon = entry.type === 'worry' ? '💭'
+                        : entry.type === 'action' ? '⚡'
+                            : '✅';
+                    markdown += `${indent}- ${icon} ${entry.content}\n`;
 
-            roots.forEach(root => renderEntry(root));
-            markdown += '\n';
+                    if (childrenMap[entry.id]) {
+                        childrenMap[entry.id].forEach(child => renderEntry(child, depth + 1));
+                    }
+                };
+
+                roots.forEach(root => renderEntry(root));
+                markdown += '\n';
+            });
         }
     }
 

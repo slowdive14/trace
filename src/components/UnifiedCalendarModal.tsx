@@ -12,9 +12,10 @@ interface UnifiedCalendarModalProps {
     expenses: Expense[];
     todos: Todo[];
     worryEntries: WorryEntry[];
+    worries: Worry[];
 }
 
-const UnifiedCalendarModal: React.FC<UnifiedCalendarModalProps> = ({ onClose, entries, expenses, todos, worryEntries }) => {
+const UnifiedCalendarModal: React.FC<UnifiedCalendarModalProps> = ({ onClose, entries, expenses, todos, worryEntries, worries }) => {
     const [currentMonth, setCurrentMonth] = useState(new Date());
     const [selectedDate, setSelectedDate] = useState<Date | null>(null);
     const [copied, setCopied] = useState(false);
@@ -30,7 +31,7 @@ const UnifiedCalendarModal: React.FC<UnifiedCalendarModalProps> = ({ onClose, en
 
         const dateStr = format(selectedDate, 'yyyy-MM-dd');
         const todo = todos.find(t => t.id === dateStr);
-        const markdown = exportDailyMarkdown(selectedDate, entries, expenses, todo, worryEntries);
+        const markdown = exportDailyMarkdown(selectedDate, entries, expenses, todo, worryEntries, worries);
         navigator.clipboard.writeText(markdown);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
@@ -55,7 +56,7 @@ const UnifiedCalendarModal: React.FC<UnifiedCalendarModalProps> = ({ onClose, en
     };
 
     const selectedTodo = selectedDate ? todos.find(t => t.id === format(selectedDate, 'yyyy-MM-dd')) : undefined;
-    const selectedMarkdown = selectedDate ? exportDailyMarkdown(selectedDate, entries, expenses, selectedTodo, worryEntries) : '';
+    const selectedMarkdown = selectedDate ? exportDailyMarkdown(selectedDate, entries, expenses, selectedTodo, worryEntries, worries) : '';
 
     return (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
