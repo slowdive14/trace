@@ -114,25 +114,49 @@ export function exportDailyMarkdown(
         if (dayWorryEntries.length > 0) {
             markdown += '\n#### 고민\n';
 
-            // Group by worryId to show context if needed, or just list them
-            // For daily view, simple list might be better, or grouped by worry title if available.
-            // Since we only have entries here, we'll list them. 
-            // Ideally we might want the worry title, but for now let's just show the entries.
+            // Build hierarchy for display
+            const entryMap = new Map(dayWorryEntries.map(e => [e.id, e]));
+            const childrenMap: Record<string, WorryEntry[]> = {};
+            const roots: WorryEntry[] = [];
 
-            // Sort by type: worry -> action -> result
-            const typeOrder = { worry: 0, action: 1, result: 2 };
-            const sorted = dayWorryEntries.sort((a, b) => {
-                const typeDiff = typeOrder[a.type] - typeOrder[b.type];
-                if (typeDiff !== 0) return typeDiff;
-                return a.timestamp.getTime() - b.timestamp.getTime();
+            dayWorryEntries.forEach(entry => {
+                if (entry.parentId && entryMap.has(entry.parentId)) {
+                    if (!childrenMap[entry.parentId]) {
+                        childrenMap[entry.parentId] = [];
+                    }
+                    childrenMap[entry.parentId].push(entry);
+                } else {
+                    roots.push(entry);
+                }
             });
 
-            sorted.forEach(entry => {
+            // Sort roots: Worry -> Action -> Result, then time
+            const typeOrder = { worry: 0, action: 1, result: 2 };
+            const sortEntries = (list: WorryEntry[]) => {
+                return list.sort((a, b) => {
+                    const typeDiff = typeOrder[a.type] - typeOrder[b.type];
+                    if (typeDiff !== 0) return typeDiff;
+                    return a.timestamp.getTime() - b.timestamp.getTime();
+                });
+            };
+
+            sortEntries(roots);
+            Object.values(childrenMap).forEach(list => sortEntries(list));
+
+            // Recursive render
+            const renderEntry = (entry: WorryEntry, depth: number = 0) => {
+                const indent = '  '.repeat(depth);
                 const icon = entry.type === 'worry' ? '💭'
                     : entry.type === 'action' ? '⚡'
                         : '✅';
-                markdown += `- ${icon} ${entry.content}\n`;
-            });
+                markdown += `${indent}- ${icon} ${entry.content}\n`;
+
+                if (childrenMap[entry.id]) {
+                    childrenMap[entry.id].forEach(child => renderEntry(child, depth + 1));
+                }
+            };
+
+            roots.forEach(root => renderEntry(root));
             markdown += '\n';
         }
     }
@@ -175,20 +199,49 @@ export const generateWorryMarkdown = (
 
         lines.push(`### Week ${week} (${dateStr})`);
 
-        // Sort by type order: worry -> action -> result
-        const typeOrder = { worry: 0, action: 1, result: 2 };
-        const sorted = weekEntries.sort((a, b) => {
-            const typeDiff = typeOrder[a.type] - typeOrder[b.type];
-            if (typeDiff !== 0) return typeDiff;
-            return a.timestamp.getTime() - b.timestamp.getTime();
+        // Build hierarchy
+        const entryMap = new Map(weekEntries.map(e => [e.id, e]));
+        const childrenMap: Record<string, WorryEntry[]> = {};
+        const roots: WorryEntry[] = [];
+
+        weekEntries.forEach(entry => {
+            if (entry.parentId && entryMap.has(entry.parentId)) {
+                if (!childrenMap[entry.parentId]) {
+                    childrenMap[entry.parentId] = [];
+                }
+                childrenMap[entry.parentId].push(entry);
+            } else {
+                roots.push(entry);
+            }
         });
 
-        for (const entry of sorted) {
+        // Sort
+        const typeOrder = { worry: 0, action: 1, result: 2 };
+        const sortEntries = (list: WorryEntry[]) => {
+            return list.sort((a, b) => {
+                const typeDiff = typeOrder[a.type] - typeOrder[b.type];
+                if (typeDiff !== 0) return typeDiff;
+                return a.timestamp.getTime() - b.timestamp.getTime();
+            });
+        };
+
+        sortEntries(roots);
+        Object.values(childrenMap).forEach(list => sortEntries(list));
+
+        // Recursive render
+        const renderEntry = (entry: WorryEntry, depth: number = 0) => {
+            const indent = '  '.repeat(depth);
             const icon = entry.type === 'worry' ? '💭'
                 : entry.type === 'action' ? '⚡'
                     : '✅';
-            lines.push(`- ${icon} ${entry.content}`);
-        }
+            lines.push(`${indent}- ${icon} ${entry.content}`);
+
+            if (childrenMap[entry.id]) {
+                childrenMap[entry.id].forEach(child => renderEntry(child, depth + 1));
+            }
+        };
+
+        roots.forEach(root => renderEntry(root));
         lines.push('');
     }
 
