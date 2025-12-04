@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { X, Copy, Check } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay } from 'date-fns';
 import { ko } from 'date-fns/locale';
-import type { Entry, Expense, Todo, WorryEntry } from '../types/types';
+import type { Entry, Expense, Todo, Worry, WorryEntry } from '../types/types';
 import { exportDailyMarkdown } from '../utils/exportUtils';
 import { getLogicalDate } from '../utils/dateUtils';
 

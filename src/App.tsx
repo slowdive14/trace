@@ -10,7 +10,7 @@ import ExpenseInput from './components/ExpenseInput';
 import UnifiedCalendarModal from './components/UnifiedCalendarModal';
 import TodoTab from './components/TodoTab';
 import WorryTab from './components/WorryTab';
-import type { Entry, Expense, Todo, WorryEntry } from './types/types';
+import type { Entry, Expense, Todo, Worry, WorryEntry } from './types/types';
 import { onSnapshot, collection, query, orderBy } from 'firebase/firestore';
 import { db } from './services/firebase';
 
