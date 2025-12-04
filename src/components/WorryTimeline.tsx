@@ -35,7 +35,10 @@ const WorryTimeline: React.FC<WorryTimelineProps> = ({ entries, onUpdate, onDele
         const childrenMap: Record<string, WorryEntry[]> = {};
 
         weekEntries.forEach(entry => {
+            // An entry is a child if it has a parentId AND that parent exists in this week's list
+            // If parent is not in this list (e.g. different week), treat as root for this view
             const isChild = entry.parentId && entryMap.has(entry.parentId);
+
             if (isChild) {
                 if (!childrenMap[entry.parentId!]) {
                     childrenMap[entry.parentId!] = [];
@@ -54,32 +57,26 @@ const WorryTimeline: React.FC<WorryTimelineProps> = ({ entries, onUpdate, onDele
             list.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
         });
 
+        // Recursive render function
+        const renderNode = (entry: WorryEntry) => (
+            <div key={entry.id} className="relative">
+                <WorryCard
+                    entry={entry}
+                    onUpdate={onUpdate}
+                    onDelete={onDelete}
+                    onReply={onReply}
+                />
+                {childrenMap[entry.id] && (
+                    <div className="ml-6 pl-4 border-l-2 border-bg-tertiary space-y-3 mt-2">
+                        {childrenMap[entry.id].map(child => renderNode(child))}
+                    </div>
+                )}
+            </div>
+        );
+
         return (
             <div className="space-y-4">
-                {roots.map(root => (
-                    <div key={root.id} className="relative">
-                        <WorryCard
-                            entry={root}
-                            onUpdate={onUpdate}
-                            onDelete={onDelete}
-                            onReply={onReply}
-                        />
-                        {/* Render Children */}
-                        {childrenMap[root.id] && (
-                            <div className="ml-6 pl-4 border-l-2 border-bg-tertiary space-y-3 mt-2">
-                                {childrenMap[root.id].map(child => (
-                                    <WorryCard
-                                        key={child.id}
-                                        entry={child}
-                                        onUpdate={onUpdate}
-                                        onDelete={onDelete}
-                                        onReply={onReply}
-                                    />
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                ))}
+                {roots.map(root => renderNode(root))}
             </div>
         );
     };

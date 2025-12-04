@@ -127,7 +127,7 @@ const WorryCard: React.FC<WorryCardProps> = ({ entry, onUpdate, onDelete, onRepl
                                                 className="flex items-center gap-1 text-xs text-text-secondary hover:text-purple-400 px-2 py-1 rounded hover:bg-purple-900/20"
                                                 title="AI 액션 추천"
                                             >
-                                                <span className="text-purple-400">✨</span> AI 추천
+                                                <Wand2 size={12} className="text-purple-400" /> AI 추천
                                             </button>
                                             <button
                                                 onClick={() => onReply(entry.id, 'action')}
