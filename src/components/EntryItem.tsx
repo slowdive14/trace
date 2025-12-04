@@ -14,7 +14,9 @@ interface EntryItemProps {
 const EntryItem: React.FC<EntryItemProps> = ({ entry, onDelete, highlightQuery, onTagClick, onPin }) => {
     const [showCopyToast, setShowCopyToast] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
-    const formattedTime = format(entry.timestamp, 'HH:mm');
+    const formattedTime = entry.isPinned
+        ? format(entry.timestamp, 'M/d')
+        : format(entry.timestamp, 'HH:mm');
 
     const handleCopy = async (e: React.MouseEvent) => {
         e.stopPropagation();
@@ -115,8 +117,8 @@ const EntryItem: React.FC<EntryItemProps> = ({ entry, onDelete, highlightQuery, 
                 </div>
             )}
             <div className={`w-12 text-right font-mono text-sm pt-1 shrink-0 flex flex-col items-end gap-1 ${entry.category === 'thought' ? 'text-purple-500' :
-                    entry.category === 'chore' ? 'text-orange-500' :
-                        'text-blue-500'
+                entry.category === 'chore' ? 'text-orange-500' :
+                    'text-blue-500'
                 }`}>
                 <span>{formattedTime}</span>
                 {entry.isPinned && <Pin size={12} className="text-accent fill-accent" />}
