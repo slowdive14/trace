@@ -1,16 +1,35 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+const getApiKey = () => {
+    // 1. Try environment variable
+    const envKey = import.meta.env.VITE_GEMINI_API_KEY;
+    if (envKey) return envKey;
 
-let genAI: GoogleGenerativeAI | null = null;
+    // 2. Try localStorage (shared with Expense feature)
+    const localKey = localStorage.getItem('gemini_api_key');
+    if (localKey) return localKey;
 
-if (API_KEY) {
-    genAI = new GoogleGenerativeAI(API_KEY);
-}
+    return null;
+};
+
+const initializeGenAI = () => {
+    const apiKey = getApiKey();
+    if (apiKey) {
+        return new GoogleGenerativeAI(apiKey);
+    }
+    return null;
+};
+
+let genAI: GoogleGenerativeAI | null = initializeGenAI();
 
 export const generateWorryActions = async (worryContent: string): Promise<string[]> => {
+    // Re-initialize if null (in case key was added to localStorage later)
     if (!genAI) {
-        throw new Error("Gemini API key is not configured.");
+        genAI = initializeGenAI();
+    }
+
+    if (!genAI) {
+        throw new Error("Gemini API key is not configured. Please add it in settings or .env file.");
     }
 
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
