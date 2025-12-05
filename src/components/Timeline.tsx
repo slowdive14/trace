@@ -23,7 +23,7 @@ type DateFilter = 'today' | '7days' | '30days' | 'all';
 const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, onTagClick, collectionName = 'entries' }) => {
     const [allEntries, setAllEntries] = useState<Entry[]>([]);
     const [displayLimit, setDisplayLimit] = useState(50);
-    const [dateFilter, setDateFilter] = useState<DateFilter>('all');
+    const [dateFilter, setDateFilter] = useState<DateFilter>('today');
     const [showToast, setShowToast] = useState(false);
     const { user } = useAuth();
     const loadMoreRef = useRef<HTMLDivElement>(null);
