@@ -189,7 +189,14 @@ const TodoTab: React.FC<TodoTabProps> = ({
     };
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-        if (e.key === 'Enter') {
+        if (e.key === 'Tab') {
+            e.preventDefault();
+            if (e.shiftKey) {
+                handleIndent('out');
+            } else {
+                handleIndent('in');
+            }
+        } else if (e.key === 'Enter') {
             e.preventDefault();
             const start = e.currentTarget.selectionStart;
             const lineStart = content.lastIndexOf('\n', start - 1) + 1;
@@ -258,9 +265,9 @@ const TodoTab: React.FC<TodoTabProps> = ({
     const todos = parseTodos(content);
 
     return (
-        <div className="flex flex-col h-[calc(100vh-224px)] relative">
+        <div className="flex flex-col relative" style={{ height: 'calc(100vh - 160px)' }}>
             {/* Mode Tabs */}
-            <div className="sticky top-0 bg-bg-primary/95 backdrop-blur border-b border-bg-tertiary z-20 px-4">
+            <div className="flex-shrink-0 bg-bg-primary/95 backdrop-blur border-b border-bg-tertiary z-20 px-4">
                 <div className="max-w-md mx-auto flex gap-2 py-2">
                     <button
                         onClick={() => setViewMode('edit')}
@@ -294,7 +301,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
 
             {viewMode === 'history' ? (
                 /* History Mode */
-                <div className="flex-1 overflow-y-auto px-4 pb-32">
+                <div className="flex-1 overflow-y-auto px-4 pb-8">
                     <div className="max-w-md mx-auto pt-4">
                         {Object.entries(groupedTodos).map(([date, todo]) => (
                             <div key={date} className="mb-8">
@@ -336,7 +343,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
                 </div>
             ) : (
                 /* Edit Mode & Template Mode */
-                <div className="w-full max-w-md mx-auto relative flex-1 flex flex-col">
+                <div className="w-full max-w-md mx-auto relative flex flex-col flex-1 overflow-hidden">
                     {/* Saving Indicator */}
                     <div className="absolute top-4 right-16 z-30 flex items-center gap-2 pointer-events-none">
                         <span className={`text-xs font-medium transition-opacity duration-300 ${isSaving ? 'text-accent opacity-100' : 'opacity-0'}`}>
@@ -376,7 +383,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                 onChange={handleChange}
                                 onKeyDown={handleKeyDown}
                                 placeholder={viewMode === 'template' ? "매일 반복할 루틴을 입력하세요..." : placeholder}
-                                className="flex-1 w-full bg-transparent text-text-primary p-4 pt-16 resize-none focus:outline-none font-mono text-sm leading-relaxed"
+                                className="flex-1 w-full bg-transparent text-text-primary p-4 pt-16 pb-8 resize-none focus:outline-none font-mono text-sm leading-relaxed overflow-y-auto"
                                 spellCheck={false}
                             />
 
@@ -405,7 +412,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
                     ) : (
                         <>
                             {/* Reading Mode (Only for Edit Mode) */}
-                            <div className="flex-1 overflow-y-auto p-4 pt-16 pb-32 w-full">
+                            <div className="flex-1 overflow-y-auto p-4 pt-16 pb-8 w-full">
                                 {todos.length === 0 ? (
                                     <p className="text-text-secondary text-sm">할 일이 없습니다. 편집 버튼을 눌러 추가하세요.</p>
                                 ) : (
