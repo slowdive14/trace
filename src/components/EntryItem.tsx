@@ -9,12 +9,13 @@ interface EntryItemProps {
     highlightQuery?: string;
     onTagClick?: (tag: string) => void;
     onPin?: (id: string, currentStatus: boolean) => void;
+    showDate?: boolean;  // true일 경우 시간 대신 날짜 표시
 }
 
-const EntryItem: React.FC<EntryItemProps> = ({ entry, onDelete, highlightQuery, onTagClick, onPin }) => {
+const EntryItem: React.FC<EntryItemProps> = ({ entry, onDelete, highlightQuery, onTagClick, onPin, showDate = false }) => {
     const [showCopyToast, setShowCopyToast] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
-    const formattedTime = entry.isPinned
+    const formattedTime = showDate || entry.isPinned
         ? format(entry.timestamp, 'M/d')
         : format(entry.timestamp, 'HH:mm');
 

@@ -60,7 +60,7 @@ const SearchBar: React.FC<SearchBarProps> = ({ onClose }) => {
                 {filteredEntries.length > 0 ? (
                     <div className="space-y-1 max-w-md mx-auto">
                         {filteredEntries.map(entry => (
-                            <EntryItem key={entry.id} entry={entry} onDelete={() => { }} highlightQuery={query} />
+                            <EntryItem key={entry.id} entry={entry} onDelete={() => { }} highlightQuery={query} showDate={true} />
                         ))}
                     </div>
                 ) : query ? (
