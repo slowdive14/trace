@@ -12,12 +12,24 @@ interface WorryTimelineProps {
 
 const WorryTimeline: React.FC<WorryTimelineProps> = ({ entries, onUpdate, onDelete, onReply }) => {
     const groupedEntries = useMemo(() => {
+        // Create a map for quick parent lookup
+        const entryMap = new Map(entries.map(e => [e.id, e]));
+
         const groups: Record<number, WorryEntry[]> = {};
         entries.forEach(entry => {
-            if (!groups[entry.week]) {
-                groups[entry.week] = [];
+            // If entry has a parent, use parent's week; otherwise use its own week
+            let targetWeek = entry.week;
+            if (entry.parentId) {
+                const parent = entryMap.get(entry.parentId);
+                if (parent) {
+                    targetWeek = parent.week;
+                }
             }
-            groups[entry.week].push(entry);
+
+            if (!groups[targetWeek]) {
+                groups[targetWeek] = [];
+            }
+            groups[targetWeek].push(entry);
         });
         return groups;
     }, [entries]);
