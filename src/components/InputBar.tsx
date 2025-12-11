@@ -1,9 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Maximize2, Minimize2, Calendar } from 'lucide-react';
+import { Send, Maximize2, Minimize2, Calendar, Smile } from 'lucide-react';
 import { extractTags } from '../utils/tagUtils';
 import { addEntry } from '../services/firestore';
 import { useAuth } from './AuthContext';
 import { format, isSameDay } from 'date-fns';
+import { searchEmotions, type EmotionTag } from '../utils/emotionTags';
+import EmotionPickerModal from './EmotionPickerModal';
 
 interface InputBarProps {
     activeCategory?: 'action' | 'thought' | 'chore';
@@ -16,8 +18,67 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
     // Use null to represent "Now/Today". This prevents stale timestamps when the app is left open.
     const [selectedDate, setSelectedDate] = useState<Date | null>(null);
     const [showDatePicker, setShowDatePicker] = useState(false);
+    const [showEmotionModal, setShowEmotionModal] = useState(false);
+
+    // 자동완성 관련 상태
+    const [showAutocomplete, setShowAutocomplete] = useState(false);
+    const [autocompleteEmotions, setAutocompleteEmotions] = useState<EmotionTag[]>([]);
+    const [selectedAutocompleteIndex, setSelectedAutocompleteIndex] = useState(0);
+    const [autocompletePosition, setAutocompletePosition] = useState({ start: 0, end: 0 });
+
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const autocompleteRef = useRef<HTMLDivElement>(null);
     const { user } = useAuth();
+
+    // 자동완성 감지 및 업데이트
+    const updateAutocomplete = (text: string, cursorPos: number) => {
+        // 커서 위치 기준으로 현재 단어 추출
+        const beforeCursor = text.substring(0, cursorPos);
+        const afterCursor = text.substring(cursorPos);
+
+        // #감정/ 패턴 찾기
+        const hashtagMatch = beforeCursor.match(/#감정\/([^#\s]*?)$/);
+
+        if (hashtagMatch) {
+            const query = hashtagMatch[1]; // #감정/ 이후의 텍스트
+            const startPos = hashtagMatch.index!;
+            const endPos = cursorPos;
+
+            const afterMatch = afterCursor.match(/^[^#\s]*/);
+            setAutocompletePosition({ start: startPos, end: endPos + (afterMatch?.[0]?.length || 0) });
+
+            // 검색 실행
+            const results = searchEmotions(query || '감정');
+            setAutocompleteEmotions(results.slice(0, 8)); // 최대 8개만 표시
+            setShowAutocomplete(results.length > 0);
+            setSelectedAutocompleteIndex(0);
+        } else {
+            setShowAutocomplete(false);
+        }
+    };
+
+    const handleContentChange = (newContent: string) => {
+        setContent(newContent);
+        const cursorPos = textareaRef.current?.selectionStart || 0;
+        updateAutocomplete(newContent, cursorPos);
+    };
+
+    const selectAutocompleteEmotion = (tag: string) => {
+        const before = content.substring(0, autocompletePosition.start);
+        const after = content.substring(autocompletePosition.end);
+        const newContent = before + tag + ' ' + after;
+        setContent(newContent);
+        setShowAutocomplete(false);
+
+        // 커서를 태그 뒤로 이동
+        setTimeout(() => {
+            if (textareaRef.current) {
+                const newCursorPos = before.length + tag.length + 1;
+                textareaRef.current.setSelectionRange(newCursorPos, newCursorPos);
+                textareaRef.current.focus();
+            }
+        }, 0);
+    };
 
     const handleSubmit = async () => {
         if (!content.trim() || !user) return;
@@ -36,17 +97,57 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
             setContent('');
             setIsExpanded(false);
             setSelectedDate(null); // Reset to "Now"
+            setShowAutocomplete(false);
         } catch (error) {
             console.error("Failed to add entry:", error);
         }
     };
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
+        // 자동완성이 활성화된 경우
+        if (showAutocomplete) {
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                setSelectedAutocompleteIndex((prev) =>
+                    prev < autocompleteEmotions.length - 1 ? prev + 1 : prev
+                );
+                return;
+            }
+            if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                setSelectedAutocompleteIndex((prev) => (prev > 0 ? prev - 1 : 0));
+                return;
+            }
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                if (autocompleteEmotions[selectedAutocompleteIndex]) {
+                    selectAutocompleteEmotion(autocompleteEmotions[selectedAutocompleteIndex].tag);
+                }
+                return;
+            }
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                setShowAutocomplete(false);
+                return;
+            }
+        }
+
+        // 일반 Enter 처리
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             handleSubmit();
         }
     };
+
+    // 자동완성 선택된 항목 스크롤
+    useEffect(() => {
+        if (autocompleteRef.current && showAutocomplete) {
+            const selectedElement = autocompleteRef.current.children[selectedAutocompleteIndex] as HTMLElement;
+            if (selectedElement) {
+                selectedElement.scrollIntoView({ block: 'nearest' });
+            }
+        }
+    }, [selectedAutocompleteIndex, showAutocomplete]);
 
     useEffect(() => {
         if (textareaRef.current) {
@@ -66,22 +167,63 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
     return (
         <>
             <div className={`fixed bottom-0 left-0 right-0 bg-bg-secondary border-t border-bg-tertiary p-4 transition-all duration-300 z-40 ${isExpanded ? 'h-1/2' : 'h-auto'}`}>
-                <div className="max-w-md mx-auto flex flex-col h-full gap-2">
+                <div className="max-w-md mx-auto flex flex-col h-full gap-2 relative">
                     {!isDisplayDateToday && (
                         <div className="text-xs text-accent text-center">
                             📅 {format(displayDate, 'yyyy년 M월 d일')} 기록
                         </div>
                     )}
+
+                    {/* 자동완성 드롭다운 */}
+                    {showAutocomplete && (
+                        <div
+                            ref={autocompleteRef}
+                            className="absolute bottom-full left-0 right-0 mb-2 bg-bg-tertiary border border-bg-primary rounded-lg shadow-lg max-h-64 overflow-y-auto z-50"
+                        >
+                            {autocompleteEmotions.map((emotion, index) => (
+                                <button
+                                    key={emotion.tag}
+                                    onClick={() => selectAutocompleteEmotion(emotion.tag)}
+                                    className={`w-full text-left p-3 transition-colors border-b border-bg-primary last:border-b-0 ${
+                                        index === selectedAutocompleteIndex
+                                            ? 'bg-accent text-white'
+                                            : 'hover:bg-bg-secondary'
+                                    }`}
+                                >
+                                    <div className={`font-medium text-sm ${index === selectedAutocompleteIndex ? 'text-white' : 'text-accent'}`}>
+                                        {emotion.tag}
+                                    </div>
+                                    <div className={`text-xs mt-1 ${index === selectedAutocompleteIndex ? 'text-white/80' : 'text-text-secondary'}`}>
+                                        {emotion.meaning}
+                                    </div>
+                                </button>
+                            ))}
+                        </div>
+                    )}
+
                     <div className="flex items-end gap-2 h-full">
-                        <textarea
-                            ref={textareaRef}
-                            value={content}
-                            onChange={(e) => setContent(e.target.value)}
-                            onKeyDown={handleKeyDown}
-                            placeholder="What's happening? #tag"
-                            className={`flex-1 bg-bg-tertiary text-text-primary rounded-lg p-3 resize-none focus:outline-none focus:ring-1 focus:ring-accent min-h-[44px] overflow-y-auto ${isExpanded ? 'h-full max-h-full' : 'max-h-[120px]'}`}
-                            rows={1}
-                        />
+                        <div className="flex-1 relative">
+                            <textarea
+                                ref={textareaRef}
+                                value={content}
+                                onChange={(e) => handleContentChange(e.target.value)}
+                                onKeyDown={handleKeyDown}
+                                onSelect={() => {
+                                    const cursorPos = textareaRef.current?.selectionStart || 0;
+                                    updateAutocomplete(content, cursorPos);
+                                }}
+                                placeholder="What's happening? #감정/ 입력하면 자동완성"
+                                className={`w-full bg-bg-tertiary text-text-primary rounded-lg p-3 resize-none focus:outline-none focus:ring-1 focus:ring-accent min-h-[44px] overflow-y-auto ${isExpanded ? 'h-full max-h-full' : 'max-h-[120px]'}`}
+                                rows={1}
+                            />
+                        </div>
+                        <button
+                            onClick={() => setShowEmotionModal(true)}
+                            className="p-2 text-yellow-500 hover:text-yellow-400 transition-colors"
+                            title="감정 태그 선택"
+                        >
+                            <Smile size={20} />
+                        </button>
                         <button
                             onClick={() => setShowDatePicker(true)}
                             className={`p-2 transition-colors ${isDisplayDateToday ? 'text-text-secondary hover:text-text-primary' : 'text-accent'}`}
@@ -142,6 +284,28 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
                     </div>
                 </div>
             )}
+
+            {/* 감정 선택 모달 */}
+            <EmotionPickerModal
+                isOpen={showEmotionModal}
+                onClose={() => setShowEmotionModal(false)}
+                onSelect={(tag) => {
+                    const cursorPos = textareaRef.current?.selectionStart || content.length;
+                    const before = content.substring(0, cursorPos);
+                    const after = content.substring(cursorPos);
+                    const newContent = before + (before.endsWith(' ') || before.length === 0 ? '' : ' ') + tag + ' ' + after;
+                    setContent(newContent);
+
+                    // 커서를 태그 뒤로 이동
+                    setTimeout(() => {
+                        if (textareaRef.current) {
+                            const newCursorPos = cursorPos + (before.endsWith(' ') || before.length === 0 ? 0 : 1) + tag.length + 1;
+                            textareaRef.current.setSelectionRange(newCursorPos, newCursorPos);
+                            textareaRef.current.focus();
+                        }
+                    }, 0);
+                }}
+            />
         </>
     );
 };

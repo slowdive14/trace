@@ -36,13 +36,22 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
             orderBy("timestamp", "desc")
         );
 
+        let isFirstLoad = true;
+
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const newEntries = snapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data(),
                 timestamp: doc.data().timestamp.toDate(),
             })) as Entry[];
+
+            // Scroll to top when new entries are added (but not on initial load)
+            if (!isFirstLoad && newEntries.length > allEntries.length) {
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+
             setAllEntries(newEntries);
+            isFirstLoad = false;
         });
 
         return () => unsubscribe();
