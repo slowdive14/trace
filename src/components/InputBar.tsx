@@ -15,6 +15,7 @@ interface InputBarProps {
 const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collectionName = 'entries' }) => {
     const [content, setContent] = useState('');
     const [isExpanded, setIsExpanded] = useState(false);
+    const [isFocused, setIsFocused] = useState(false);
     // Use null to represent "Now/Today". This prevents stale timestamps when the app is left open.
     const [selectedDate, setSelectedDate] = useState<Date | null>(null);
     const [showDatePicker, setShowDatePicker] = useState(false);
@@ -166,7 +167,7 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
 
     return (
         <>
-            <div className={`fixed bottom-0 left-0 right-0 bg-bg-secondary border-t border-bg-tertiary p-4 transition-all duration-300 z-40 ${isExpanded ? 'h-1/2' : 'h-auto'}`}>
+            <div className={`fixed bottom-0 left-0 right-0 bg-bg-secondary border-t border-bg-tertiary p-3 transition-all duration-300 ${isExpanded ? 'h-1/2 z-50' : (isFocused || content.length > 0) ? 'h-auto z-50' : 'h-auto z-40'}`}>
                 <div className="max-w-md mx-auto flex flex-col h-full gap-2 relative">
                     {!isDisplayDateToday && (
                         <div className="text-xs text-accent text-center">
@@ -201,19 +202,21 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
                         </div>
                     )}
 
-                    <div className="flex items-end gap-2 h-full">
-                        <div className="flex-1 relative">
+                    <div className={`flex gap-2 flex-1 ${isExpanded ? 'items-stretch' : 'items-end'}`}>
+                        <div className={`flex-1 relative ${isExpanded ? 'flex flex-col' : ''}`}>
                             <textarea
                                 ref={textareaRef}
                                 value={content}
                                 onChange={(e) => handleContentChange(e.target.value)}
                                 onKeyDown={handleKeyDown}
+                                onFocus={() => setIsFocused(true)}
+                                onBlur={() => setIsFocused(false)}
                                 onSelect={() => {
                                     const cursorPos = textareaRef.current?.selectionStart || 0;
                                     updateAutocomplete(content, cursorPos);
                                 }}
                                 placeholder="What's happening? #감정/ 입력하면 자동완성"
-                                className={`w-full bg-bg-tertiary text-text-primary rounded-lg p-3 resize-none focus:outline-none focus:ring-1 focus:ring-accent min-h-[44px] overflow-y-auto ${isExpanded ? 'h-full max-h-full' : 'max-h-[120px]'}`}
+                                className={`w-full bg-bg-tertiary text-text-primary rounded-lg p-3 resize-none focus:outline-none focus:ring-1 focus:ring-accent min-h-[44px] overflow-y-auto ${isExpanded ? 'h-full max-h-full' : 'max-h-24'}`}
                                 rows={1}
                             />
                         </div>
