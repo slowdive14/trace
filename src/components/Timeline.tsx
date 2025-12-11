@@ -27,6 +27,7 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
     const [showToast, setShowToast] = useState(false);
     const { user } = useAuth();
     const loadMoreRef = useRef<HTMLDivElement>(null);
+    const isFirstLoadRef = useRef<Record<string, boolean>>({});
 
     useEffect(() => {
         if (!user) return;
@@ -36,7 +37,11 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
             orderBy("timestamp", "desc")
         );
 
-        let isFirstLoad = true;
+        // Track first load per collection to persist across tab switches
+        const collectionKey = `${user.uid}/${collectionName}`;
+        if (!(collectionKey in isFirstLoadRef.current)) {
+            isFirstLoadRef.current[collectionKey] = true;
+        }
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const newEntries = snapshot.docs.map(doc => ({
@@ -45,17 +50,17 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
                 timestamp: doc.data().timestamp.toDate(),
             })) as Entry[];
 
-            // Scroll to top when new entries are added (but not on initial load)
-            if (!isFirstLoad && newEntries.length > allEntries.length) {
+            // Scroll to top when new entries are added (but not on initial load for this collection)
+            if (!isFirstLoadRef.current[collectionKey] && newEntries.length > allEntries.length) {
                 window.scrollTo({ top: 0, behavior: 'smooth' });
             }
 
             setAllEntries(newEntries);
-            isFirstLoad = false;
+            isFirstLoadRef.current[collectionKey] = false;
         });
 
         return () => unsubscribe();
-    }, [user, collectionName]);
+    }, [user, collectionName, allEntries.length]);
 
     // Infinite scroll observer
     useEffect(() => {
