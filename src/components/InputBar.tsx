@@ -15,7 +15,6 @@ interface InputBarProps {
 const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collectionName = 'entries' }) => {
     const [content, setContent] = useState('');
     const [isExpanded, setIsExpanded] = useState(false);
-    const [isFocused, setIsFocused] = useState(false);
     // Use null to represent "Now/Today". This prevents stale timestamps when the app is left open.
     const [selectedDate, setSelectedDate] = useState<Date | null>(null);
     const [showDatePicker, setShowDatePicker] = useState(false);
@@ -209,8 +208,6 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
                                 value={content}
                                 onChange={(e) => handleContentChange(e.target.value)}
                                 onKeyDown={handleKeyDown}
-                                onFocus={() => setIsFocused(true)}
-                                onBlur={() => setIsFocused(false)}
                                 onSelect={() => {
                                     const cursorPos = textareaRef.current?.selectionStart || 0;
                                     updateAutocomplete(content, cursorPos);
