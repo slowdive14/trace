@@ -99,6 +99,7 @@ const ExpenseCalendar: React.FC<ExpenseCalendarProps> = ({ expenses, selectedDat
                             const total = getDayTotal(day);
                             const isSelected = isSameDay(day, selectedDate);
                             const isCurrentMonth = isSameMonth(day, currentMonth);
+                            const isHighExpense = total > 15000;
 
                             return (
                                 <button
@@ -111,6 +112,7 @@ const ExpenseCalendar: React.FC<ExpenseCalendarProps> = ({ expenses, selectedDat
                                         p-1.5 rounded-lg text-xs transition-all relative
                                         ${isSelected ? 'bg-accent text-white' : 'hover:bg-bg-tertiary'}
                                         ${isToday(day) ? 'ring-1 ring-accent' : ''}
+                                        ${isHighExpense && isCurrentMonth ? 'ring-2 ring-red-500' : ''}
                                         ${!isCurrentMonth ? 'text-text-secondary/30' : 'text-text-primary'}
                                     `}
                                 >
