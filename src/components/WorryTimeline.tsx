@@ -1,16 +1,17 @@
 import React, { useMemo } from 'react';
 import type { WorryEntry } from '../types/types';
 import WorryCard from './WorryCard';
-import { format } from 'date-fns';
+import { format, addWeeks } from 'date-fns';
 
 interface WorryTimelineProps {
     entries: WorryEntry[];
+    worryStartDate: Date;
     onUpdate: (id: string, content: string) => void;
     onDelete: (id: string) => void;
     onReply: (id: string, type: 'action' | 'result', content?: string) => void;
 }
 
-const WorryTimeline: React.FC<WorryTimelineProps> = ({ entries, onUpdate, onDelete, onReply }) => {
+const WorryTimeline: React.FC<WorryTimelineProps> = ({ entries, worryStartDate, onUpdate, onDelete, onReply }) => {
     const groupedEntries = useMemo(() => {
         // Create a map for quick parent lookup
         const entryMap = new Map(entries.map(e => [e.id, e]));
@@ -97,17 +98,16 @@ const WorryTimeline: React.FC<WorryTimelineProps> = ({ entries, onUpdate, onDele
         <div className="pb-4">
             {sortedWeeks.map(week => {
                 const weekEntries = groupedEntries[week];
-                const firstEntryDate = weekEntries[0]?.timestamp;
+                // Calculate week start date: Week 1 = startDate, Week 2 = startDate + 7 days, etc.
+                const weekStartDate = addWeeks(worryStartDate, week - 1);
 
                 return (
                     <div key={week} className="mb-6">
                         <div className="flex items-center gap-2 mb-3">
                             <h4 className="font-bold text-text-primary">Week {week}</h4>
-                            {firstEntryDate && (
-                                <span className="text-xs text-text-secondary">
-                                    ({format(firstEntryDate, 'M/d')}~)
-                                </span>
-                            )}
+                            <span className="text-xs text-text-secondary">
+                                ({format(weekStartDate, 'M/d')}~)
+                            </span>
                         </div>
                         {renderThreadedEntries(weekEntries)}
                     </div>

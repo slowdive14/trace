@@ -121,6 +121,7 @@ const WorrySection: React.FC<WorrySectionProps> = ({ worry, onDeleteWorry, onClo
                 <div className="p-4 border-t border-bg-tertiary bg-bg-primary/50">
                     <WorryTimeline
                         entries={entries}
+                        worryStartDate={worry.startDate}
                         onUpdate={handleUpdateEntry}
                         onDelete={handleDeleteEntry}
                         onReply={(id, type, content) => {
