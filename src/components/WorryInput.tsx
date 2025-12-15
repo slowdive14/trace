@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { differenceInCalendarDays } from 'date-fns';
+import { differenceInWeeks, startOfDay } from 'date-fns';
 
 interface WorryInputProps {
     activeWorryId: string | null;
@@ -23,9 +23,10 @@ const WorryInput: React.FC<WorryInputProps> = ({ activeWorryId, worryStartDate, 
     }, [replyingToId, replyType]);
 
     const calculateWeek = (startDate: Date): number => {
-        const today = new Date();
-        const diffDays = differenceInCalendarDays(today, startDate);
-        return Math.floor(diffDays / 7) + 1;
+        const today = startOfDay(new Date());
+        const start = startOfDay(startDate);
+        const diffWeeks = differenceInWeeks(today, start);
+        return diffWeeks + 1;
     };
 
     const handleSubmit = (e: React.FormEvent) => {

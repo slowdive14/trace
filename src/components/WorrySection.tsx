@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from './AuthContext';
-import { getWorryEntries, addWorryEntry, deleteWorryEntry, updateWorryEntry } from '../services/firestore';
-import type { Worry, WorryEntry } from '../types/types';
-import { format, differenceInCalendarDays } from 'date-fns';
+import { format, differenceInWeeks, startOfDay } from 'date-fns';
 import { Trash2, ChevronDown, ChevronUp, CheckCircle } from 'lucide-react';
+import { useAuth } from './AuthContext';
+import { getWorryEntries, addWorryEntry, updateWorryEntry, deleteWorryEntry } from '../services/firestore';
+import type { Worry, WorryEntry } from '../types/types';
 import WorryTimeline from './WorryTimeline';
 import WorryInput from './WorryInput';
 
@@ -37,9 +37,10 @@ const WorrySection: React.FC<WorrySectionProps> = ({ worry, onDeleteWorry, onClo
     };
 
     const calculateWeek = (startDate: Date): number => {
-        const today = new Date();
-        const diffDays = differenceInCalendarDays(today, startDate);
-        return Math.floor(diffDays / 7) + 1;
+        const today = startOfDay(new Date());
+        const start = startOfDay(startDate);
+        const diffWeeks = differenceInWeeks(today, start);
+        return diffWeeks + 1;
     };
 
     const handleAddEntry = async (entryData: { type: 'worry' | 'action' | 'result', content: string, week: number, parentId?: string }) => {
