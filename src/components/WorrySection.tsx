@@ -16,7 +16,7 @@ interface WorrySectionProps {
 const WorrySection: React.FC<WorrySectionProps> = ({ worry, onDeleteWorry, onCloseWorry }) => {
     const { user } = useAuth();
     const [entries, setEntries] = useState<WorryEntry[]>([]);
-    const [isExpanded, setIsExpanded] = useState(true);
+    const [isExpanded, setIsExpanded] = useState(false);
     const [replyingToId, setReplyingToId] = useState<string | null>(null);
     const [replyType, setReplyType] = useState<'action' | 'result'>('action');
 
