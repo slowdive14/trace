@@ -25,6 +25,24 @@ export interface Todo {
     updatedAt: Date;
 }
 
+// Search result types
+export type SearchResultType = 'entry' | 'todo';
+
+export interface SearchResult {
+    type: SearchResultType;
+    id: string;
+    content: string;
+    timestamp: Date;
+    // Entry-specific (optional)
+    tags?: string[];
+    category?: 'action' | 'thought' | 'chore';
+    isPinned?: boolean;
+    createdAt?: Date;
+    updatedAt?: Date;
+    // Todo-specific (optional)
+    date?: Date;
+}
+
 export type ExpenseCategory =
     | '커피/음료'
     | '식사'
