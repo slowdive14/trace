@@ -93,7 +93,10 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
             const isToday = selectedDate && isSameDay(selectedDate, new Date());
             const dateToUse = (selectedDate && !isToday) ? selectedDate : undefined;
 
-            await addEntry(user.uid, content, tags, category, dateToUse, collectionName);
+            // Chores are pinned by default
+            const isPinned = category === 'chore';
+
+            await addEntry(user.uid, content, tags, category, dateToUse, collectionName, isPinned);
             setContent('');
             setIsExpanded(false);
             setSelectedDate(null); // Reset to "Now"

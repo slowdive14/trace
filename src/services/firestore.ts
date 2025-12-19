@@ -134,7 +134,8 @@ export const addEntry = async (
     tags: string[],
     category: string,
     date?: Date,
-    collectionName: string = 'entries'
+    collectionName: string = 'entries',
+    isPinned: boolean = false
 ) => {
     try {
         const timestamp = date ? Timestamp.fromDate(date) : Timestamp.now();
@@ -143,7 +144,7 @@ export const addEntry = async (
             tags,
             category,
             timestamp,
-            isPinned: false,
+            isPinned,
             createdAt: Timestamp.now(),
         });
         return docRef.id;
