@@ -9,13 +9,14 @@ import { getLogicalDate } from '../utils/dateUtils';
 interface UnifiedCalendarModalProps {
     onClose: () => void;
     entries: Entry[];
+    books: Entry[];
     expenses: Expense[];
     todos: Todo[];
     worryEntries: WorryEntry[];
     worries: Worry[];
 }
 
-const UnifiedCalendarModal: React.FC<UnifiedCalendarModalProps> = ({ onClose, entries, expenses, todos, worryEntries, worries }) => {
+const UnifiedCalendarModal: React.FC<UnifiedCalendarModalProps> = ({ onClose, entries, books, expenses, todos, worryEntries, worries }) => {
     const [currentMonth, setCurrentMonth] = useState(new Date());
     const [selectedDate, setSelectedDate] = useState<Date | null>(null);
     const [copied, setCopied] = useState(false);
@@ -31,7 +32,7 @@ const UnifiedCalendarModal: React.FC<UnifiedCalendarModalProps> = ({ onClose, en
 
         const dateStr = format(selectedDate, 'yyyy-MM-dd');
         const todo = todos.find(t => t.id === dateStr);
-        const markdown = exportDailyMarkdown(selectedDate, entries, expenses, todo, worryEntries, worries);
+        const markdown = exportDailyMarkdown(selectedDate, entries, books, expenses, todo, worryEntries, worries);
         navigator.clipboard.writeText(markdown);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
@@ -40,6 +41,7 @@ const UnifiedCalendarModal: React.FC<UnifiedCalendarModalProps> = ({ onClose, en
     const getDayData = (date: Date) => {
         const dateStr = format(date, 'yyyy-MM-dd');
         const dayEntries = entries.filter(e => format(getLogicalDate(e.timestamp), 'yyyy-MM-dd') === dateStr);
+        const dayBooks = books.filter(b => format(getLogicalDate(b.timestamp), 'yyyy-MM-dd') === dateStr);
         const dayExpenses = expenses.filter(e => format(getLogicalDate(e.timestamp), 'yyyy-MM-dd') === dateStr);
         const dayWorryEntries = worryEntries.filter(e => format(getLogicalDate(e.timestamp), 'yyyy-MM-dd') === dateStr);
         // Lookup by ID (YYYY-MM-DD) instead of date field for robustness
@@ -49,14 +51,14 @@ const UnifiedCalendarModal: React.FC<UnifiedCalendarModalProps> = ({ onClose, en
             .reduce((sum, e) => sum + e.amount, 0);
 
         return {
-            count: dayEntries.length + dayExpenses.length + dayWorryEntries.length + (dayTodo ? 1 : 0),
+            count: dayEntries.length + dayBooks.length + dayExpenses.length + dayWorryEntries.length + (dayTodo ? 1 : 0),
             total,
-            hasData: dayEntries.length > 0 || dayExpenses.length > 0 || dayWorryEntries.length > 0 || !!dayTodo
+            hasData: dayEntries.length > 0 || dayBooks.length > 0 || dayExpenses.length > 0 || dayWorryEntries.length > 0 || !!dayTodo
         };
     };
 
     const selectedTodo = selectedDate ? todos.find(t => t.id === format(selectedDate, 'yyyy-MM-dd')) : undefined;
-    const selectedMarkdown = selectedDate ? exportDailyMarkdown(selectedDate, entries, expenses, selectedTodo, worryEntries, worries) : '';
+    const selectedMarkdown = selectedDate ? exportDailyMarkdown(selectedDate, entries, books, expenses, selectedTodo, worryEntries, worries) : '';
 
     return (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>

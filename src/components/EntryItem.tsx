@@ -119,6 +119,7 @@ const EntryItem: React.FC<EntryItemProps> = ({ entry, onDelete, highlightQuery, 
             )}
             <div className={`w-12 text-right font-mono text-sm pt-1 shrink-0 flex flex-col items-end gap-1 ${entry.category === 'thought' ? 'text-purple-500' :
                 entry.category === 'chore' ? 'text-orange-500' :
+                entry.category === 'book' ? 'text-amber-700' :
                     'text-blue-500'
                 }`}>
                 <span>{formattedTime}</span>

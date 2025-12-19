@@ -27,7 +27,10 @@ const SearchBar: React.FC<SearchBarProps> = ({ onClose }) => {
             // 2. Fetch chores
             const chores = await getEntries(user.uid, 'chores');
 
-            // 3. Fetch todos (last 180 days)
+            // 3. Fetch books
+            const books = await getEntries(user.uid, 'books');
+
+            // 4. Fetch todos (last 180 days)
             const endDate = endOfDay(new Date());
             const startDate = startOfDay(subDays(new Date(), 180));
             const todos = await getTodos(user.uid, startDate, endDate, 'todos');
@@ -43,6 +46,11 @@ const SearchBar: React.FC<SearchBarProps> = ({ onClose }) => {
                     type: 'entry' as const,
                     ...c,
                     timestamp: c.timestamp
+                })),
+                ...books.map(b => ({
+                    type: 'entry' as const,
+                    ...b,
+                    timestamp: b.timestamp
                 })),
                 ...todos.map(t => ({
                     type: 'todo' as const,

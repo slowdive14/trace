@@ -19,12 +19,14 @@ const AppContent: React.FC = () => {
   const [showCalendar, setShowCalendar] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [showUnifiedCalendar, setShowUnifiedCalendar] = useState(false);
-  const [activeTab, setActiveTab] = useState<'action' | 'thought' | 'chore' | 'todo' | 'expense' | 'worry'>('action');
+  const [activeTab, setActiveTab] = useState<'action' | 'thought' | 'chore' | 'book' | 'todo' | 'expense' | 'worry'>('action');
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [selectedExpenseDate, setSelectedExpenseDate] = useState<Date | undefined>(undefined);
+  const [bookSubFilter, setBookSubFilter] = useState<string | null>(null);
 
   // Data for unified calendar
   const [entries, setEntries] = useState<Entry[]>([]);
+  const [books, setBooks] = useState<Entry[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [todos, setTodos] = useState<Todo[]>([]);
   const [worryEntries, setWorryEntries] = useState<WorryEntry[]>([]);
@@ -47,6 +49,27 @@ const AppContent: React.FC = () => {
         timestamp: doc.data().timestamp.toDate(),
       })) as Entry[];
       setEntries(newEntries);
+    });
+
+    return () => unsubscribe();
+  }, [user]);
+
+  // Subscribe to books
+  useEffect(() => {
+    if (!user) return;
+
+    const q = query(
+      collection(db, `users/${user.uid}/books`),
+      orderBy("timestamp", "desc")
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const newBooks = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        timestamp: doc.data().timestamp.toDate(),
+      })) as Entry[];
+      setBooks(newBooks);
     });
 
     return () => unsubscribe();
@@ -153,7 +176,7 @@ const AppContent: React.FC = () => {
     >
       {user ? (
         <>
-          {selectedTag && activeTab !== 'expense' && activeTab !== 'todo' && (
+          {selectedTag && activeTab !== 'expense' && activeTab !== 'todo' && activeTab !== 'book' && (
             <div className="sticky top-0 bg-bg-secondary/95 backdrop-blur border-b border-bg-tertiary py-2 px-4 z-20">
               <div className="max-w-md mx-auto flex items-center justify-between">
                 <span className="text-sm text-text-secondary">
@@ -187,6 +210,18 @@ const AppContent: React.FC = () => {
                 collectionName="chores"
               />
               <InputBar activeCategory="chore" collectionName="chores" />
+            </>
+          ) : activeTab === 'book' ? (
+            <>
+              <Timeline
+                category="book"
+                selectedTag={selectedTag}
+                onTagClick={(tag: string) => setSelectedTag(tag)}
+                collectionName="books"
+                subFilter={bookSubFilter}
+                onSubFilterChange={setBookSubFilter}
+              />
+              <InputBar activeCategory="book" collectionName="books" />
             </>
           ) : (
             <>
@@ -238,6 +273,19 @@ const AppContent: React.FC = () => {
                   }`}
               >
                 할일
+              </button>
+              <button
+                onClick={() => {
+                  setActiveTab('book');
+                  setSelectedTag(null);
+                  setBookSubFilter(null);
+                }}
+                className={`flex-1 py-4 text-sm font-medium transition-colors ${activeTab === 'book'
+                  ? 'text-amber-700 border-b-2 border-amber-700'
+                  : 'text-text-secondary hover:text-text-primary'
+                  }`}
+              >
+                📚 책
               </button>
               <button
                 onClick={() => {
@@ -296,6 +344,7 @@ const AppContent: React.FC = () => {
             <UnifiedCalendarModal
               onClose={() => setShowUnifiedCalendar(false)}
               entries={entries}
+              books={books}
               expenses={expenses}
               todos={todos}
               worryEntries={worryEntries}

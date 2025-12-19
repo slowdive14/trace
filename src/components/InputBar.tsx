@@ -8,7 +8,7 @@ import { searchEmotions, type EmotionTag } from '../utils/emotionTags';
 import EmotionPickerModal from './EmotionPickerModal';
 
 interface InputBarProps {
-    activeCategory?: 'action' | 'thought' | 'chore';
+    activeCategory?: 'action' | 'thought' | 'chore' | 'book';
     collectionName?: string;
 }
 
@@ -215,7 +215,7 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
                                     const cursorPos = textareaRef.current?.selectionStart || 0;
                                     updateAutocomplete(content, cursorPos);
                                 }}
-                                placeholder="#감정/ 입력하면 자동완성"
+                                placeholder={activeCategory === 'book' ? '책 내용을 기록하세요... (#발췌, #읽을책, #진행중, #완독)' : '#감정/ 입력하면 자동완성'}
                                 className={`w-full bg-bg-tertiary text-text-primary rounded-lg p-3 resize-none focus:outline-none focus:ring-1 focus:ring-accent min-h-[44px] overflow-y-auto ${isExpanded ? 'h-full max-h-full' : 'max-h-24'}`}
                                 rows={1}
                             />
@@ -245,6 +245,7 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
                             disabled={!content.trim()}
                             className={`p-2 text-white rounded-full hover:bg-opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all ${activeCategory === 'thought' ? 'bg-purple-500' :
                                     activeCategory === 'chore' ? 'bg-orange-500' :
+                                    activeCategory === 'book' ? 'bg-amber-700' :
                                         'bg-blue-500'
                                 }`}
                         >

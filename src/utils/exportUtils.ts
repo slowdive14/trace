@@ -39,6 +39,7 @@ export const generateMarkdown = (entries: Entry[], date: Date): string => {
 export function exportDailyMarkdown(
     date: Date,
     entries: Entry[],
+    books: Entry[],
     expenses: Expense[],
     todo?: Todo,
     worryEntries?: WorryEntry[],
@@ -46,9 +47,12 @@ export function exportDailyMarkdown(
 ): string {
     const dateStr = format(date, 'yyyy-MM-dd');
 
-    // Filter entries and expenses for the selected date
+    // Filter entries, books, and expenses for the selected date
     const dayEntries = entries.filter(e =>
         format(getLogicalDate(e.timestamp), 'yyyy-MM-dd') === dateStr
+    );
+    const dayBooks = books.filter(b =>
+        format(getLogicalDate(b.timestamp), 'yyyy-MM-dd') === dateStr
     );
     const dayExpenses = expenses.filter(e =>
         format(getLogicalDate(e.timestamp), 'yyyy-MM-dd') === dateStr
@@ -81,6 +85,15 @@ export function exportDailyMarkdown(
         markdown += '#### 생각\n';
         thoughtEntries.forEach(entry => {
             markdown += `- ${entry.content}\n`;
+        });
+        markdown += '\n';
+    }
+
+    // 책 섹션
+    if (dayBooks.length > 0) {
+        markdown += '#### 📚 책\n';
+        dayBooks.forEach(book => {
+            markdown += `- ${book.content}\n`;
         });
         markdown += '\n';
     }

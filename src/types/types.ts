@@ -2,7 +2,7 @@ export interface Entry {
     id: string;
     content: string;
     tags: string[];
-    category: 'action' | 'thought' | 'chore';
+    category: 'action' | 'thought' | 'chore' | 'book';
     timestamp: Date;
     createdAt: Date;
     updatedAt: Date;
@@ -35,7 +35,7 @@ export interface SearchResult {
     timestamp: Date;
     // Entry-specific (optional)
     tags?: string[];
-    category?: 'action' | 'thought' | 'chore';
+    category?: 'action' | 'thought' | 'chore' | 'book';
     isPinned?: boolean;
     createdAt?: Date;
     updatedAt?: Date;

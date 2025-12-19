@@ -12,15 +12,17 @@ import { generateMarkdown, copyToClipboard } from '../utils/exportUtils';
 import { getLogicalDate } from '../utils/dateUtils';
 
 interface TimelineProps {
-    category?: 'action' | 'thought' | 'chore' | 'all';
+    category?: 'action' | 'thought' | 'chore' | 'book' | 'all';
     selectedTag?: string | null;
     onTagClick?: (tag: string) => void;
     collectionName?: string;
+    subFilter?: string | null;
+    onSubFilterChange?: (filter: string | null) => void;
 }
 
 type DateFilter = 'today' | '7days' | '30days' | 'all';
 
-const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, onTagClick, collectionName = 'entries' }) => {
+const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, onTagClick, collectionName = 'entries', subFilter, onSubFilterChange }) => {
     const [allEntries, setAllEntries] = useState<Entry[]>([]);
     const [displayLimit, setDisplayLimit] = useState(50);
     const [dateFilter, setDateFilter] = useState<DateFilter>('today');
@@ -106,9 +108,12 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
             if (category !== 'all' && entry.category !== category) return false;
             if (selectedTag && !entry.tags.some(tag => tag.startsWith(selectedTag))) return false;
 
+            // Sub-filter (book category only)
+            if (subFilter && category === 'book' && !entry.tags.some(tag => tag === subFilter)) return false;
+
             return entry.isPinned;
         });
-    }, [allEntries, category, selectedTag]);
+    }, [allEntries, category, selectedTag, subFilter]);
 
     const getFilteredEntries = useCallback(() => {
         let filtered = allEntries.filter(entry => !entry.isPinned); // Exclude pinned items from main list
@@ -138,11 +143,17 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
         }
 
         // Apply category and tag filters
-        return filtered
+        filtered = filtered
             .filter(entry => category === 'all' || entry.category === category)
-            .filter(entry => !selectedTag || entry.tags.some(tag => tag.startsWith(selectedTag)))
-            .slice(0, displayLimit);
-    }, [allEntries, dateFilter, category, selectedTag, displayLimit]);
+            .filter(entry => !selectedTag || entry.tags.some(tag => tag.startsWith(selectedTag)));
+
+        // Apply sub-filter (book category only)
+        if (subFilter && category === 'book') {
+            filtered = filtered.filter(entry => entry.tags.some(tag => tag === subFilter));
+        }
+
+        return filtered.slice(0, displayLimit);
+    }, [allEntries, dateFilter, category, selectedTag, subFilter, displayLimit]);
 
     const pinnedEntries = getPinnedEntries();
     const entries = getFilteredEntries();
@@ -217,6 +228,59 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
                     </button>
                 </div>
             </div>
+
+            {/* Sub-filter for Book Category */}
+            {category === 'book' && (
+                <div className="sticky top-[57px] bg-bg-primary/95 backdrop-blur border-b border-bg-tertiary z-19 px-4 py-2">
+                    <div className="max-w-md mx-auto flex gap-2">
+                        <button
+                            onClick={() => onSubFilterChange?.(null)}
+                            className={`flex-1 py-1.5 px-2 text-xs font-medium rounded-md transition-colors ${subFilter === null
+                                ? 'bg-amber-700 text-white'
+                                : 'bg-bg-secondary text-text-secondary hover:bg-bg-tertiary'
+                                }`}
+                        >
+                            전체
+                        </button>
+                        <button
+                            onClick={() => onSubFilterChange?.('#발췌')}
+                            className={`flex-1 py-1.5 px-2 text-xs font-medium rounded-md transition-colors ${subFilter === '#발췌'
+                                ? 'bg-amber-700 text-white'
+                                : 'bg-bg-secondary text-text-secondary hover:bg-bg-tertiary'
+                                }`}
+                        >
+                            발췌
+                        </button>
+                        <button
+                            onClick={() => onSubFilterChange?.('#읽을책')}
+                            className={`flex-1 py-1.5 px-2 text-xs font-medium rounded-md transition-colors ${subFilter === '#읽을책'
+                                ? 'bg-amber-700 text-white'
+                                : 'bg-bg-secondary text-text-secondary hover:bg-bg-tertiary'
+                                }`}
+                        >
+                            읽을책
+                        </button>
+                        <button
+                            onClick={() => onSubFilterChange?.('#진행중')}
+                            className={`flex-1 py-1.5 px-2 text-xs font-medium rounded-md transition-colors ${subFilter === '#진행중'
+                                ? 'bg-amber-700 text-white'
+                                : 'bg-bg-secondary text-text-secondary hover:bg-bg-tertiary'
+                                }`}
+                        >
+                            진행중
+                        </button>
+                        <button
+                            onClick={() => onSubFilterChange?.('#완독')}
+                            className={`flex-1 py-1.5 px-2 text-xs font-medium rounded-md transition-colors ${subFilter === '#완독'
+                                ? 'bg-amber-700 text-white'
+                                : 'bg-bg-secondary text-text-secondary hover:bg-bg-tertiary'
+                                }`}
+                        >
+                            완독
+                        </button>
+                    </div>
+                </div>
+            )}
 
             <div className="pb-32 px-4 max-w-md mx-auto">
                 {/* Pinned Entries Section */}
