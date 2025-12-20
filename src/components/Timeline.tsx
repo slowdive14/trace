@@ -28,7 +28,7 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
     const [dateFilter, setDateFilter] = useState<DateFilter>('today');
     const [showToast, setShowToast] = useState(false);
     const { user } = useAuth();
-    const loadMoreRef = useRef<HTMLDivElement>(null);
+    const [loadMoreNode, setLoadMoreNode] = useState<HTMLDivElement | null>(null);
     const isFirstLoadRef = useRef<Record<string, boolean>>({});
 
     useEffect(() => {
@@ -64,8 +64,10 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
         return () => unsubscribe();
     }, [user, collectionName, allEntries.length]);
 
-    // Infinite scroll observer
+    // Infinite scroll observer - uses callback ref pattern for dynamic elements
     useEffect(() => {
+        if (!loadMoreNode) return;
+
         const observer = new IntersectionObserver(
             (entries) => {
                 if (entries[0].isIntersecting) {
@@ -75,12 +77,10 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
             { threshold: 0.1 }
         );
 
-        if (loadMoreRef.current) {
-            observer.observe(loadMoreRef.current);
-        }
+        observer.observe(loadMoreNode);
 
         return () => observer.disconnect();
-    }, []);
+    }, [loadMoreNode]);
 
     const handleDelete = async (id: string) => {
         if (!user) return;
@@ -115,7 +115,7 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
         });
     }, [allEntries, category, selectedTag, subFilter]);
 
-    const getFilteredEntries = useCallback(() => {
+    const getFilteredEntriesAll = useCallback(() => {
         let filtered = allEntries.filter(entry => !entry.isPinned); // Exclude pinned items from main list
 
         // Apply date filter
@@ -152,11 +152,12 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
             filtered = filtered.filter(entry => entry.tags.some(tag => tag === subFilter));
         }
 
-        return filtered.slice(0, displayLimit);
-    }, [allEntries, dateFilter, category, selectedTag, subFilter, displayLimit]);
+        return filtered;
+    }, [allEntries, dateFilter, category, selectedTag, subFilter]);
 
     const pinnedEntries = getPinnedEntries();
-    const entries = getFilteredEntries();
+    const filteredEntriesAll = getFilteredEntriesAll();
+    const entries = filteredEntriesAll.slice(0, displayLimit);
 
     const groupedEntries = entries.reduce((groups: Record<string, Entry[]>, entry: Entry) => {
         const dateKey = format(getLogicalDate(entry.timestamp), 'yyyy-MM-dd');
@@ -341,8 +342,8 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
                 )}
 
                 {/* Infinite scroll trigger */}
-                {entries.length > 0 && entries.length < allEntries.filter(entry => category === 'all' || entry.category === category).length && (
-                    <div ref={loadMoreRef} className="py-8 text-center">
+                {entries.length > 0 && entries.length < filteredEntriesAll.length && (
+                    <div ref={setLoadMoreNode} className="py-8 text-center">
                         <div className="inline-block animate-pulse text-text-secondary text-sm">
                             Loading more...
                         </div>
