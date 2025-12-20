@@ -282,7 +282,7 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
                 </div>
             )}
 
-            <div className={`px-4 max-w-md mx-auto ${category === 'book' ? 'pb-52' : 'pb-32'}`}>
+            <div className={`px-4 max-w-md mx-auto ${category === 'book' ? 'pb-60' : 'pb-32'}`}>
                 {/* Pinned Entries Section */}
                 {pinnedEntries.length > 0 && (
                     <div className="mb-8">

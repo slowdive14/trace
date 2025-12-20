@@ -191,8 +191,80 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
 
     return (
         <>
+            {/* 책 태그 버튼 바 - Fixed positioning (only when not expanded) */}
+            {activeCategory === 'book' && !isExpanded && (
+                <div className="fixed bottom-[136px] left-0 right-0 flex justify-center z-[60]">
+                    <div className="max-w-md w-full px-4">
+                        <div className="flex gap-2 flex-wrap p-2 bg-bg-secondary rounded-lg border border-bg-tertiary shadow-lg">
+                            <button
+                                type="button"
+                                onClick={() => insertBookTag('#발췌')}
+                                className="py-1.5 px-3 text-xs font-medium rounded-md bg-amber-500 text-white hover:bg-amber-600 transition-colors"
+                            >
+                                #발췌
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => insertBookTag('#읽을책')}
+                                className="py-1.5 px-3 text-xs font-medium rounded-md bg-amber-500 text-white hover:bg-amber-600 transition-colors"
+                            >
+                                #읽을책
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => insertBookTag('#진행중')}
+                                className="py-1.5 px-3 text-xs font-medium rounded-md bg-amber-500 text-white hover:bg-amber-600 transition-colors"
+                            >
+                                #진행중
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => insertBookTag('#완독')}
+                                className="py-1.5 px-3 text-xs font-medium rounded-md bg-amber-500 text-white hover:bg-amber-600 transition-colors"
+                            >
+                                #완독
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <div className={`fixed bottom-0 left-0 right-0 bg-bg-secondary border-t border-bg-tertiary p-3 transition-all duration-300 ${isExpanded ? 'h-1/2 z-50' : 'h-auto z-40'}`}>
                 <div className="max-w-md mx-auto flex flex-col h-full gap-2 relative">
+                    {/* 확장 모드에서 책 태그 버튼 바를 InputBar 상단에 표시 */}
+                    {activeCategory === 'book' && isExpanded && (
+                        <div className="flex gap-2 flex-wrap p-2 bg-bg-tertiary rounded-lg border-b border-bg-primary">
+                            <button
+                                type="button"
+                                onClick={() => insertBookTag('#발췌')}
+                                className="py-1.5 px-3 text-xs font-medium rounded-md bg-amber-500 text-white hover:bg-amber-600 transition-colors"
+                            >
+                                #발췌
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => insertBookTag('#읽을책')}
+                                className="py-1.5 px-3 text-xs font-medium rounded-md bg-amber-500 text-white hover:bg-amber-600 transition-colors"
+                            >
+                                #읽을책
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => insertBookTag('#진행중')}
+                                className="py-1.5 px-3 text-xs font-medium rounded-md bg-amber-500 text-white hover:bg-amber-600 transition-colors"
+                            >
+                                #진행중
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => insertBookTag('#완독')}
+                                className="py-1.5 px-3 text-xs font-medium rounded-md bg-amber-500 text-white hover:bg-amber-600 transition-colors"
+                            >
+                                #완독
+                            </button>
+                        </div>
+                    )}
+
                     {!isDisplayDateToday && (
                         <div className="text-xs text-accent text-center">
                             📅 {format(displayDate, 'yyyy년 M월 d일')} 기록
@@ -223,40 +295,6 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
                                     </div>
                                 </button>
                             ))}
-                        </div>
-                    )}
-
-                    {/* 책 태그 버튼 바 */}
-                    {activeCategory === 'book' && (
-                        <div className="absolute bottom-full left-0 right-0 mb-3 flex gap-2 flex-wrap p-3 bg-bg-secondary rounded-t-lg border border-bg-tertiary shadow-lg">
-                            <button
-                                type="button"
-                                onClick={() => insertBookTag('#발췌')}
-                                className="py-2 px-4 text-sm font-medium rounded-md bg-amber-500 text-white hover:bg-amber-600 transition-colors shadow-sm"
-                            >
-                                #발췌
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => insertBookTag('#읽을책')}
-                                className="py-2 px-4 text-sm font-medium rounded-md bg-amber-500 text-white hover:bg-amber-600 transition-colors shadow-sm"
-                            >
-                                #읽을책
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => insertBookTag('#진행중')}
-                                className="py-2 px-4 text-sm font-medium rounded-md bg-amber-500 text-white hover:bg-amber-600 transition-colors shadow-sm"
-                            >
-                                #진행중
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => insertBookTag('#완독')}
-                                className="py-2 px-4 text-sm font-medium rounded-md bg-amber-500 text-white hover:bg-amber-600 transition-colors shadow-sm"
-                            >
-                                #완독
-                            </button>
                         </div>
                     )}
 
