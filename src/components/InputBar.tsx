@@ -228,32 +228,32 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
 
                     {/* 책 태그 버튼 바 */}
                     {activeCategory === 'book' && (
-                        <div className="flex gap-2 flex-wrap">
+                        <div className="flex gap-2 flex-wrap mb-3 p-2 bg-amber-50/50 rounded-lg border border-amber-200">
                             <button
                                 type="button"
                                 onClick={() => insertBookTag('#발췌')}
-                                className="py-1.5 px-3 text-xs font-medium rounded-md bg-amber-100 text-amber-800 hover:bg-amber-200 transition-colors"
+                                className="py-2 px-4 text-sm font-medium rounded-md bg-amber-500 text-white hover:bg-amber-600 transition-colors shadow-sm"
                             >
                                 #발췌
                             </button>
                             <button
                                 type="button"
                                 onClick={() => insertBookTag('#읽을책')}
-                                className="py-1.5 px-3 text-xs font-medium rounded-md bg-amber-100 text-amber-800 hover:bg-amber-200 transition-colors"
+                                className="py-2 px-4 text-sm font-medium rounded-md bg-amber-500 text-white hover:bg-amber-600 transition-colors shadow-sm"
                             >
                                 #읽을책
                             </button>
                             <button
                                 type="button"
                                 onClick={() => insertBookTag('#진행중')}
-                                className="py-1.5 px-3 text-xs font-medium rounded-md bg-amber-100 text-amber-800 hover:bg-amber-200 transition-colors"
+                                className="py-2 px-4 text-sm font-medium rounded-md bg-amber-500 text-white hover:bg-amber-600 transition-colors shadow-sm"
                             >
                                 #진행중
                             </button>
                             <button
                                 type="button"
                                 onClick={() => insertBookTag('#완독')}
-                                className="py-1.5 px-3 text-xs font-medium rounded-md bg-amber-100 text-amber-800 hover:bg-amber-200 transition-colors"
+                                className="py-2 px-4 text-sm font-medium rounded-md bg-amber-500 text-white hover:bg-amber-600 transition-colors shadow-sm"
                             >
                                 #완독
                             </button>
