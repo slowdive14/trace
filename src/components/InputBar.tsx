@@ -228,7 +228,7 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
 
                     {/* 책 태그 버튼 바 */}
                     {activeCategory === 'book' && (
-                        <div className="absolute bottom-full left-0 right-0 mb-2 flex gap-2 flex-wrap p-2 bg-bg-secondary rounded-t-lg border border-bg-tertiary shadow-lg">
+                        <div className="absolute bottom-full left-0 right-0 mb-3 flex gap-2 flex-wrap p-3 bg-bg-secondary rounded-t-lg border border-bg-tertiary shadow-lg">
                             <button
                                 type="button"
                                 onClick={() => insertBookTag('#발췌')}
