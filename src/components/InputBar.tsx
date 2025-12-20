@@ -80,6 +80,28 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
         }, 0);
     };
 
+    const insertBookTag = (tag: string) => {
+        const cursorPos = textareaRef.current?.selectionStart || content.length;
+        const before = content.substring(0, cursorPos);
+        const after = content.substring(cursorPos);
+
+        // 스페이스 패딩 처리
+        const needsSpaceBefore = before.length > 0 && !before.endsWith(' ');
+        const spaceBefore = needsSpaceBefore ? ' ' : '';
+
+        const newContent = before + spaceBefore + tag + ' ' + after;
+        setContent(newContent);
+
+        // 커서를 태그 뒤로 이동
+        setTimeout(() => {
+            if (textareaRef.current) {
+                const newCursorPos = cursorPos + spaceBefore.length + tag.length + 1;
+                textareaRef.current.setSelectionRange(newCursorPos, newCursorPos);
+                textareaRef.current.focus();
+            }
+        }, 0);
+    };
+
     const handleSubmit = async () => {
         if (!content.trim() || !user) return;
 
@@ -206,6 +228,38 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
 
                     <div className={`flex gap-2 flex-1 ${isExpanded ? 'items-stretch' : 'items-end'}`}>
                         <div className={`flex-1 relative ${isExpanded ? 'flex flex-col' : ''}`}>
+                            {activeCategory === 'book' && (
+                                <div className="flex gap-2 mb-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => insertBookTag('#발췌')}
+                                        className="py-1.5 px-3 text-xs font-medium rounded-md bg-amber-100 text-amber-800 hover:bg-amber-200 transition-colors"
+                                    >
+                                        #발췌
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => insertBookTag('#읽을책')}
+                                        className="py-1.5 px-3 text-xs font-medium rounded-md bg-amber-100 text-amber-800 hover:bg-amber-200 transition-colors"
+                                    >
+                                        #읽을책
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => insertBookTag('#진행중')}
+                                        className="py-1.5 px-3 text-xs font-medium rounded-md bg-amber-100 text-amber-800 hover:bg-amber-200 transition-colors"
+                                    >
+                                        #진행중
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => insertBookTag('#완독')}
+                                        className="py-1.5 px-3 text-xs font-medium rounded-md bg-amber-100 text-amber-800 hover:bg-amber-200 transition-colors"
+                                    >
+                                        #완독
+                                    </button>
+                                </div>
+                            )}
                             <textarea
                                 ref={textareaRef}
                                 value={content}
