@@ -157,11 +157,8 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
             }
         }
 
-        // 일반 Enter 처리
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            handleSubmit();
-        }
+        // Enter 키는 줄바꿈만 허용 (전송은 버튼으로만)
+        // 모바일 사용성을 위해 Enter로 전송하지 않음
     };
 
     // 자동완성 선택된 항목 스크롤
