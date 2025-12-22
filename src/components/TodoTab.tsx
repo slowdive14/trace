@@ -72,7 +72,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
         loadContent();
     }, [user, collectionName, viewMode]);
 
-    // Load history (last 7 days)
+    // Load history (last 30 days)
     useEffect(() => {
         const loadHistory = async () => {
             if (!user || viewMode !== 'history') return;
@@ -80,7 +80,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
                 // Use logical date for history range
                 const logicalToday = getLogicalDate();
                 const endDate = endOfDay(logicalToday);
-                const startDate = startOfDay(subDays(logicalToday, 6));
+                const startDate = startOfDay(subDays(logicalToday, 29));
                 const todos = await getTodos(user.uid, startDate, endDate, collectionName);
                 setHistoryTodos(todos);
             } catch (error) {
@@ -336,7 +336,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
                         ))}
                         {historyTodos.length === 0 && (
                             <div className="text-center text-text-secondary mt-20">
-                                <p>최근 7일간 작성된 투두가 없습니다.</p>
+                                <p>최근 30일간 작성된 투두가 없습니다.</p>
                             </div>
                         )}
                     </div>

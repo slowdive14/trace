@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { differenceInWeeks, startOfDay } from 'date-fns';
 import { useAuth } from './AuthContext';
-import { getActiveWorries, createWorry, closeWorry, deleteWorry } from '../services/firestore';
-import type { Worry, WorryReflection } from '../types/types';
+import { getActiveWorries, createWorry, closeWorry, deleteWorry, getWorryEntries, addWorryEntry, updateWorryEntry, deleteWorryEntry } from '../services/firestore';
+import type { Worry, WorryReflection, WorryEntry } from '../types/types';
 import WorrySection from './WorrySection';
 import WorryCloseModal from './WorryCloseModal';
+import WorryInput from './WorryInput';
 import { Plus } from 'lucide-react';
 
 const WorryTab: React.FC = () => {
@@ -16,11 +18,38 @@ const WorryTab: React.FC = () => {
     const [isCreating, setIsCreating] = useState(false);
     const [newTitle, setNewTitle] = useState('');
 
+    // Expansion and entries state
+    const [expandedWorryId, setExpandedWorryId] = useState<string | null>(null);
+    const [entries, setEntries] = useState<WorryEntry[]>([]);
+    const [replyingToId, setReplyingToId] = useState<string | null>(null);
+    const [replyType, setReplyType] = useState<'action' | 'result'>('action');
+
     useEffect(() => {
         if (user) {
             loadActiveWorries();
         }
     }, [user]);
+
+    // Load entries when expanded worry changes
+    useEffect(() => {
+        if (user && expandedWorryId) {
+            loadEntries(expandedWorryId);
+        } else {
+            setEntries([]);
+        }
+        // Clear reply state when switching worries
+        setReplyingToId(null);
+    }, [user, expandedWorryId]);
+
+    const loadEntries = async (worryId: string) => {
+        if (!user) return;
+        try {
+            const fetchedEntries = await getWorryEntries(user.uid, worryId);
+            setEntries(fetchedEntries);
+        } catch (error) {
+            console.error("Failed to load entries:", error);
+        }
+    };
 
     const loadActiveWorries = async () => {
         if (!user) return;
@@ -65,16 +94,79 @@ const WorryTab: React.FC = () => {
             await closeWorry(user.uid, worryToClose.id, reflection);
             await loadActiveWorries();
             setWorryToClose(null);
+            if (expandedWorryId === worryToClose.id) {
+                setExpandedWorryId(null);
+            }
         } catch (error) {
             console.error("Failed to close worry:", error);
             alert("고민 마무리 중 오류가 발생했습니다.");
         }
-    }
+    };
+
+    // Entry handlers
+    const calculateWeek = (startDate: Date): number => {
+        const today = startOfDay(new Date());
+        const start = startOfDay(startDate);
+        const diffWeeks = differenceInWeeks(today, start);
+        return diffWeeks + 1;
+    };
+
+    const handleAddEntry = async (entryData: { type: 'worry' | 'action' | 'result', content: string, week: number, parentId?: string }) => {
+        if (!user || !expandedWorryId) return;
+        try {
+            await addWorryEntry(user.uid, expandedWorryId, entryData.type, entryData.content, entryData.week, entryData.parentId);
+            await loadEntries(expandedWorryId);
+        } catch (error) {
+            console.error("Failed to add entry:", error);
+            alert("기록 저장 중 오류가 발생했습니다.");
+        }
+    };
+
+    const handleAddEntryWithContent = async (type: 'action' | 'result', content: string, parentId: string) => {
+        const expandedWorry = activeWorries.find(w => w.id === expandedWorryId);
+        if (!expandedWorry) return;
+        const week = calculateWeek(expandedWorry.startDate);
+        await handleAddEntry({ type, content, week, parentId });
+    };
+
+    const handleUpdateEntry = async (entryId: string, content: string) => {
+        if (!user) return;
+        try {
+            await updateWorryEntry(user.uid, entryId, content);
+            if (expandedWorryId) await loadEntries(expandedWorryId);
+        } catch (error) {
+            console.error('Error updating entry:', error);
+            alert("수정 중 오류가 발생했습니다.");
+        }
+    };
+
+    const handleDeleteEntry = async (entryId: string) => {
+        if (!user) return;
+        try {
+            await deleteWorryEntry(user.uid, entryId);
+            if (expandedWorryId) await loadEntries(expandedWorryId);
+        } catch (error) {
+            console.error('Error deleting entry:', error);
+            alert("삭제 중 오류가 발생했습니다.");
+        }
+    };
+
+    const handleReplyRequest = (entryId: string, type: 'action' | 'result') => {
+        setReplyingToId(entryId);
+        setReplyType(type);
+    };
+
+    const handleToggleExpand = (worryId: string) => {
+        setExpandedWorryId(prev => prev === worryId ? null : worryId);
+    };
+
+    // Get expanded worry for WorryInput
+    const expandedWorry = activeWorries.find(w => w.id === expandedWorryId);
 
     if (loading) return <div className="p-4 text-center text-text-secondary">Loading...</div>;
 
     return (
-        <div className="flex flex-col h-full max-w-md mx-auto pb-24">
+        <div className="flex flex-col h-full max-w-md mx-auto pb-48">
             <div className="p-4 bg-bg-secondary border-b border-bg-tertiary mb-4">
                 <div className="flex items-center justify-between mb-4">
                     <h2 className="text-lg font-bold text-text-primary">진행 중인 고민</h2>
@@ -126,8 +218,15 @@ const WorryTab: React.FC = () => {
                         <WorrySection
                             key={worry.id}
                             worry={worry}
+                            entries={worry.id === expandedWorryId ? entries : []}
+                            isExpanded={worry.id === expandedWorryId}
+                            onToggleExpand={handleToggleExpand}
                             onDeleteWorry={handleDeleteWorry}
                             onCloseWorry={setWorryToClose}
+                            onUpdateEntry={handleUpdateEntry}
+                            onDeleteEntry={handleDeleteEntry}
+                            onReplyRequest={handleReplyRequest}
+                            onAddEntryWithContent={handleAddEntryWithContent}
                         />
                     ))
                 )}
@@ -139,6 +238,19 @@ const WorryTab: React.FC = () => {
                     isOpen={!!worryToClose}
                     onClose={() => setWorryToClose(null)}
                     onSubmit={handleCloseWorry}
+                />
+            )}
+
+            {expandedWorry && (
+                <WorryInput
+                    activeWorryId={expandedWorry.id}
+                    worryStartDate={expandedWorry.startDate}
+                    worryTitle={expandedWorry.title}
+                    replyingToId={replyingToId}
+                    replyType={replyType}
+                    onCancelReply={() => setReplyingToId(null)}
+                    onSubmit={handleAddEntry}
+                    isEmbedded={false}
                 />
             )}
         </div>

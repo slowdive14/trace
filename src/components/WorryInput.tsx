@@ -4,6 +4,7 @@ import { differenceInWeeks, startOfDay } from 'date-fns';
 interface WorryInputProps {
     activeWorryId: string | null;
     worryStartDate: Date | null;
+    worryTitle?: string;
     replyingToId: string | null;
     replyType?: 'action' | 'result';
     onCancelReply: () => void;
@@ -11,7 +12,7 @@ interface WorryInputProps {
     isEmbedded?: boolean;
 }
 
-const WorryInput: React.FC<WorryInputProps> = ({ activeWorryId, worryStartDate, replyingToId, replyType, onCancelReply, onSubmit, isEmbedded = false }) => {
+const WorryInput: React.FC<WorryInputProps> = ({ activeWorryId, worryStartDate, worryTitle, replyingToId, replyType, onCancelReply, onSubmit, isEmbedded = false }) => {
     const [content, setContent] = useState('');
     const [type, setType] = useState<'worry' | 'action' | 'result'>('worry');
 
@@ -49,7 +50,7 @@ const WorryInput: React.FC<WorryInputProps> = ({ activeWorryId, worryStartDate, 
     if (!activeWorryId) {
         if (isEmbedded) return null;
         return (
-            <div className="fixed bottom-20 left-0 right-0 bg-bg-secondary border-t border-bg-tertiary p-4 z-10">
+            <div className="fixed bottom-[52px] left-0 right-0 bg-bg-secondary border-t border-bg-tertiary p-4 z-40">
                 <div className="max-w-md mx-auto text-center text-text-secondary text-sm">
                     고민을 먼저 시작해주세요
                 </div>
@@ -59,11 +60,16 @@ const WorryInput: React.FC<WorryInputProps> = ({ activeWorryId, worryStartDate, 
 
     const containerClasses = isEmbedded
         ? "mt-4 bg-bg-secondary border border-bg-tertiary rounded-xl p-4"
-        : "fixed bottom-20 left-0 right-0 bg-bg-secondary border-t border-bg-tertiary p-4 z-10";
+        : "fixed bottom-[52px] left-0 right-0 bg-bg-secondary border-t border-bg-tertiary p-4 z-40";
 
     return (
         <div className={containerClasses}>
             <div className={isEmbedded ? "w-full" : "max-w-md mx-auto"}>
+                {!isEmbedded && worryTitle && (
+                    <div className="text-center text-xs text-purple-400 mb-2">
+                        💭 "{worryTitle}" 에 기록 중
+                    </div>
+                )}
                 {replyingToId && (
                     <div className="flex items-center justify-between bg-bg-tertiary px-3 py-2 rounded-lg mb-3 text-sm">
                         <span className="text-text-secondary">

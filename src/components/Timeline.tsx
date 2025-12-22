@@ -261,24 +261,6 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
                         >
                             읽을책
                         </button>
-                        <button
-                            onClick={() => onSubFilterChange?.('#진행중')}
-                            className={`flex-1 py-1.5 px-2 text-xs font-medium rounded-md transition-colors ${subFilter === '#진행중'
-                                ? 'bg-amber-700 text-white'
-                                : 'bg-bg-secondary text-text-secondary hover:bg-bg-tertiary'
-                                }`}
-                        >
-                            진행중
-                        </button>
-                        <button
-                            onClick={() => onSubFilterChange?.('#완독')}
-                            className={`flex-1 py-1.5 px-2 text-xs font-medium rounded-md transition-colors ${subFilter === '#완독'
-                                ? 'bg-amber-700 text-white'
-                                : 'bg-bg-secondary text-text-secondary hover:bg-bg-tertiary'
-                                }`}
-                        >
-                            완독
-                        </button>
                     </div>
                 </div>
             )}
@@ -289,7 +271,7 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
                     <div className="mb-8">
                         <div className="sticky top-[57px] bg-bg-primary/95 backdrop-blur py-2 z-10 border-b border-bg-tertiary flex justify-between items-center mb-4">
                             <h2 className="text-accent text-sm font-bold flex items-center gap-2">
-                                <Pin size={14} className="fill-accent" /> 고정된 할일
+                                <Pin size={14} className="fill-accent" /> 고정된 생각
                             </h2>
                         </div>
                         <div className="space-y-1">

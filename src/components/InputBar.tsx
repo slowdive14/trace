@@ -210,20 +210,6 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
                             >
                                 #읽을책
                             </button>
-                            <button
-                                type="button"
-                                onClick={() => insertBookTag('#진행중')}
-                                className="py-1.5 px-3 text-xs font-medium rounded-md bg-amber-500 text-white hover:bg-amber-600 transition-colors"
-                            >
-                                #진행중
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => insertBookTag('#완독')}
-                                className="py-1.5 px-3 text-xs font-medium rounded-md bg-amber-500 text-white hover:bg-amber-600 transition-colors"
-                            >
-                                #완독
-                            </button>
                         </div>
                     </div>
                 </div>
@@ -247,20 +233,6 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
                                 className="py-1.5 px-3 text-xs font-medium rounded-md bg-amber-500 text-white hover:bg-amber-600 transition-colors"
                             >
                                 #읽을책
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => insertBookTag('#진행중')}
-                                className="py-1.5 px-3 text-xs font-medium rounded-md bg-amber-500 text-white hover:bg-amber-600 transition-colors"
-                            >
-                                #진행중
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => insertBookTag('#완독')}
-                                className="py-1.5 px-3 text-xs font-medium rounded-md bg-amber-500 text-white hover:bg-amber-600 transition-colors"
-                            >
-                                #완독
                             </button>
                         </div>
                     )}
@@ -309,7 +281,7 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
                                     const cursorPos = textareaRef.current?.selectionStart || 0;
                                     updateAutocomplete(content, cursorPos);
                                 }}
-                                placeholder={activeCategory === 'book' ? '책 내용을 기록하세요... (#발췌, #읽을책, #진행중, #완독)' : '#감정/ 입력하면 자동완성'}
+                                placeholder={activeCategory === 'book' ? '책 내용을 기록하세요... (#발췌, #읽을책)' : '#감정/ 입력하면 자동완성'}
                                 className={`w-full bg-bg-tertiary text-text-primary rounded-lg p-3 resize-none focus:outline-none focus:ring-1 focus:ring-accent min-h-[44px] overflow-y-auto ${isExpanded ? 'h-full max-h-full' : 'max-h-24'}`}
                                 rows={1}
                             />

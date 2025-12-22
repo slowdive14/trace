@@ -1,86 +1,39 @@
-import React, { useState, useEffect } from 'react';
-import { format, differenceInWeeks, startOfDay } from 'date-fns';
+import React from 'react';
+import { format } from 'date-fns';
 import { Trash2, ChevronDown, ChevronUp, CheckCircle } from 'lucide-react';
-import { useAuth } from './AuthContext';
-import { getWorryEntries, addWorryEntry, updateWorryEntry, deleteWorryEntry } from '../services/firestore';
 import type { Worry, WorryEntry } from '../types/types';
 import WorryTimeline from './WorryTimeline';
-import WorryInput from './WorryInput';
 
 interface WorrySectionProps {
     worry: Worry;
+    entries: WorryEntry[];
+    isExpanded: boolean;
+    onToggleExpand: (id: string) => void;
     onDeleteWorry: (id: string) => void;
     onCloseWorry: (worry: Worry) => void;
+    onUpdateEntry: (entryId: string, content: string) => void;
+    onDeleteEntry: (entryId: string) => void;
+    onReplyRequest: (entryId: string, type: 'action' | 'result') => void;
+    onAddEntryWithContent: (type: 'action' | 'result', content: string, parentId: string) => void;
 }
 
-const WorrySection: React.FC<WorrySectionProps> = ({ worry, onDeleteWorry, onCloseWorry }) => {
-    const { user } = useAuth();
-    const [entries, setEntries] = useState<WorryEntry[]>([]);
-    const [isExpanded, setIsExpanded] = useState(false);
-    const [replyingToId, setReplyingToId] = useState<string | null>(null);
-    const [replyType, setReplyType] = useState<'action' | 'result'>('action');
-
-    useEffect(() => {
-        if (user) {
-            loadEntries();
-        }
-    }, [user, worry.id]);
-
-    const loadEntries = async () => {
-        if (!user) return;
-        try {
-            const fetchedEntries = await getWorryEntries(user.uid, worry.id);
-            setEntries(fetchedEntries);
-        } catch (error) {
-            console.error("Failed to load entries:", error);
-        }
-    };
-
-    const calculateWeek = (startDate: Date): number => {
-        const today = startOfDay(new Date());
-        const start = startOfDay(startDate);
-        const diffWeeks = differenceInWeeks(today, start);
-        return diffWeeks + 1;
-    };
-
-    const handleAddEntry = async (entryData: { type: 'worry' | 'action' | 'result', content: string, week: number, parentId?: string }) => {
-        if (!user) return;
-        try {
-            await addWorryEntry(user.uid, worry.id, entryData.type, entryData.content, entryData.week, entryData.parentId);
-            await loadEntries();
-        } catch (error) {
-            console.error("Failed to add entry:", error);
-            alert("기록 저장 중 오류가 발생했습니다.");
-        }
-    };
-
-    const handleUpdateEntry = async (entryId: string, content: string) => {
-        if (!user) return;
-        try {
-            await updateWorryEntry(user.uid, entryId, content);
-            await loadEntries();
-        } catch (error) {
-            console.error('Error updating entry:', error);
-            alert("수정 중 오류가 발생했습니다.");
-        }
-    };
-
-    const handleDeleteEntry = async (entryId: string) => {
-        if (!user) return;
-        try {
-            await deleteWorryEntry(user.uid, entryId);
-            await loadEntries();
-        } catch (error) {
-            console.error('Error deleting entry:', error);
-            alert("삭제 중 오류가 발생했습니다.");
-        }
-    };
-
+const WorrySection: React.FC<WorrySectionProps> = ({
+    worry,
+    entries,
+    isExpanded,
+    onToggleExpand,
+    onDeleteWorry,
+    onCloseWorry,
+    onUpdateEntry,
+    onDeleteEntry,
+    onReplyRequest,
+    onAddEntryWithContent
+}) => {
     return (
         <div className="mb-6 bg-bg-secondary border border-bg-tertiary rounded-xl overflow-hidden">
             <div
                 className="p-4 flex items-center justify-between cursor-pointer hover:bg-bg-tertiary/50 transition-colors"
-                onClick={() => setIsExpanded(!isExpanded)}
+                onClick={() => onToggleExpand(worry.id)}
             >
                 <div className="flex-1">
                     <h3 className="text-lg font-bold text-text-primary">{worry.title}</h3>
@@ -122,33 +75,17 @@ const WorrySection: React.FC<WorrySectionProps> = ({ worry, onDeleteWorry, onClo
                     <WorryTimeline
                         entries={entries}
                         worryStartDate={worry.startDate}
-                        onUpdate={handleUpdateEntry}
-                        onDelete={handleDeleteEntry}
+                        onUpdate={onUpdateEntry}
+                        onDelete={onDeleteEntry}
                         onReply={(id, type, content) => {
                             if (content) {
-                                // AI generated content
-                                const week = calculateWeek(worry.startDate);
-                                handleAddEntry({
-                                    type,
-                                    content,
-                                    week,
-                                    parentId: id
-                                });
+                                // AI generated content - add directly
+                                onAddEntryWithContent(type, content, id);
                             } else {
-                                setReplyingToId(id);
-                                setReplyType(type);
+                                // User wants to type their own reply
+                                onReplyRequest(id, type);
                             }
                         }}
-                    />
-
-                    <WorryInput
-                        activeWorryId={worry.id}
-                        worryStartDate={worry.startDate}
-                        replyingToId={replyingToId}
-                        replyType={replyType}
-                        onCancelReply={() => setReplyingToId(null)}
-                        onSubmit={handleAddEntry}
-                        isEmbedded={true}
                     />
                 </div>
             )}

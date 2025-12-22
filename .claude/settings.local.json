@@ -6,7 +6,18 @@
       "Bash(npm run build:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(git push)"
+      "Bash(git push)",
+      "Bash(git log:*)",
+      "Bash(npx grab@latest init)",
+      "Bash(npm cache clean:*)",
+      "Bash(npm install:*)",
+      "Bash(netstat:*)",
+      "Bash(findstr:*)",
+      "Bash(taskkill /F /PID 17076)",
+      "Bash(taskkill:*)",
+      "Bash(taskkill /F /PID 19644)",
+      "Bash(powershell -Command \"Stop-Process -Id 17076,61668,19644 -Force\")",
+      "Bash(claude --version:*)"
     ],
     "deny": [],
     "ask": []
