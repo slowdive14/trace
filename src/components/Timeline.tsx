@@ -271,7 +271,7 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
                     <div className="mb-8">
                         <div className="sticky top-[57px] bg-bg-primary/95 backdrop-blur py-2 z-10 border-b border-bg-tertiary flex justify-between items-center mb-4">
                             <h2 className="text-accent text-sm font-bold flex items-center gap-2">
-                                <Pin size={14} className="fill-accent" /> 고정된 생각
+                                <Pin size={14} className="fill-accent" /> 고정된 {category === 'chore' ? '할일' : category === 'book' ? '책' : category === 'action' ? '일상' : '생각'}
                             </h2>
                         </div>
                         <div className="space-y-1">
