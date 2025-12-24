@@ -41,7 +41,7 @@ export function exportDailyMarkdown(
     entries: Entry[],
     books: Entry[],
     expenses: Expense[],
-    _todo?: Todo,
+    todo?: Todo,
     worryEntries?: WorryEntry[],
     worries?: Worry[]
 ): string {
@@ -60,11 +60,11 @@ export function exportDailyMarkdown(
 
     let markdown = '';
 
-    // Todo Section (Top) - Removed as per user request
-    // if (todo && todo.content.trim()) {
-    //     markdown += '## 🎯 오늘의 목표\n';
-    //     markdown += todo.content.trim() + '\n\n';
-    // }
+    // Todo Section (Top)
+    if (todo && todo.content.trim()) {
+        // markdown += '## 🎯 오늘의 목표\n'; // Header removed as per request
+        markdown += todo.content.trim() + '\n\n';
+    }
 
     markdown += '## 🤔 What happened today?\n';
 
