@@ -157,8 +157,17 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
             }
         }
 
-        // Enter 키는 줄바꿈만 허용 (전송은 버튼으로만)
-        // 모바일 사용성을 위해 Enter로 전송하지 않음
+        // Enter 키 처리
+        if (e.key === 'Enter') {
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+            if (!isMobile && !e.shiftKey) {
+                // 데스크톱에서는 Enter로 전송 (Shift+Enter는 줄바꿈)
+                e.preventDefault();
+                handleSubmit();
+            }
+            // 모바일에서는 Enter가 줄바꿈 (기본 동작), 전송은 버튼으로만
+        }
     };
 
     // 자동완성 선택된 항목 스크롤
@@ -250,11 +259,10 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
                                 <button
                                     key={emotion.tag}
                                     onClick={() => selectAutocompleteEmotion(emotion.tag)}
-                                    className={`w-full text-left p-3 transition-colors border-b border-bg-primary last:border-b-0 ${
-                                        index === selectedAutocompleteIndex
+                                    className={`w-full text-left p-3 transition-colors border-b border-bg-primary last:border-b-0 ${index === selectedAutocompleteIndex
                                             ? 'bg-accent text-white'
                                             : 'hover:bg-bg-secondary'
-                                    }`}
+                                        }`}
                                 >
                                     <div className={`font-medium text-sm ${index === selectedAutocompleteIndex ? 'text-white' : 'text-accent'}`}>
                                         {emotion.tag}
@@ -307,7 +315,7 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
                             onClick={handleSubmit}
                             disabled={!content.trim()}
                             className={`p-2 text-white rounded-full hover:bg-opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all ${activeCategory === 'thought' ? 'bg-purple-500' :
-                                    activeCategory === 'chore' ? 'bg-orange-500' :
+                                activeCategory === 'chore' ? 'bg-orange-500' :
                                     activeCategory === 'book' ? 'bg-amber-700' :
                                         'bg-blue-500'
                                 }`}
