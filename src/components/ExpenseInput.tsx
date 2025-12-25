@@ -212,7 +212,7 @@ const ExpenseInput: React.FC<ExpenseInputProps> = ({ externalDate }) => {
                             type="date"
                             value={format(selectedDate, 'yyyy-MM-dd')}
                             onChange={(e) => {
-                                setSelectedDate(new Date(e.target.value + 'T00:00:00'));
+                                setSelectedDate(new Date(e.target.value + 'T12:00:00'));
                                 setShowDatePicker(false);
                             }}
                             className="w-full bg-bg-tertiary text-text-primary rounded-lg p-3 focus:outline-none focus:ring-1 focus:ring-accent"
