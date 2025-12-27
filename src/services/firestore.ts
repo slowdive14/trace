@@ -400,11 +400,11 @@ export const getClosedWorries = async (userId: string): Promise<Worry[]> => {
     const worryRef = collection(db, 'users', userId, 'worries');
     const q = query(
         worryRef,
-        where('status', '==', 'closed'),
-        orderBy('closedAt', 'desc')
+        where('status', '==', 'closed')
+        // orderBy 제거 - 복합 인덱스 불필요하게 클라이언트 측 정렬
     );
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({
+    const worries = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data(),
         startDate: doc.data().startDate.toDate(),
@@ -412,6 +412,11 @@ export const getClosedWorries = async (userId: string): Promise<Worry[]> => {
         createdAt: doc.data().createdAt.toDate(),
         updatedAt: doc.data().updatedAt.toDate()
     } as Worry));
+
+    // 클라이언트 측 정렬 (closedAt 내림차순)
+    return worries.sort((a, b) =>
+        (b.closedAt?.getTime() || 0) - (a.closedAt?.getTime() || 0)
+    );
 };
 
 // ============ WorryEntry Functions ============
