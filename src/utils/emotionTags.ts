@@ -169,3 +169,60 @@ export const searchEmotions = (query: string): EmotionTag[] => {
 export const findEmotionByTag = (tag: string): EmotionTag | undefined => {
     return allEmotionTags.find(emotion => emotion.tag === tag);
 };
+
+// 긍정 감정 여부 확인 (적록색약 대응: 파란색 사용)
+const positiveSubcategories = [
+    '높은 에너지 + 긍정',
+    '낮은 에너지 + 긍정',
+    '긍정적 미묘함'
+];
+
+// 부정 감정 여부 확인 (적록색약 대응: 주황색 사용)
+const negativeSubcategories = [
+    '높은 에너지 + 부정',
+    '낮은 에너지 + 부정',
+    '불편함의 변주',
+    '체념과 무기력'
+];
+
+export const isPositiveEmotion = (tag: EmotionTag): boolean => {
+    return positiveSubcategories.includes(tag.subcategory || '');
+};
+
+export const isNegativeEmotion = (tag: EmotionTag): boolean => {
+    return negativeSubcategories.includes(tag.subcategory || '');
+};
+
+// 텍스트에서 감정 태그 추출 및 분류
+export const analyzeEmotionsInText = (text: string): {
+    positive: EmotionTag[];
+    negative: EmotionTag[];
+    neutral: EmotionTag[];
+    all: EmotionTag[];
+} => {
+    const emotionTagPattern = /#감정\/[^\s#]+/g;
+    const matches = text.match(emotionTagPattern) || [];
+
+    const result = {
+        positive: [] as EmotionTag[],
+        negative: [] as EmotionTag[],
+        neutral: [] as EmotionTag[],
+        all: [] as EmotionTag[]
+    };
+
+    matches.forEach(tag => {
+        const emotion = findEmotionByTag(tag);
+        if (emotion) {
+            result.all.push(emotion);
+            if (isPositiveEmotion(emotion)) {
+                result.positive.push(emotion);
+            } else if (isNegativeEmotion(emotion)) {
+                result.negative.push(emotion);
+            } else {
+                result.neutral.push(emotion);
+            }
+        }
+    });
+
+    return result;
+};
