@@ -1,7 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { differenceInWeeks, startOfDay } from 'date-fns';
+import {
+    DndContext,
+    closestCenter,
+    KeyboardSensor,
+    PointerSensor,
+    TouchSensor,
+    useSensor,
+    useSensors,
+} from '@dnd-kit/core';
+import type { DragEndEvent } from '@dnd-kit/core';
+import {
+    arrayMove,
+    SortableContext,
+    sortableKeyboardCoordinates,
+    verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
 import { useAuth } from './AuthContext';
-import { getActiveWorries, createWorry, closeWorry, deleteWorry, getWorryEntries, addWorryEntry, updateWorryEntry, deleteWorryEntry } from '../services/firestore';
+import { getActiveWorries, createWorry, closeWorry, deleteWorry, getWorryEntries, addWorryEntry, updateWorryEntry, deleteWorryEntry, updateWorryOrders } from '../services/firestore';
 import type { Worry, WorryReflection, WorryEntry } from '../types/types';
 import WorrySection from './WorrySection';
 import WorryCloseModal from './WorryCloseModal';
@@ -160,6 +176,51 @@ const WorryTab: React.FC = () => {
         setExpandedWorryId(prev => prev === worryId ? null : worryId);
     };
 
+    // Drag and drop sensors
+    const sensors = useSensors(
+        useSensor(PointerSensor, {
+            activationConstraint: {
+                distance: 8, // Prevent accidental drags
+            },
+        }),
+        useSensor(TouchSensor, {
+            activationConstraint: {
+                delay: 250, // Long press to start drag on mobile
+                tolerance: 5,
+            },
+        }),
+        useSensor(KeyboardSensor, {
+            coordinateGetter: sortableKeyboardCoordinates,
+        })
+    );
+
+    const handleDragEnd = async (event: DragEndEvent) => {
+        const { active, over } = event;
+
+        if (over && active.id !== over.id) {
+            const oldIndex = activeWorries.findIndex(w => w.id === active.id);
+            const newIndex = activeWorries.findIndex(w => w.id === over.id);
+
+            // Optimistic update
+            const newWorries = arrayMove(activeWorries, oldIndex, newIndex);
+            setActiveWorries(newWorries);
+
+            // Calculate new orders and persist
+            const orderUpdates = newWorries.map((worry, index) => ({
+                id: worry.id,
+                order: index + 1,
+            }));
+
+            try {
+                await updateWorryOrders(user!.uid, orderUpdates);
+            } catch (error) {
+                console.error('Failed to update worry orders:', error);
+                // Revert on error
+                await loadActiveWorries();
+            }
+        }
+    };
+
     // Get expanded worry for WorryInput
     const expandedWorry = activeWorries.find(w => w.id === expandedWorryId);
 
@@ -214,21 +275,32 @@ const WorryTab: React.FC = () => {
                         <p className="mt-1">새로운 고민을 등록해보세요.</p>
                     </div>
                 ) : (
-                    activeWorries.map(worry => (
-                        <WorrySection
-                            key={worry.id}
-                            worry={worry}
-                            entries={worry.id === expandedWorryId ? entries : []}
-                            isExpanded={worry.id === expandedWorryId}
-                            onToggleExpand={handleToggleExpand}
-                            onDeleteWorry={handleDeleteWorry}
-                            onCloseWorry={setWorryToClose}
-                            onUpdateEntry={handleUpdateEntry}
-                            onDeleteEntry={handleDeleteEntry}
-                            onReplyRequest={handleReplyRequest}
-                            onAddEntryWithContent={handleAddEntryWithContent}
-                        />
-                    ))
+                    <DndContext
+                        sensors={sensors}
+                        collisionDetection={closestCenter}
+                        onDragEnd={handleDragEnd}
+                    >
+                        <SortableContext
+                            items={activeWorries.map(w => w.id)}
+                            strategy={verticalListSortingStrategy}
+                        >
+                            {activeWorries.map(worry => (
+                                <WorrySection
+                                    key={worry.id}
+                                    worry={worry}
+                                    entries={worry.id === expandedWorryId ? entries : []}
+                                    isExpanded={worry.id === expandedWorryId}
+                                    onToggleExpand={handleToggleExpand}
+                                    onDeleteWorry={handleDeleteWorry}
+                                    onCloseWorry={setWorryToClose}
+                                    onUpdateEntry={handleUpdateEntry}
+                                    onDeleteEntry={handleDeleteEntry}
+                                    onReplyRequest={handleReplyRequest}
+                                    onAddEntryWithContent={handleAddEntryWithContent}
+                                />
+                            ))}
+                        </SortableContext>
+                    </DndContext>
                 )}
             </div>
 

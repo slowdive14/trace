@@ -11,7 +11,8 @@ import {
     orderBy,
     limit,
     Timestamp,
-    setDoc
+    setDoc,
+    writeBatch
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { startOfDay } from 'date-fns';
@@ -290,11 +291,9 @@ export const createWorry = async (
     userId: string,
     title: string
 ): Promise<string> => {
-    // Check if user already has an active worry - REMOVED to allow multiple
-    // const activeWorry = await getActiveWorry(userId);
-    // if (activeWorry) {
-    //     throw new Error('이미 진행 중인 고민이 있습니다. 먼저 마무리해주세요.');
-    // }
+    // Get current max order for new worry placement
+    const existingWorries = await getActiveWorries(userId);
+    const maxOrder = existingWorries.reduce((max, w) => Math.max(max, w.order ?? 0), 0);
 
     const worryRef = collection(db, 'users', userId, 'worries');
     const docRef = await addDoc(worryRef, {
@@ -303,6 +302,7 @@ export const createWorry = async (
         startDate: Timestamp.now(),
         createdAt: Timestamp.now(),
         updatedAt: Timestamp.now(),
+        order: maxOrder + 1,
     });
     return docRef.id;
 };
@@ -337,11 +337,32 @@ export const getActiveWorries = async (userId: string): Promise<Worry[]> => {
         ...doc.data(),
         startDate: doc.data().startDate.toDate(),
         createdAt: doc.data().createdAt.toDate(),
-        updatedAt: doc.data().updatedAt.toDate()
+        updatedAt: doc.data().updatedAt.toDate(),
+        order: doc.data().order
     } as Worry));
 
-    // Client-side sort
-    return worries.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    // Client-side sort: order first (ascending), then createdAt (newest first) as fallback
+    return worries.sort((a, b) => {
+        if (a.order !== undefined && b.order !== undefined) {
+            return a.order - b.order;
+        }
+        if (a.order !== undefined) return -1;
+        if (b.order !== undefined) return 1;
+        return b.createdAt.getTime() - a.createdAt.getTime();
+    });
+};
+
+// Update worry orders (batch update for drag-and-drop reordering)
+export const updateWorryOrders = async (
+    userId: string,
+    orderUpdates: Array<{ id: string; order: number }>
+): Promise<void> => {
+    const batch = writeBatch(db);
+    for (const { id, order } of orderUpdates) {
+        const worryRef = doc(db, 'users', userId, 'worries', id);
+        batch.update(worryRef, { order, updatedAt: Timestamp.now() });
+    }
+    await batch.commit();
 };
 
 // Close worry with reflection

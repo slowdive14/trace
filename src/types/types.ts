@@ -111,6 +111,7 @@ export interface Worry {
     reflection?: WorryReflection;
     createdAt: Date;
     updatedAt: Date;
+    order?: number;
 }
 
 export interface WorryEntry {

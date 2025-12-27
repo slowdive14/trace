@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { differenceInWeeks, startOfDay } from 'date-fns';
+import { Maximize2, Minimize2 } from 'lucide-react';
 
 interface WorryInputProps {
     activeWorryId: string | null;
@@ -15,6 +16,7 @@ interface WorryInputProps {
 const WorryInput: React.FC<WorryInputProps> = ({ activeWorryId, worryStartDate, worryTitle, replyingToId, replyType, onCancelReply, onSubmit, isEmbedded = false }) => {
     const [content, setContent] = useState('');
     const [type, setType] = useState<'worry' | 'action' | 'result'>('worry');
+    const [isExpanded, setIsExpanded] = useState(false);
 
     // Automatically switch to 'action' or 'result' when replying
     React.useEffect(() => {
@@ -120,22 +122,42 @@ const WorryInput: React.FC<WorryInputProps> = ({ activeWorryId, worryStartDate, 
                     </button>
                 </div>
 
-                <form onSubmit={handleSubmit} className="flex gap-2">
-                    <input
-                        type="text"
-                        value={content}
-                        onChange={(e) => setContent(e.target.value)}
-                        placeholder={`${type === 'worry' ? '고민되는 점' : type === 'action' ? '실행할 계획' : '실행 결과'}을 입력하세요`}
-                        className="flex-1 bg-bg-tertiary text-text-primary placeholder-text-secondary border border-bg-tertiary rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-green-500 focus:bg-bg-secondary transition-all"
-                        autoFocus={!!replyingToId}
-                    />
-                    <button
-                        type="submit"
-                        disabled={!content.trim()}
-                        className="bg-green-600 text-white rounded-xl px-4 font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-green-500 transition-colors"
-                    >
-                        전송
-                    </button>
+                <form onSubmit={handleSubmit} className="flex flex-col gap-2">
+                    <div className="flex gap-2">
+                        <textarea
+                            value={content}
+                            onChange={(e) => setContent(e.target.value)}
+                            placeholder={`${type === 'worry' ? '고민되는 점' : type === 'action' ? '실행할 계획' : '실행 결과'}을 입력하세요`}
+                            className={`flex-1 bg-bg-tertiary text-text-primary placeholder-text-secondary border border-bg-tertiary rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-green-500 focus:bg-bg-secondary transition-all resize-none ${isExpanded ? 'min-h-[120px]' : 'min-h-[48px] max-h-[48px]'}`}
+                            autoFocus={!!replyingToId}
+                            rows={isExpanded ? 4 : 1}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter' && !e.shiftKey && !isExpanded) {
+                                    e.preventDefault();
+                                    if (content.trim()) {
+                                        handleSubmit(e);
+                                    }
+                                }
+                            }}
+                        />
+                        <div className="flex flex-col gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setIsExpanded(!isExpanded)}
+                                className="p-3 bg-bg-tertiary text-text-secondary hover:text-text-primary rounded-xl transition-colors"
+                                title={isExpanded ? '축소' : '확장'}
+                            >
+                                {isExpanded ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+                            </button>
+                            <button
+                                type="submit"
+                                disabled={!content.trim()}
+                                className="bg-green-600 text-white rounded-xl px-4 py-3 font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-green-500 transition-colors flex-1"
+                            >
+                                전송
+                            </button>
+                        </div>
+                    </div>
                 </form>
             </div>
         </div>

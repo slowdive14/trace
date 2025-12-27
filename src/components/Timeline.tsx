@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { format, subDays, startOfDay, isSameDay } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import type { Entry } from '../types/types';
-import { deleteEntry, toggleEntryPin } from '../services/firestore';
+import { deleteEntry, toggleEntryPin, updateEntry } from '../services/firestore';
 import { useAuth } from './AuthContext';
 import EntryItem from './EntryItem';
 import { onSnapshot, collection, query, orderBy } from 'firebase/firestore';
@@ -90,6 +90,11 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
     const handlePin = async (id: string, currentStatus: boolean) => {
         if (!user) return;
         await toggleEntryPin(user.uid, id, currentStatus, collectionName);
+    };
+
+    const handleEdit = async (id: string, content: string) => {
+        if (!user) return;
+        await updateEntry(user.uid, id, content, collectionName);
     };
 
     const handleExport = async (dateStr: string) => {
@@ -280,6 +285,7 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
                                     key={entry.id}
                                     entry={entry}
                                     onDelete={handleDelete}
+                                    onEdit={handleEdit}
                                     onTagClick={onTagClick}
                                     onPin={handlePin}
                                 />
@@ -308,6 +314,7 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
                                     key={entry.id}
                                     entry={entry}
                                     onDelete={handleDelete}
+                                    onEdit={handleEdit}
                                     onTagClick={onTagClick}
                                     onPin={handlePin}
                                 />

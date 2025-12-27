@@ -1,20 +1,23 @@
 import React, { useState } from 'react';
 import { format } from 'date-fns';
 import type { Entry } from '../types/types';
-import { Trash2, Copy, Check, Pin } from 'lucide-react';
+import { Trash2, Copy, Check, Pin, Pencil } from 'lucide-react';
 
 interface EntryItemProps {
     entry: Entry;
     onDelete: (id: string) => void;
+    onEdit?: (id: string, content: string) => void;
     highlightQuery?: string;
     onTagClick?: (tag: string) => void;
     onPin?: (id: string, currentStatus: boolean) => void;
     showDate?: boolean;  // true일 경우 시간 대신 날짜 표시
 }
 
-const EntryItem: React.FC<EntryItemProps> = ({ entry, onDelete, highlightQuery, onTagClick, onPin, showDate = false }) => {
+const EntryItem: React.FC<EntryItemProps> = ({ entry, onDelete, onEdit, highlightQuery, onTagClick, onPin, showDate = false }) => {
     const [showCopyToast, setShowCopyToast] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
+    const [isEditing, setIsEditing] = useState(false);
+    const [editContent, setEditContent] = useState(entry.content);
     const formattedTime = showDate || entry.isPinned
         ? format(entry.timestamp, 'M/d')
         : format(entry.timestamp, 'HH:mm');
@@ -53,6 +56,25 @@ const EntryItem: React.FC<EntryItemProps> = ({ entry, onDelete, highlightQuery, 
         setIsDeleting(false);
     };
 
+    const handleEditClick = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        setEditContent(entry.content);
+        setIsEditing(true);
+    };
+
+    const handleSaveEdit = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (onEdit && editContent.trim()) {
+            onEdit(entry.id, editContent.trim());
+        }
+        setIsEditing(false);
+    };
+
+    const handleCancelEdit = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        setEditContent(entry.content);
+        setIsEditing(false);
+    };
 
     const renderContent = () => {
         return entry.content.split(/(#[^\s#]+)/g).map((part, index) => {
@@ -126,10 +148,39 @@ const EntryItem: React.FC<EntryItemProps> = ({ entry, onDelete, highlightQuery, 
                 {entry.isPinned && <Pin size={12} className="text-accent fill-accent" />}
             </div>
             <div className="flex-1 min-w-0">
-                <div className={`text-text-primary break-words whitespace-pre-wrap ${entry.category === 'thought' ? 'font-serif leading-relaxed text-sm' : ''
-                    }`}>
-                    {renderContent()}
-                </div>
+                {isEditing ? (
+                    <div className="flex flex-col gap-2">
+                        <textarea
+                            value={editContent}
+                            onChange={(e) => setEditContent(e.target.value)}
+                            className={`w-full px-3 py-2 bg-bg-primary border border-bg-tertiary rounded-lg text-text-primary resize-none focus:outline-none focus:border-accent ${entry.category === 'thought' ? 'font-serif text-sm' : ''}`}
+                            rows={3}
+                            autoFocus
+                            onClick={(e) => e.stopPropagation()}
+                        />
+                        <div className="flex gap-2 justify-end">
+                            <button
+                                type="button"
+                                onClick={handleCancelEdit}
+                                className="px-3 py-1 text-text-secondary hover:text-text-primary text-sm transition-colors"
+                            >
+                                취소
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleSaveEdit}
+                                className="px-3 py-1 bg-accent text-white rounded text-sm hover:bg-accent/80 transition-colors"
+                            >
+                                저장
+                            </button>
+                        </div>
+                    </div>
+                ) : (
+                    <div className={`text-text-primary break-words whitespace-pre-wrap ${entry.category === 'thought' ? 'font-serif leading-relaxed text-sm' : ''
+                        }`}>
+                        {renderContent()}
+                    </div>
+                )}
             </div>
             <div className={`flex gap-1 transition-all shrink-0 items-start ${isDeleting ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
                 {isDeleting ? (
@@ -161,6 +212,16 @@ const EntryItem: React.FC<EntryItemProps> = ({ entry, onDelete, highlightQuery, 
                                 aria-label={entry.isPinned ? "Unpin entry" : "Pin entry"}
                             >
                                 <Pin size={16} className={entry.isPinned ? "fill-accent" : ""} />
+                            </button>
+                        )}
+                        {onEdit && (
+                            <button
+                                type="button"
+                                onClick={handleEditClick}
+                                className="text-text-secondary hover:text-accent transition-colors p-1"
+                                aria-label="Edit entry"
+                            >
+                                <Pencil size={16} />
                             </button>
                         )}
                         <button
