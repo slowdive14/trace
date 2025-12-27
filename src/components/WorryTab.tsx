@@ -180,13 +180,13 @@ const WorryTab: React.FC = () => {
     const sensors = useSensors(
         useSensor(PointerSensor, {
             activationConstraint: {
-                distance: 8, // Prevent accidental drags
+                distance: 5, // Reduced for better responsiveness
             },
         }),
         useSensor(TouchSensor, {
             activationConstraint: {
-                delay: 250, // Long press to start drag on mobile
-                tolerance: 5,
+                delay: 100, // Shorter delay for faster touch response
+                tolerance: 10, // More tolerance for touch movement
             },
         }),
         useSensor(KeyboardSensor, {
