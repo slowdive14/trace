@@ -20,6 +20,12 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [showEmotionModal, setShowEmotionModal] = useState(false);
 
+    // 수면 시간 선택 모달 관련 상태
+    const [showSleepTimeModal, setShowSleepTimeModal] = useState(false);
+    const [sleepModalType, setSleepModalType] = useState<'sleep' | 'wake'>('sleep');
+    const [sleepTime, setSleepTime] = useState('');
+    const longPressTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
     // 자동완성 관련 상태
     const [showAutocomplete, setShowAutocomplete] = useState(false);
     const [autocompleteEmotions, setAutocompleteEmotions] = useState<EmotionTag[]>([]);
@@ -80,18 +86,57 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
         }, 0);
     };
 
-    // 수면 기록 핸들러
-    const handleSleepRecord = async (type: 'sleep' | 'wake') => {
+    // 수면 기록 핸들러 (즉시 기록)
+    const handleSleepRecord = async (type: 'sleep' | 'wake', customTime?: Date) => {
         if (!user) return;
 
         const content = type === 'sleep' ? '잠자기 🌙' : '기상 ⛅';
         const tags = [type === 'sleep' ? '#sleep' : '#wake'];
 
         try {
-            await addEntry(user.uid, content, tags, 'action', undefined, 'entries', false);
+            await addEntry(user.uid, content, tags, 'action', customTime, 'entries', false);
         } catch (error) {
             console.error('Failed to add sleep record:', error);
         }
+    };
+
+    // 수면 버튼 길게 누르기 핸들러
+    const handleSleepButtonDown = (type: 'sleep' | 'wake') => {
+        longPressTimeout.current = setTimeout(() => {
+            // 길게 누름 → 모달 열기
+            setSleepModalType(type);
+            setSleepTime(format(new Date(), 'HH:mm'));
+            setShowSleepTimeModal(true);
+            longPressTimeout.current = null;
+        }, 500);
+    };
+
+    const handleSleepButtonUp = (type: 'sleep' | 'wake') => {
+        if (longPressTimeout.current) {
+            // 짧게 누름 → 즉시 기록
+            clearTimeout(longPressTimeout.current);
+            longPressTimeout.current = null;
+            handleSleepRecord(type);
+        }
+    };
+
+    const handleSleepButtonLeave = () => {
+        if (longPressTimeout.current) {
+            clearTimeout(longPressTimeout.current);
+            longPressTimeout.current = null;
+        }
+    };
+
+    // 시간 지정 수면 기록 제출
+    const handleSleepTimeSubmit = async () => {
+        if (!user || !sleepTime) return;
+
+        const [hours, minutes] = sleepTime.split(':').map(Number);
+        const selectedDateTime = new Date();
+        selectedDateTime.setHours(hours, minutes, 0, 0);
+
+        await handleSleepRecord(sleepModalType, selectedDateTime);
+        setShowSleepTimeModal(false);
     };
 
     const insertBookTag = (tag: string) => {
@@ -218,15 +263,23 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
                         <div className="flex gap-2 p-2 bg-bg-secondary rounded-lg border border-bg-tertiary shadow-lg justify-center">
                             <button
                                 type="button"
-                                onClick={() => handleSleepRecord('sleep')}
-                                className="flex items-center gap-1.5 py-1.5 px-3 text-sm font-medium rounded-md bg-indigo-600 text-white hover:bg-indigo-500 transition-colors"
+                                onMouseDown={() => handleSleepButtonDown('sleep')}
+                                onMouseUp={() => handleSleepButtonUp('sleep')}
+                                onMouseLeave={handleSleepButtonLeave}
+                                onTouchStart={() => handleSleepButtonDown('sleep')}
+                                onTouchEnd={() => handleSleepButtonUp('sleep')}
+                                className="flex items-center gap-1.5 py-1.5 px-3 text-sm font-medium rounded-md bg-indigo-600 text-white hover:bg-indigo-500 transition-colors select-none"
                             >
                                 <Moon size={16} /> 잠자기
                             </button>
                             <button
                                 type="button"
-                                onClick={() => handleSleepRecord('wake')}
-                                className="flex items-center gap-1.5 py-1.5 px-3 text-sm font-medium rounded-md bg-amber-500 text-white hover:bg-amber-400 transition-colors"
+                                onMouseDown={() => handleSleepButtonDown('wake')}
+                                onMouseUp={() => handleSleepButtonUp('wake')}
+                                onMouseLeave={handleSleepButtonLeave}
+                                onTouchStart={() => handleSleepButtonDown('wake')}
+                                onTouchEnd={() => handleSleepButtonUp('wake')}
+                                className="flex items-center gap-1.5 py-1.5 px-3 text-sm font-medium rounded-md bg-amber-500 text-white hover:bg-amber-400 transition-colors select-none"
                             >
                                 <Sun size={16} /> 기상
                             </button>
@@ -419,6 +472,40 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
                     }, 0);
                 }}
             />
+
+            {/* 수면 시간 선택 모달 */}
+            {showSleepTimeModal && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowSleepTimeModal(false)}>
+                    <div className="bg-bg-secondary rounded-2xl p-6 max-w-xs w-full" onClick={(e) => e.stopPropagation()}>
+                        <h3 className="text-lg font-bold mb-4 text-center">
+                            {sleepModalType === 'sleep' ? '🌙 취침 시간' : '⛅ 기상 시간'}
+                        </h3>
+                        <p className="text-xs text-text-secondary text-center mb-4">
+                            시간을 선택하세요
+                        </p>
+                        <input
+                            type="time"
+                            value={sleepTime}
+                            onChange={(e) => setSleepTime(e.target.value)}
+                            className="w-full bg-bg-tertiary text-text-primary rounded-lg p-3 text-center text-xl focus:outline-none focus:ring-1 focus:ring-accent"
+                        />
+                        <div className="flex gap-2 mt-4">
+                            <button
+                                onClick={handleSleepTimeSubmit}
+                                className={`flex-1 py-2 px-4 text-white rounded-lg hover:bg-opacity-90 ${sleepModalType === 'sleep' ? 'bg-indigo-600' : 'bg-amber-500'}`}
+                            >
+                                확인
+                            </button>
+                            <button
+                                onClick={() => setShowSleepTimeModal(false)}
+                                className="flex-1 py-2 px-4 bg-bg-tertiary text-text-primary rounded-lg hover:bg-bg-primary"
+                            >
+                                취소
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </>
     );
 };
