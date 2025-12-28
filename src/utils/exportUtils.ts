@@ -193,6 +193,29 @@ export function exportDailyMarkdown(
         }
     }
 
+    // 마무리된 고민 회고 섹션
+    if (worries && worries.length > 0) {
+        const closedToday = worries.filter(w =>
+            w.status === 'closed' &&
+            w.closedAt &&
+            format(getLogicalDate(w.closedAt), 'yyyy-MM-dd') === dateStr &&
+            w.reflection
+        );
+
+        if (closedToday.length > 0) {
+            markdown += '\n#### 🎉 마무리된 고민\n';
+
+            closedToday.forEach(worry => {
+                markdown += `##### ${worry.title}\n`;
+                markdown += `- **처음 의도를 이루었는가**: ${worry.reflection!.intentAchieved}\n`;
+                markdown += `- **의도가 변화했는가**: ${worry.reflection!.intentChanged}\n`;
+                markdown += `- **결과가 마음에 드는가**: ${worry.reflection!.satisfiedWithResult}\n`;
+                markdown += `- **어떤 변화가 일어났는가**: ${worry.reflection!.whatChanged}\n`;
+                markdown += '\n';
+            });
+        }
+    }
+
     return markdown.trim();
 };
 
