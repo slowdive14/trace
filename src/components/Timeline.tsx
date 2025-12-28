@@ -10,6 +10,7 @@ import { db } from '../services/firebase';
 import { Share, Check, Pin } from 'lucide-react';
 import { generateMarkdown, copyToClipboard } from '../utils/exportUtils';
 import { getLogicalDate } from '../utils/dateUtils';
+import { SleepStats } from './SleepStats';
 
 interface TimelineProps {
     category?: 'action' | 'thought' | 'chore' | 'book' | 'all';
@@ -271,6 +272,13 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
             )}
 
             <div className={`px-4 max-w-md mx-auto ${category === 'book' ? 'pb-60' : 'pb-32'}`}>
+                {/* Sleep Stats - 일상 탭에서만 표시 */}
+                {category === 'action' && (
+                    <div className="mt-4">
+                        <SleepStats entries={allEntries} />
+                    </div>
+                )}
+
                 {/* Pinned Entries Section */}
                 {pinnedEntries.length > 0 && (
                     <div className="mb-8">

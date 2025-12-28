@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Maximize2, Minimize2, Calendar, Smile } from 'lucide-react';
+import { Send, Maximize2, Minimize2, Calendar, Smile, Moon, Sun } from 'lucide-react';
 import { extractTags } from '../utils/tagUtils';
 import { addEntry } from '../services/firestore';
 import { useAuth } from './AuthContext';
@@ -78,6 +78,20 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
                 textareaRef.current.focus();
             }
         }, 0);
+    };
+
+    // 수면 기록 핸들러
+    const handleSleepRecord = async (type: 'sleep' | 'wake') => {
+        if (!user) return;
+
+        const content = type === 'sleep' ? '잠자기 🌙' : '기상 ⛅';
+        const tags = [type === 'sleep' ? '#sleep' : '#wake'];
+
+        try {
+            await addEntry(user.uid, content, tags, 'action', undefined, 'entries', false);
+        } catch (error) {
+            console.error('Failed to add sleep record:', error);
+        }
     };
 
     const insertBookTag = (tag: string) => {
@@ -197,6 +211,30 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
 
     return (
         <>
+            {/* 수면 기록 버튼 바 - 일상 탭에서만 표시 */}
+            {activeCategory === 'action' && !isExpanded && (
+                <div className="fixed bottom-[136px] left-0 right-0 flex justify-center z-[60]">
+                    <div className="max-w-md w-full px-4">
+                        <div className="flex gap-2 p-2 bg-bg-secondary rounded-lg border border-bg-tertiary shadow-lg justify-center">
+                            <button
+                                type="button"
+                                onClick={() => handleSleepRecord('sleep')}
+                                className="flex items-center gap-1.5 py-1.5 px-3 text-sm font-medium rounded-md bg-indigo-600 text-white hover:bg-indigo-500 transition-colors"
+                            >
+                                <Moon size={16} /> 잠자기
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => handleSleepRecord('wake')}
+                                className="flex items-center gap-1.5 py-1.5 px-3 text-sm font-medium rounded-md bg-amber-500 text-white hover:bg-amber-400 transition-colors"
+                            >
+                                <Sun size={16} /> 기상
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* 책 태그 버튼 바 - Fixed positioning (only when not expanded) */}
             {activeCategory === 'book' && !isExpanded && (
                 <div className="fixed bottom-[136px] left-0 right-0 flex justify-center z-[60]">
