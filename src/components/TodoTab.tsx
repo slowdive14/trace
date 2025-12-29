@@ -171,18 +171,18 @@ const TodoTab: React.FC<TodoTabProps> = ({
         return total;
     };
 
-    // Real level based on total completed tasks
+    // Real level based on total completed tasks (max Lv.10 = 2000)
     const getRealLevel = (totalCompleted: number): { level: number; title: string; nextLevelAt: number } => {
-        if (totalCompleted >= 500) return { level: 10, title: '전설의 사자왕 🏆', nextLevelAt: 999 };
-        if (totalCompleted >= 300) return { level: 9, title: '위대한 사자 ✨', nextLevelAt: 500 };
-        if (totalCompleted >= 200) return { level: 8, title: '현명한 사자 📚', nextLevelAt: 300 };
-        if (totalCompleted >= 150) return { level: 7, title: '강인한 사자 🔥', nextLevelAt: 200 };
-        if (totalCompleted >= 100) return { level: 6, title: '늠름한 사자 🌟', nextLevelAt: 150 };
-        if (totalCompleted >= 70) return { level: 5, title: '사자왕 👑', nextLevelAt: 100 };
-        if (totalCompleted >= 50) return { level: 4, title: '용감한 사자 ⚡', nextLevelAt: 70 };
-        if (totalCompleted >= 30) return { level: 3, title: '씩씩한 사자 💪', nextLevelAt: 50 };
-        if (totalCompleted >= 10) return { level: 2, title: '꼬마 사자 🦁', nextLevelAt: 30 };
-        return { level: 1, title: '아기 사자 🐱', nextLevelAt: 10 };
+        if (totalCompleted >= 2000) return { level: 10, title: '전설의 사자왕 🏆', nextLevelAt: 9999 };
+        if (totalCompleted >= 1300) return { level: 9, title: '위대한 사자 ✨', nextLevelAt: 2000 };
+        if (totalCompleted >= 900) return { level: 8, title: '현명한 사자 📚', nextLevelAt: 1300 };
+        if (totalCompleted >= 600) return { level: 7, title: '강인한 사자 🔥', nextLevelAt: 900 };
+        if (totalCompleted >= 400) return { level: 6, title: '늠름한 사자 🌟', nextLevelAt: 600 };
+        if (totalCompleted >= 250) return { level: 5, title: '사자왕 👑', nextLevelAt: 400 };
+        if (totalCompleted >= 150) return { level: 4, title: '용감한 사자 ⚡', nextLevelAt: 250 };
+        if (totalCompleted >= 80) return { level: 3, title: '씩씩한 사자 💪', nextLevelAt: 150 };
+        if (totalCompleted >= 30) return { level: 2, title: '꼬마 사자 🦁', nextLevelAt: 80 };
+        return { level: 1, title: '아기 사자 🐱', nextLevelAt: 30 };
     };
 
     const handleSave = useCallback((newContent: string) => {
