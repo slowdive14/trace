@@ -123,6 +123,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
     // Calculate weekly stats (Korean week: Monday start)
     const calculateWeeklyStats = () => {
         const logicalToday = getLogicalDate();
+        const todayStr = format(logicalToday, 'yyyy-MM-dd');
 
         // This week
         const thisWeekStart = startOfWeek(logicalToday, { weekStartsOn: 1 });
@@ -133,18 +134,19 @@ const TodoTab: React.FC<TodoTabProps> = ({
         const lastWeekEnd = endOfWeek(subDays(thisWeekStart, 1), { weekStartsOn: 1 });
 
         const calcStats = (start: Date, end: Date) => {
-            const todos = historyTodos.filter(todo => {
+            const todosInRange = historyTodos.filter(todo => {
                 const todoDate = new Date(todo.date);
                 return todoDate >= start && todoDate <= end;
             });
 
-            if (todos.length === 0) return { avgPercentage: 0, totalCompleted: 0 };
-
             let completed = 0;
             let total = 0;
 
-            todos.forEach(todo => {
-                const items = parseTodos(todo.content);
+            todosInRange.forEach(todo => {
+                const todoDateStr = format(new Date(todo.date), 'yyyy-MM-dd');
+                // Use current content for today (real-time update)
+                const todoContent = todoDateStr === todayStr ? content : todo.content;
+                const items = parseTodos(todoContent);
                 completed += items.filter(item => item.checked).length;
                 total += items.length;
             });
@@ -163,9 +165,15 @@ const TodoTab: React.FC<TodoTabProps> = ({
 
     // Calculate total completed (all time) for real level
     const calculateTotalCompleted = () => {
+        const logicalToday = getLogicalDate();
+        const todayStr = format(logicalToday, 'yyyy-MM-dd');
+
         let total = 0;
         historyTodos.forEach(todo => {
-            const items = parseTodos(todo.content);
+            const todoDateStr = format(new Date(todo.date), 'yyyy-MM-dd');
+            // Use current content for today (real-time update)
+            const todoContent = todoDateStr === todayStr ? content : todo.content;
+            const items = parseTodos(todoContent);
             total += items.filter(item => item.checked).length;
         });
         return total;
