@@ -100,10 +100,12 @@ const TodoTab: React.FC<TodoTabProps> = ({
         loadContent();
     }, [user, collectionName, viewMode]);
 
-    // Load history (last 30 days)
+    // Load history (last 30 days) - also used for stats in edit mode
     useEffect(() => {
         const loadHistory = async () => {
-            if (!user || viewMode !== 'history') return;
+            if (!user) return;
+            // Load history for both 'history' and 'edit' modes (for stats)
+            if (viewMode === 'template') return;
             try {
                 // Use logical date for history range
                 const logicalToday = getLogicalDate();
@@ -117,6 +119,55 @@ const TodoTab: React.FC<TodoTabProps> = ({
         };
         loadHistory();
     }, [user, viewMode, collectionName]);
+
+    // Calculate weekly stats
+    const calculateWeeklyStats = () => {
+        const logicalToday = getLogicalDate();
+        const weekStart = startOfDay(subDays(logicalToday, 6)); // Last 7 days including today
+
+        const weekTodos = historyTodos.filter(todo => {
+            const todoDate = new Date(todo.date);
+            return todoDate >= weekStart && todoDate <= logicalToday;
+        });
+
+        if (weekTodos.length === 0) return { avgPercentage: 0, totalCompleted: 0 };
+
+        let totalCompleted = 0;
+        let totalItems = 0;
+
+        weekTodos.forEach(todo => {
+            const items = parseTodos(todo.content);
+            totalCompleted += items.filter(item => item.checked).length;
+            totalItems += items.length;
+        });
+
+        const avgPercentage = totalItems > 0 ? Math.round((totalCompleted / totalItems) * 100) : 0;
+        return { avgPercentage, totalCompleted };
+    };
+
+    // Calculate total completed (all time) for real level
+    const calculateTotalCompleted = () => {
+        let total = 0;
+        historyTodos.forEach(todo => {
+            const items = parseTodos(todo.content);
+            total += items.filter(item => item.checked).length;
+        });
+        return total;
+    };
+
+    // Real level based on total completed tasks
+    const getRealLevel = (totalCompleted: number): { level: number; title: string; nextLevelAt: number } => {
+        if (totalCompleted >= 500) return { level: 10, title: '전설의 사자왕 🏆', nextLevelAt: 999 };
+        if (totalCompleted >= 300) return { level: 9, title: '위대한 사자 ✨', nextLevelAt: 500 };
+        if (totalCompleted >= 200) return { level: 8, title: '현명한 사자 📚', nextLevelAt: 300 };
+        if (totalCompleted >= 150) return { level: 7, title: '강인한 사자 🔥', nextLevelAt: 200 };
+        if (totalCompleted >= 100) return { level: 6, title: '늠름한 사자 🌟', nextLevelAt: 150 };
+        if (totalCompleted >= 70) return { level: 5, title: '사자왕 👑', nextLevelAt: 100 };
+        if (totalCompleted >= 50) return { level: 4, title: '용감한 사자 ⚡', nextLevelAt: 70 };
+        if (totalCompleted >= 30) return { level: 3, title: '씩씩한 사자 💪', nextLevelAt: 50 };
+        if (totalCompleted >= 10) return { level: 2, title: '꼬마 사자 🦁', nextLevelAt: 30 };
+        return { level: 1, title: '아기 사자 🐱', nextLevelAt: 10 };
+    };
 
     const handleSave = useCallback((newContent: string) => {
         if (!user) return;
@@ -450,12 +501,29 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                     const message = getEncouragementMessage(percentage);
                                     const progressColor = getProgressColor(percentage);
 
+                                    // Stats
+                                    const weeklyStats = calculateWeeklyStats();
+                                    const totalCompleted = calculateTotalCompleted();
+                                    const realLevel = getRealLevel(totalCompleted);
+
                                     return (
                                         <div className={`mb-6 p-4 bg-bg-secondary rounded-xl border border-bg-tertiary ${percentage >= 100 ? 'animate-pulse' : ''}`}>
-                                            {/* Level & Progress */}
+                                            {/* Real Level (Cumulative) */}
+                                            <div className="flex items-center justify-between mb-3 pb-3 border-b border-bg-tertiary">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-base font-bold text-text-primary">
+                                                        Lv.{realLevel.level} {realLevel.title}
+                                                    </span>
+                                                </div>
+                                                <span className="text-xs text-text-tertiary">
+                                                    {totalCompleted}/{realLevel.nextLevelAt} 완료
+                                                </span>
+                                            </div>
+
+                                            {/* Today's Progress */}
                                             <div className="flex items-center justify-between mb-2">
-                                                <span className="text-sm font-bold text-text-primary">
-                                                    Lv.{levelInfo.level} {levelInfo.title}
+                                                <span className="text-sm text-text-secondary">
+                                                    오늘의 {levelInfo.title}
                                                 </span>
                                                 <span className="text-sm text-text-secondary">
                                                     {completed}/{total}
@@ -463,15 +531,21 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                             </div>
 
                                             {/* Progress Bar */}
-                                            <div className="h-3 bg-bg-tertiary rounded-full overflow-hidden mb-2">
+                                            <div className="h-3 bg-bg-tertiary rounded-full overflow-hidden mb-3">
                                                 <div
                                                     className={`h-full ${progressColor} transition-all duration-500 ease-out rounded-full`}
                                                     style={{ width: `${percentage}%` }}
                                                 />
                                             </div>
 
+                                            {/* Weekly Stats */}
+                                            <div className="flex items-center justify-between text-xs text-text-tertiary mb-2">
+                                                <span>이번 주 평균: {weeklyStats.avgPercentage}%</span>
+                                                <span>주간 완료: {weeklyStats.totalCompleted}개</span>
+                                            </div>
+
                                             {/* Encouragement Message */}
-                                            <p className="text-xs text-text-secondary text-center">
+                                            <p className="text-xs text-text-secondary text-center pt-2 border-t border-bg-tertiary">
                                                 {message}
                                             </p>
                                         </div>
