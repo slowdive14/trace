@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from './AuthContext';
 import { saveTodo, getTodo, getTodos, saveTemplate, getTemplate } from '../services/firestore';
 import { CheckSquare, Square, Bold, Highlighter, ArrowRight, ArrowLeft, Edit3, Check } from 'lucide-react';
-import { format, subDays, startOfDay, endOfDay } from 'date-fns';
+import { format, subDays, startOfDay, endOfDay, startOfWeek, endOfWeek } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import type { Todo } from '../types/types';
 import { getLogicalDate } from '../utils/dateUtils';
@@ -120,29 +120,45 @@ const TodoTab: React.FC<TodoTabProps> = ({
         loadHistory();
     }, [user, viewMode, collectionName]);
 
-    // Calculate weekly stats
+    // Calculate weekly stats (Korean week: Monday start)
     const calculateWeeklyStats = () => {
         const logicalToday = getLogicalDate();
-        const weekStart = startOfDay(subDays(logicalToday, 6)); // Last 7 days including today
 
-        const weekTodos = historyTodos.filter(todo => {
-            const todoDate = new Date(todo.date);
-            return todoDate >= weekStart && todoDate <= logicalToday;
-        });
+        // This week
+        const thisWeekStart = startOfWeek(logicalToday, { weekStartsOn: 1 });
+        const thisWeekEnd = endOfWeek(logicalToday, { weekStartsOn: 1 });
 
-        if (weekTodos.length === 0) return { avgPercentage: 0, totalCompleted: 0 };
+        // Last week
+        const lastWeekStart = startOfWeek(subDays(thisWeekStart, 1), { weekStartsOn: 1 });
+        const lastWeekEnd = endOfWeek(subDays(thisWeekStart, 1), { weekStartsOn: 1 });
 
-        let totalCompleted = 0;
-        let totalItems = 0;
+        const calcStats = (start: Date, end: Date) => {
+            const todos = historyTodos.filter(todo => {
+                const todoDate = new Date(todo.date);
+                return todoDate >= start && todoDate <= end;
+            });
 
-        weekTodos.forEach(todo => {
-            const items = parseTodos(todo.content);
-            totalCompleted += items.filter(item => item.checked).length;
-            totalItems += items.length;
-        });
+            if (todos.length === 0) return { avgPercentage: 0, totalCompleted: 0 };
 
-        const avgPercentage = totalItems > 0 ? Math.round((totalCompleted / totalItems) * 100) : 0;
-        return { avgPercentage, totalCompleted };
+            let completed = 0;
+            let total = 0;
+
+            todos.forEach(todo => {
+                const items = parseTodos(todo.content);
+                completed += items.filter(item => item.checked).length;
+                total += items.length;
+            });
+
+            return {
+                avgPercentage: total > 0 ? Math.round((completed / total) * 100) : 0,
+                totalCompleted: completed
+            };
+        };
+
+        return {
+            thisWeek: calcStats(thisWeekStart, thisWeekEnd),
+            lastWeek: calcStats(lastWeekStart, lastWeekEnd)
+        };
     };
 
     // Calculate total completed (all time) for real level
@@ -540,8 +556,8 @@ const TodoTab: React.FC<TodoTabProps> = ({
 
                                             {/* Weekly Stats */}
                                             <div className="flex items-center justify-between text-xs text-text-tertiary mb-2">
-                                                <span>이번 주 평균: {weeklyStats.avgPercentage}%</span>
-                                                <span>주간 완료: {weeklyStats.totalCompleted}개</span>
+                                                <span>이번 주: {weeklyStats.thisWeek.avgPercentage}% ({weeklyStats.thisWeek.totalCompleted}개)</span>
+                                                <span>지난 주: {weeklyStats.lastWeek.avgPercentage}%</span>
                                             </div>
 
                                             {/* Encouragement Message */}
