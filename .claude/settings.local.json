@@ -17,7 +17,8 @@
       "Bash(taskkill:*)",
       "Bash(taskkill /F /PID 19644)",
       "Bash(powershell -Command \"Stop-Process -Id 17076,61668,19644 -Force\")",
-      "Bash(claude --version:*)"
+      "Bash(claude --version:*)",
+      "WebSearch"
     ],
     "deny": [],
     "ask": []

@@ -266,8 +266,8 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
                                 onMouseDown={() => handleSleepButtonDown('sleep')}
                                 onMouseUp={() => handleSleepButtonUp('sleep')}
                                 onMouseLeave={handleSleepButtonLeave}
-                                onTouchStart={() => handleSleepButtonDown('sleep')}
-                                onTouchEnd={() => handleSleepButtonUp('sleep')}
+                                onTouchStart={(e) => { e.preventDefault(); handleSleepButtonDown('sleep'); }}
+                                onTouchEnd={(e) => { e.preventDefault(); handleSleepButtonUp('sleep'); }}
                                 className="flex items-center gap-1.5 py-1.5 px-3 text-sm font-medium rounded-md bg-indigo-600 text-white hover:bg-indigo-500 transition-colors select-none"
                             >
                                 <Moon size={16} /> 잠자기
@@ -277,8 +277,8 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
                                 onMouseDown={() => handleSleepButtonDown('wake')}
                                 onMouseUp={() => handleSleepButtonUp('wake')}
                                 onMouseLeave={handleSleepButtonLeave}
-                                onTouchStart={() => handleSleepButtonDown('wake')}
-                                onTouchEnd={() => handleSleepButtonUp('wake')}
+                                onTouchStart={(e) => { e.preventDefault(); handleSleepButtonDown('wake'); }}
+                                onTouchEnd={(e) => { e.preventDefault(); handleSleepButtonUp('wake'); }}
                                 className="flex items-center gap-1.5 py-1.5 px-3 text-sm font-medium rounded-md bg-amber-500 text-white hover:bg-amber-400 transition-colors select-none"
                             >
                                 <Sun size={16} /> 기상
@@ -351,8 +351,8 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
                                     key={emotion.tag}
                                     onClick={() => selectAutocompleteEmotion(emotion.tag)}
                                     className={`w-full text-left p-3 transition-colors border-b border-bg-primary last:border-b-0 ${index === selectedAutocompleteIndex
-                                            ? 'bg-accent text-white'
-                                            : 'hover:bg-bg-secondary'
+                                        ? 'bg-accent text-white'
+                                        : 'hover:bg-bg-secondary'
                                         }`}
                                 >
                                     <div className={`font-medium text-sm ${index === selectedAutocompleteIndex ? 'text-white' : 'text-accent'}`}>
