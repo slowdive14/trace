@@ -21,6 +21,34 @@ interface TodoItem {
 
 type ViewMode = 'edit' | 'history' | 'template';
 
+// 레벨 시스템 (귀여운 사자 테마)
+const getLevelInfo = (percentage: number): { level: number; title: string } => {
+    if (percentage >= 100) return { level: 5, title: '사자왕 👑' };
+    if (percentage >= 75) return { level: 4, title: '용감한 사자 ⚡' };
+    if (percentage >= 50) return { level: 3, title: '씩씩한 사자 💪' };
+    if (percentage >= 25) return { level: 2, title: '꼬마 사자 🦁' };
+    return { level: 1, title: '아기 사자 🐱' };
+};
+
+// 격려 메시지
+const getEncouragementMessage = (percentage: number): string => {
+    if (percentage >= 100) return '완벽한 하루! 오늘 정말 잘했어 🎉';
+    if (percentage >= 75) return '거의 다 왔어! 조금만 더!';
+    if (percentage >= 50) return '절반 넘었어! 잘하고 있어';
+    if (percentage >= 25) return '순조롭게 진행 중!';
+    if (percentage > 0) return '좋은 시작이야! 계속 가보자';
+    return '오늘도 화이팅! 하나씩 시작해볼까?';
+};
+
+// 프로그레스바 색상 (진행률에 따라)
+const getProgressColor = (percentage: number): string => {
+    if (percentage >= 100) return 'bg-gradient-to-r from-yellow-400 to-yellow-300';
+    if (percentage >= 75) return 'bg-gradient-to-r from-green-500 to-green-400';
+    if (percentage >= 50) return 'bg-gradient-to-r from-lime-500 to-lime-400';
+    if (percentage >= 25) return 'bg-gradient-to-r from-yellow-500 to-yellow-400';
+    return 'bg-gradient-to-r from-orange-500 to-orange-400';
+};
+
 const TodoTab: React.FC<TodoTabProps> = ({
     collectionName = 'todos',
     placeholder = "오늘의 할 일을 기록하세요..."
@@ -413,6 +441,43 @@ const TodoTab: React.FC<TodoTabProps> = ({
                         <>
                             {/* Reading Mode (Only for Edit Mode) */}
                             <div className="flex-1 overflow-y-auto p-4 pt-16 pb-8 w-full">
+                                {/* Progress Bar */}
+                                {todos.length > 0 && (() => {
+                                    const completed = todos.filter(t => t.checked).length;
+                                    const total = todos.length;
+                                    const percentage = Math.round((completed / total) * 100);
+                                    const levelInfo = getLevelInfo(percentage);
+                                    const message = getEncouragementMessage(percentage);
+                                    const progressColor = getProgressColor(percentage);
+
+                                    return (
+                                        <div className={`mb-6 p-4 bg-bg-secondary rounded-xl border border-bg-tertiary ${percentage >= 100 ? 'animate-pulse' : ''}`}>
+                                            {/* Level & Progress */}
+                                            <div className="flex items-center justify-between mb-2">
+                                                <span className="text-sm font-bold text-text-primary">
+                                                    Lv.{levelInfo.level} {levelInfo.title}
+                                                </span>
+                                                <span className="text-sm text-text-secondary">
+                                                    {completed}/{total}
+                                                </span>
+                                            </div>
+
+                                            {/* Progress Bar */}
+                                            <div className="h-3 bg-bg-tertiary rounded-full overflow-hidden mb-2">
+                                                <div
+                                                    className={`h-full ${progressColor} transition-all duration-500 ease-out rounded-full`}
+                                                    style={{ width: `${percentage}%` }}
+                                                />
+                                            </div>
+
+                                            {/* Encouragement Message */}
+                                            <p className="text-xs text-text-secondary text-center">
+                                                {message}
+                                            </p>
+                                        </div>
+                                    );
+                                })()}
+
                                 {todos.length === 0 ? (
                                     <p className="text-text-secondary text-sm">할 일이 없습니다. 편집 버튼을 눌러 추가하세요.</p>
                                 ) : (
