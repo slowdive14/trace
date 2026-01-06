@@ -24,6 +24,7 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
     const [showSleepTimeModal, setShowSleepTimeModal] = useState(false);
     const [sleepModalType, setSleepModalType] = useState<'sleep' | 'wake'>('sleep');
     const [sleepTime, setSleepTime] = useState('');
+    const [sleepDate, setSleepDate] = useState<Date>(new Date());
     const longPressTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // 자동완성 관련 상태
@@ -106,6 +107,7 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
             // 길게 누름 → 모달 열기
             setSleepModalType(type);
             setSleepTime(format(new Date(), 'HH:mm'));
+            setSleepDate(new Date());
             setShowSleepTimeModal(true);
             longPressTimeout.current = null;
         }, 500);
@@ -132,7 +134,7 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
         if (!user || !sleepTime) return;
 
         const [hours, minutes] = sleepTime.split(':').map(Number);
-        const selectedDateTime = new Date();
+        const selectedDateTime = new Date(sleepDate);
         selectedDateTime.setHours(hours, minutes, 0, 0);
 
         await handleSleepRecord(sleepModalType, selectedDateTime);
@@ -481,15 +483,27 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
                             {sleepModalType === 'sleep' ? '🌙 취침 시간' : '⛅ 기상 시간'}
                         </h3>
                         <p className="text-xs text-text-secondary text-center mb-4">
-                            시간을 선택하세요
+                            날짜와 시간을 선택하세요
                         </p>
-                        <input
-                            type="time"
-                            value={sleepTime}
-                            onChange={(e) => setSleepTime(e.target.value)}
-                            className="w-full bg-bg-tertiary text-text-primary rounded-lg p-3 text-center text-xl focus:outline-none focus:ring-1 focus:ring-accent"
-                        />
-                        <div className="flex gap-2 mt-4">
+                        <div className="mb-3">
+                            <label className="block text-xs text-text-secondary mb-1">날짜</label>
+                            <input
+                                type="date"
+                                value={format(sleepDate, 'yyyy-MM-dd')}
+                                onChange={(e) => setSleepDate(new Date(e.target.value + 'T00:00:00'))}
+                                className="w-full bg-bg-tertiary text-text-primary rounded-lg p-3 text-center focus:outline-none focus:ring-1 focus:ring-accent"
+                            />
+                        </div>
+                        <div className="mb-4">
+                            <label className="block text-xs text-text-secondary mb-1">시간</label>
+                            <input
+                                type="time"
+                                value={sleepTime}
+                                onChange={(e) => setSleepTime(e.target.value)}
+                                className="w-full bg-bg-tertiary text-text-primary rounded-lg p-3 text-center text-xl focus:outline-none focus:ring-1 focus:ring-accent"
+                            />
+                        </div>
+                        <div className="flex gap-2">
                             <button
                                 onClick={handleSleepTimeSubmit}
                                 className={`flex-1 py-2 px-4 text-white rounded-lg hover:bg-opacity-90 ${sleepModalType === 'sleep' ? 'bg-indigo-600' : 'bg-amber-500'}`}

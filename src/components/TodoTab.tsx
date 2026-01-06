@@ -515,7 +515,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
                     ) : (
                         <>
                             {/* Reading Mode (Only for Edit Mode) */}
-                            <div className="flex-1 overflow-y-auto p-4 pt-16 pb-8 w-full">
+                            <div className="flex-1 overflow-y-auto p-4 pt-16 pb-20 w-full">
                                 {/* Progress Bar */}
                                 {todos.length > 0 && (() => {
                                     const completed = todos.filter(t => t.checked).length;
