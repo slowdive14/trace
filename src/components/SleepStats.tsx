@@ -22,7 +22,7 @@ interface Props {
 
 // 주간 바 차트 컴포넌트
 function WeeklyBarChart({ data }: { data: DailyBarData[] }) {
-    const maxDuration = 10; // 10시간 기준 스케일
+    const maxDuration = 9; // 9시간 기준 스케일 (바 높이 최대화)
 
     return (
         <div className="bg-bg-tertiary/50 rounded-lg p-3">
