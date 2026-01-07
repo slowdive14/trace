@@ -29,7 +29,7 @@ function WeeklyBarChart({ data }: { data: DailyBarData[] }) {
             <div className="text-xs text-text-secondary mb-2">이번 주 수면</div>
 
             {/* 바 차트 */}
-            <div className="flex items-end justify-between gap-1 h-20">
+            <div className="flex items-end justify-between gap-1 h-32">
                 {data.map((day) => {
                     const heightPercent = day.duration
                         ? Math.min((day.duration / maxDuration) * 100, 100)
