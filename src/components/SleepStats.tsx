@@ -258,6 +258,7 @@ export function SleepStats({ entries }: Props) {
     const stats = useMemo(() => {
         const allRecords = extractSleepRecords(entries);
         const recentRecords = getRecentRecords(allRecords, 7);
+        const monthlyRecords = getRecentRecords(allRecords, 30);
         const weeklyBar = getWeeklyBarData(allRecords);
         const comparison = compareWeeks(allRecords);
         const streak = checkWeeklyGoalStreak(allRecords);
@@ -269,6 +270,9 @@ export function SleepStats({ entries }: Props) {
             avgDuration: getAverageDuration(recentRecords),
             avgSleepTime: getAverageSleepTime(recentRecords),
             avgWakeTime: getAverageWakeTime(recentRecords),
+            // 이번 달 평균
+            monthlyAvgSleepTime: getAverageSleepTime(monthlyRecords),
+            monthlyAvgWakeTime: getAverageWakeTime(monthlyRecords),
             recordCount: recentRecords.length,
         };
     }, [entries]);
@@ -285,11 +289,14 @@ export function SleepStats({ entries }: Props) {
                 onClick={() => setIsExpanded(!isExpanded)}
                 className="w-full p-3 flex items-center justify-between"
             >
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
                     <Moon size={16} className="text-indigo-400" />
-                    <span className="text-sm font-medium">수면 통계</span>
+                    <span className="text-sm font-medium">수면</span>
                     <span className="text-xs text-text-secondary">
-                        {stats.comparison.thisWeek.total}점
+                        이번 주 {stats.comparison.thisWeek.total}점
+                    </span>
+                    <span className="text-[10px] text-text-secondary">
+                        · 월평균 {stats.monthlyAvgSleepTime || '--:--'}~{stats.monthlyAvgWakeTime || '--:--'}
                     </span>
                 </div>
                 <ChevronDown
