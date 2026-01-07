@@ -1,4 +1,4 @@
-import { format, subDays, differenceInMinutes, getHours, getMinutes } from 'date-fns';
+import { format, subDays, differenceInMinutes, getHours, getMinutes, startOfWeek, endOfWeek, subWeeks, addDays } from 'date-fns';
 import type { Entry } from '../types/types';
 
 export interface SleepRecord {
@@ -148,4 +148,245 @@ export function getAverageWakeTime(records: SleepRecord[]): string | null {
     }, 0);
     const avgMinutes = totalMinutes / validRecords.length;
     return minutesToTimeString(avgMinutes);
+}
+
+// ============================================
+// 목표 달성 체크 관련 함수들
+// ============================================
+
+// 목표 시간 상수 (분 단위)
+const WAKE_GOAL_START = 6 * 60;      // 06:00 = 360분
+const WAKE_GOAL_GRACE = 7 * 60 + 30; // 07:30 = 450분 (허용 한계)
+
+const SLEEP_GOAL_START = 23 * 60;    // 23:00 = 1380분
+const SLEEP_GOAL_GRACE = 30;         // 00:30 = 30분 (다음날)
+
+export interface GoalAchievement {
+    wakeGoalMet: boolean;
+    sleepGoalMet: boolean;
+}
+
+/**
+ * 개별 기록의 목표 달성 여부 체크
+ * - 기상 목표: 06:00~07:30
+ * - 취침 목표: 23:00~00:30
+ */
+export function checkGoalAchievement(record: SleepRecord): GoalAchievement {
+    let wakeGoalMet = false;
+    let sleepGoalMet = false;
+
+    // 기상 목표 체크: 06:00 ~ 07:30
+    if (record.wakeTime) {
+        const wakeMinutes = getHours(record.wakeTime) * 60 + getMinutes(record.wakeTime);
+        wakeGoalMet = wakeMinutes >= WAKE_GOAL_START && wakeMinutes <= WAKE_GOAL_GRACE;
+    }
+
+    // 취침 목표 체크: 23:00 ~ 00:30 (자정 넘김 처리)
+    if (record.sleepTime) {
+        const sleepMinutes = getHours(record.sleepTime) * 60 + getMinutes(record.sleepTime);
+        // 23:00~23:59 OR 00:00~00:30
+        sleepGoalMet = (sleepMinutes >= SLEEP_GOAL_START) || (sleepMinutes <= SLEEP_GOAL_GRACE);
+    }
+
+    return { wakeGoalMet, sleepGoalMet };
+}
+
+export interface WeeklyRecords {
+    records: SleepRecord[];
+    weekStart: Date;
+    weekEnd: Date;
+}
+
+/**
+ * 특정 주의 기록 필터링 (월~일, 한국 기준)
+ * @param weekOffset 0 = 이번 주, 1 = 지난 주
+ */
+export function getWeeklyRecords(records: SleepRecord[], weekOffset: number = 0): WeeklyRecords {
+    const now = new Date();
+    const targetWeek = subWeeks(now, weekOffset);
+    const monday = startOfWeek(targetWeek, { weekStartsOn: 1 });
+    const sunday = endOfWeek(targetWeek, { weekStartsOn: 1 });
+
+    const weekRecords = records.filter(r => {
+        const recordDate = new Date(r.date + 'T00:00:00');
+        return recordDate >= monday && recordDate <= sunday;
+    });
+
+    return {
+        records: weekRecords,
+        weekStart: monday,
+        weekEnd: sunday,
+    };
+}
+
+export interface SleepScore {
+    total: number;           // 0-100
+    durationScore: number;   // 0-40
+    sleepRegularity: number; // 0-30
+    wakeRegularity: number;  // 0-30
+    details: {
+        avgDuration: number | null;
+        sleepGoalDays: number;
+        wakeGoalDays: number;
+        totalRecordedDays: number;
+    };
+}
+
+/**
+ * 수면 점수 계산 (100점 만점)
+ * - 수면시간 충족도: 40점 (8시간 기준)
+ * - 취침 규칙성: 30점 (목표 시간대 달성률)
+ * - 기상 규칙성: 30점 (목표 시간대 달성률)
+ */
+export function calculateSleepScore(records: SleepRecord[]): SleepScore {
+    if (records.length === 0) {
+        return {
+            total: 0,
+            durationScore: 0,
+            sleepRegularity: 0,
+            wakeRegularity: 0,
+            details: { avgDuration: null, sleepGoalDays: 0, wakeGoalDays: 0, totalRecordedDays: 0 }
+        };
+    }
+
+    const achievements = records.map(r => checkGoalAchievement(r));
+
+    // 수면시간 점수 (40점 만점)
+    const avgDuration = getAverageDuration(records);
+    let durationScore = 0;
+    if (avgDuration !== null) {
+        const idealHours = 7.5; // 목표 수면시간
+        const deviation = Math.abs(avgDuration - idealHours);
+        // 0.5시간 이내 편차면 만점, 그 이후 감점
+        durationScore = Math.max(0, 40 - (deviation * 8));
+    }
+
+    // 취침 규칙성 점수 (30점 만점)
+    const sleepGoalDays = achievements.filter(a => a.sleepGoalMet).length;
+    const sleepRegularity = Math.round((sleepGoalDays / 7) * 30);
+
+    // 기상 규칙성 점수 (30점 만점)
+    const wakeGoalDays = achievements.filter(a => a.wakeGoalMet).length;
+    const wakeRegularity = Math.round((wakeGoalDays / 7) * 30);
+
+    const total = Math.round(durationScore + sleepRegularity + wakeRegularity);
+
+    return {
+        total,
+        durationScore: Math.round(durationScore),
+        sleepRegularity,
+        wakeRegularity,
+        details: {
+            avgDuration,
+            sleepGoalDays,
+            wakeGoalDays,
+            totalRecordedDays: records.length,
+        }
+    };
+}
+
+export interface WeeklyComparison {
+    thisWeek: SleepScore;
+    lastWeek: SleepScore;
+    scoreDiff: number;
+    durationDiff: number | null;
+    trend: 'improved' | 'declined' | 'stable';
+}
+
+/**
+ * 이번 주 vs 지난 주 비교
+ */
+export function compareWeeks(records: SleepRecord[]): WeeklyComparison {
+    const thisWeekData = getWeeklyRecords(records, 0);
+    const lastWeekData = getWeeklyRecords(records, 1);
+
+    const thisWeek = calculateSleepScore(thisWeekData.records);
+    const lastWeek = calculateSleepScore(lastWeekData.records);
+
+    const scoreDiff = thisWeek.total - lastWeek.total;
+
+    let durationDiff: number | null = null;
+    if (thisWeek.details.avgDuration !== null && lastWeek.details.avgDuration !== null) {
+        durationDiff = thisWeek.details.avgDuration - lastWeek.details.avgDuration;
+    }
+
+    let trend: 'improved' | 'declined' | 'stable' = 'stable';
+    if (scoreDiff > 5) trend = 'improved';
+    else if (scoreDiff < -5) trend = 'declined';
+
+    return { thisWeek, lastWeek, scoreDiff, durationDiff, trend };
+}
+
+export interface DailyBarData {
+    date: string;
+    dayLabel: string;
+    duration: number | null;
+    status: 'sufficient' | 'insufficient' | 'no-data';
+    wakeGoalMet: boolean;
+    sleepGoalMet: boolean;
+}
+
+/**
+ * 주간 바 차트 데이터 생성 (월~일)
+ */
+export function getWeeklyBarData(records: SleepRecord[]): DailyBarData[] {
+    const weekData = getWeeklyRecords(records, 0);
+    const days = ['월', '화', '수', '목', '금', '토', '일'];
+
+    const result: DailyBarData[] = [];
+
+    for (let i = 0; i < 7; i++) {
+        const date = addDays(weekData.weekStart, i);
+        const dateStr = format(date, 'yyyy-MM-dd');
+        const record = records.find(r => r.date === dateStr);
+
+        let status: 'sufficient' | 'insufficient' | 'no-data' = 'no-data';
+        let duration: number | null = null;
+        let wakeGoalMet = false;
+        let sleepGoalMet = false;
+
+        if (record && record.duration !== undefined) {
+            duration = record.duration / 60; // 분 → 시간
+            status = duration >= 7 ? 'sufficient' : 'insufficient';
+            const achievement = checkGoalAchievement(record);
+            wakeGoalMet = achievement.wakeGoalMet;
+            sleepGoalMet = achievement.sleepGoalMet;
+        }
+
+        result.push({
+            date: dateStr,
+            dayLabel: days[i],
+            duration,
+            status,
+            wakeGoalMet,
+            sleepGoalMet,
+        });
+    }
+
+    return result;
+}
+
+export interface WeeklyStreak {
+    sleepStreak: number;
+    wakeStreak: number;
+    sleepStreakMet: boolean;
+    wakeStreakMet: boolean;
+}
+
+/**
+ * 주 5일 목표 달성 여부 체크
+ */
+export function checkWeeklyGoalStreak(records: SleepRecord[]): WeeklyStreak {
+    const weekData = getWeeklyRecords(records, 0);
+    const achievements = weekData.records.map(r => checkGoalAchievement(r));
+
+    const sleepStreak = achievements.filter(a => a.sleepGoalMet).length;
+    const wakeStreak = achievements.filter(a => a.wakeGoalMet).length;
+
+    return {
+        sleepStreak,
+        wakeStreak,
+        sleepStreakMet: sleepStreak >= 5,
+        wakeStreakMet: wakeStreak >= 5,
+    };
 }
