@@ -22,17 +22,18 @@ interface Props {
 
 // 주간 바 차트 컴포넌트
 function WeeklyBarChart({ data }: { data: DailyBarData[] }) {
-    const maxDuration = 9; // 9시간 기준 스케일 (바 높이 최대화)
+    const maxDuration = 9; // 9시간 기준 스케일
+    const maxBarHeight = 60; // 바 최대 높이 (픽셀)
 
     return (
         <div className="bg-bg-tertiary/50 rounded-lg p-3">
             <div className="text-xs text-text-secondary mb-2">이번 주 수면</div>
 
             {/* 바 차트 */}
-            <div className="flex items-end justify-between gap-1 h-32">
+            <div className="flex items-end justify-between gap-1">
                 {data.map((day) => {
-                    const heightPercent = day.duration
-                        ? Math.min((day.duration / maxDuration) * 100, 100)
+                    const barHeight = day.duration
+                        ? Math.min((day.duration / maxDuration) * maxBarHeight, maxBarHeight)
                         : 0;
 
                     let barColor = 'bg-bg-tertiary';
@@ -41,10 +42,10 @@ function WeeklyBarChart({ data }: { data: DailyBarData[] }) {
 
                     return (
                         <div key={day.date} className="flex-1 flex flex-col items-center">
-                            <div className="w-full flex justify-center mb-1">
+                            <div className="flex justify-center mb-1" style={{ height: `${maxBarHeight}px`, alignItems: 'flex-end' }}>
                                 <div
                                     className={`w-5 rounded-t ${barColor} transition-all`}
-                                    style={{ height: `${heightPercent}%`, minHeight: day.duration ? '4px' : '2px' }}
+                                    style={{ height: `${barHeight}px`, minHeight: day.duration ? '4px' : '2px' }}
                                 />
                             </div>
                             <div className="text-[9px] text-text-secondary">
