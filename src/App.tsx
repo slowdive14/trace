@@ -202,16 +202,15 @@ const AppContent: React.FC = () => {
           ) : activeTab === 'todo' ? (
             <TodoTab />
           ) : activeTab === 'chore' ? (
-            <TodoTab
-              collectionName="chores"
-              placeholder="정보나 할 일을 기록하세요..."
-              quadrantConfig={{
-                q1: { title: "Q1: Do First", label: "긴급 & 중요", color: "text-red-400" },
-                q2: { title: "Q2: Schedule", label: "중요", color: "text-green-400" },
-                q3: { title: "Q3: Someday", label: "언젠가 할 수도 있는 일", color: "text-yellow-400" },
-                q4: { title: "Q4: Info", label: "정보/참고", color: "text-blue-400" },
-              }}
-            />
+            <>
+              <Timeline
+                category="chore"
+                selectedTag={selectedTag}
+                onTagClick={(tag: string) => setSelectedTag(tag)}
+                collectionName="chores"
+              />
+              <InputBar activeCategory="chore" collectionName="chores" />
+            </>
           ) : activeTab === 'book' ? (
             <>
               <Timeline

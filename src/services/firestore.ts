@@ -173,11 +173,12 @@ export const getEntries = async (userId: string, collectionName: string = 'entri
     }
 };
 
-export const updateEntry = async (userId: string, entryId: string, content: string, collectionName: string = 'entries') => {
+export const updateEntry = async (userId: string, entryId: string, content: string, collectionName: string = 'entries', extraData: any = {}) => {
     try {
         const entryRef = doc(db, `users/${userId}/${collectionName}`, entryId);
         await updateDoc(entryRef, {
             content,
+            ...extraData,
             updatedAt: Timestamp.now()
         });
     } catch (e) {
