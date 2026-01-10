@@ -26,6 +26,12 @@ import { CSS } from '@dnd-kit/utilities';
 interface TodoTabProps {
     collectionName?: string;
     placeholder?: string;
+    quadrantConfig?: {
+        q1: { title: string; label: string; color: string };
+        q2: { title: string; label: string; color: string };
+        q3: { title: string; label: string; color: string };
+        q4: { title: string; label: string; color: string };
+    };
 }
 
 interface TodoItem {
@@ -68,7 +74,13 @@ const getProgressColor = (percentage: number): string => {
 
 const TodoTab: React.FC<TodoTabProps> = ({
     collectionName = 'todos',
-    placeholder = "오늘의 할 일을 기록하세요..."
+    placeholder = "오늘의 할 일을 기록하세요...",
+    quadrantConfig = {
+        q1: { title: "Q1: Do First", label: "긴급 & 중요", color: "text-red-400" },
+        q2: { title: "Q2: Schedule", label: "중요", color: "text-green-400" },
+        q3: { title: "Q3: Delegate", label: "긴급", color: "text-yellow-400" },
+        q4: { title: "Q4: Eliminate", label: "보관", color: "text-blue-400" },
+    }
 }) => {
     const [content, setContent] = useState('');
     const [isEditing, setIsEditing] = useState(false);
@@ -667,30 +679,30 @@ const TodoTab: React.FC<TodoTabProps> = ({
                         <div className="flex-1 grid grid-cols-2 grid-rows-2 gap-3 mb-4">
                             <Quadrant
                                 id="q1"
-                                title="Q1: Do First"
-                                label="긴급 & 중요"
-                                color="text-red-400"
+                                title={quadrantConfig.q1.title}
+                                label={quadrantConfig.q1.label}
+                                color={quadrantConfig.q1.color}
                                 items={todos.filter(t => t.quadrant === 'q1')}
                             />
                             <Quadrant
                                 id="q2"
-                                title="Q2: Schedule"
-                                label="중요"
-                                color="text-green-400"
+                                title={quadrantConfig.q2.title}
+                                label={quadrantConfig.q2.label}
+                                color={quadrantConfig.q2.color}
                                 items={todos.filter(t => t.quadrant === 'q2')}
                             />
                             <Quadrant
                                 id="q3"
-                                title="Q3: Delegate"
-                                label="긴급"
-                                color="text-yellow-400"
+                                title={quadrantConfig.q3.title}
+                                label={quadrantConfig.q3.label}
+                                color={quadrantConfig.q3.color}
                                 items={todos.filter(t => t.quadrant === 'q3')}
                             />
                             <Quadrant
                                 id="q4"
-                                title="Q4: Eliminate"
-                                label="보관"
-                                color="text-blue-400"
+                                title={quadrantConfig.q4.title}
+                                label={quadrantConfig.q4.label}
+                                color={quadrantConfig.q4.color}
                                 items={todos.filter(t => t.quadrant === 'q4')}
                             />
                         </div>
