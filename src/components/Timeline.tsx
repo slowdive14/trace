@@ -480,7 +480,7 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
 
             {/* Header: Date Filter & View Toggle */}
             <div className="sticky top-0 bg-bg-primary/95 backdrop-blur border-b border-bg-tertiary z-20 px-4 py-3">
-                <div className="max-w-md mx-auto flex flex-col gap-3">
+                <div className={`${category === 'chore' ? 'max-w-4xl' : 'max-w-md'} mx-auto flex flex-col gap-3`}>
                     <div className="flex gap-2">
                         <div className="flex-1 flex gap-1 bg-bg-secondary rounded-lg p-1">
                             <button
@@ -590,7 +590,7 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
                 </div>
             )}
 
-            <div className={`px-4 max-w-md mx-auto ${category === 'book' ? 'pb-60' : 'pb-32'}`}>
+            <div className={`px-4 ${category === 'chore' ? 'max-w-4xl' : 'max-w-md'} mx-auto ${category === 'book' ? 'pb-60' : 'pb-32'}`}>
                 {viewMode === 'list' ? (
                     <>
                         {/* Sleep Stats - 일상 탭에서만 표시 */}
