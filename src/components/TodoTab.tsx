@@ -9,6 +9,13 @@ import { getLogicalDate } from '../utils/dateUtils';
 import {
     DndContext,
     closestCenter,
+    DragOverlay,
+    defaultDropAnimationSideEffects,
+    useDroppable,
+    MouseSensor,
+    TouchSensor,
+    useSensor,
+    useSensors,
 } from '@dnd-kit/core';
 import {
     SortableContext,
@@ -214,7 +221,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
 
         saveTimeoutRef.current = setTimeout(async () => {
             try {
-                if (viewMode === 'edit') {
+                if (viewMode === 'edit' || viewMode === 'matrix') {
                     // Save to logical today's date
                     const today = getLogicalDate();
                     await saveTodo(user.uid, today, newContent, collectionName);
@@ -395,6 +402,22 @@ const TodoTab: React.FC<TodoTabProps> = ({
 
     const todos = parseTodos(content);
 
+    const sensors = useSensors(
+        useSensor(MouseSensor, {
+            // Require the mouse to move by 10 pixels before activating
+            activationConstraint: {
+                distance: 10,
+            },
+        }),
+        useSensor(TouchSensor, {
+            // Press and hold for 250ms to start dragging, with 5px tolerance
+            activationConstraint: {
+                delay: 250,
+                tolerance: 5,
+            },
+        })
+    );
+
     const onDragEnd = (event: any) => {
         const { active, over } = event;
         if (!over) return;
@@ -405,14 +428,23 @@ const TodoTab: React.FC<TodoTabProps> = ({
         // activeId is the lineIndex
         const lineIndex = parseInt(activeId);
 
-        // overId is the quadrant (q1, q2, q3, q4, inbox)
-        const targetQuadrant = overId as 'q1' | 'q2' | 'q3' | 'q4' | 'inbox';
+        // Find target quadrant (could be the quadrant ID or another item's ID)
+        let targetQuadrant: 'q1' | 'q2' | 'q3' | 'q4' | 'inbox';
+
+        if (['q1', 'q2', 'q3', 'q4', 'inbox'].includes(overId)) {
+            targetQuadrant = overId as any;
+        } else {
+            // overId is another item's lineIndex
+            const overItem = todos.find(t => t.lineIndex.toString() === overId);
+            if (!overItem) return;
+            targetQuadrant = overItem.quadrant;
+        }
 
         const lines = content.split('\n');
         let line = lines[lineIndex];
 
-        // Remove existing #q tags
-        line = line.replace(/#q[1-4]\b/g, '').trim();
+        // Remove existing #q tags (safely)
+        line = line.replace(/\s*#q[1-4]\b/g, '').trim();
 
         // Add new tag if not inbox
         if (targetQuadrant !== 'inbox') {
@@ -423,6 +455,41 @@ const TodoTab: React.FC<TodoTabProps> = ({
         const newContent = lines.join('\n');
         setContent(newContent);
         handleSave(newContent);
+    };
+
+    const DroppableInbox = ({ items }: { items: TodoItem[] }) => {
+        const { setNodeRef, isOver } = useDroppable({ id: 'inbox' });
+
+        return (
+            <div
+                ref={setNodeRef}
+                className={`h-full bg-bg-secondary/50 rounded-lg p-3 border border-bg-tertiary flex flex-col transition-colors ${isOver ? 'bg-accent/10 border-accent' : ''}`}
+            >
+                <div className="flex items-center justify-between mb-2">
+                    <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Inbox</span>
+                    <span className="text-[9px] text-text-tertiary">분류 전 할 일</span>
+                </div>
+                <div className="flex-1 overflow-x-auto overflow-y-hidden pb-1 scrollbar-hide">
+                    <SortableContext
+                        items={items.map(t => t.lineIndex.toString())}
+                        strategy={verticalListSortingStrategy}
+                    >
+                        <div className="flex gap-2 h-full items-start">
+                            {items.map(item => (
+                                <div key={item.lineIndex} className="w-32 flex-shrink-0">
+                                    <MatrixItem item={item} />
+                                </div>
+                            ))}
+                            {items.length === 0 && !isOver && (
+                                <div className="flex-1 self-stretch flex items-center justify-center border border-dashed border-bg-tertiary rounded opacity-30 min-w-[200px]">
+                                    <span className="text-[10px]">드래그하여 이쪽으로 옮길 수 있습니다</span>
+                                </div>
+                            )}
+                        </div>
+                    </SortableContext>
+                </div>
+            </div>
+        );
     };
 
     const MatrixItem = ({ item }: { item: TodoItem }) => {
@@ -458,7 +525,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
     };
 
     const Quadrant = ({ id, title, label, color, items }: { id: string, title: string, label: string, color: string, items: TodoItem[] }) => {
-        const { setNodeRef, isOver } = useSortable({ id });
+        const { setNodeRef, isOver } = useDroppable({ id });
 
         return (
             <div
@@ -574,6 +641,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
                 /* Matrix Mode */
                 <div className="flex-1 flex flex-col p-4 overflow-hidden">
                     <DndContext
+                        sensors={sensors}
                         collisionDetection={closestCenter}
                         onDragEnd={onDragEnd}
                     >
@@ -609,27 +677,8 @@ const TodoTab: React.FC<TodoTabProps> = ({
                         </div>
 
                         {/* Inbox / Unassigned */}
-                        <div className="h-1/4 bg-bg-secondary/50 rounded-lg p-3 border border-bg-tertiary flex flex-col">
-                            <div className="flex items-center justify-between mb-2">
-                                <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Inbox</span>
-                                <span className="text-[9px] text-text-tertiary">분류 전 할 일</span>
-                            </div>
-                            <div className="flex-1 overflow-x-auto overflow-y-hidden pb-1 scrollbar-hide">
-                                <div className="flex gap-2 h-full items-start">
-                                    <SortableContext
-                                        items={todos.filter(t => t.quadrant === 'inbox').map(t => t.lineIndex.toString())}
-                                        strategy={verticalListSortingStrategy}
-                                    >
-                                        <div ref={(el) => { if (el) { /* No-op to use ref on container */ } }} className="flex gap-2 h-full">
-                                            {todos.filter(t => t.quadrant === 'inbox').map(item => (
-                                                <div key={item.lineIndex} className="w-32 flex-shrink-0">
-                                                    <MatrixItem item={item} />
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </SortableContext>
-                                </div>
-                            </div>
+                        <div className="h-1/4">
+                            <DroppableInbox items={todos.filter(t => t.quadrant === 'inbox')} />
                         </div>
                     </DndContext>
 
