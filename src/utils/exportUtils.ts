@@ -219,6 +219,33 @@ export function exportDailyMarkdown(
     return markdown.trim();
 };
 
+export const generateMatrixMarkdown = (entries: Entry[], quadrantConfig: any): string => {
+    const quadrants = ['q1', 'q2', 'q3', 'q4', 'inbox'];
+    let markdown = `# Eisenhower Matrix (${format(getLogicalDate(), 'yyyy-MM-dd')})\n\n`;
+
+    const getQuadrant = (entry: Entry) => {
+        const qTag = entry.tags.find(tag => /^#q[1-4]$/.test(tag));
+        if (qTag) return qTag.substring(1);
+        return 'inbox';
+    };
+
+    quadrants.forEach(id => {
+        const items = entries.filter(e => getQuadrant(e) === id);
+        if (items.length > 0) {
+            const config = id === 'inbox' ? { title: 'Inbox', label: '미분류' } : quadrantConfig[id];
+            const icon = id === 'q1' ? '🔴' : id === 'q2' ? '🟢' : id === 'q3' ? '🟡' : id === 'q4' ? '🔵' : '⚪';
+            markdown += `## ${icon} ${config.title} (${config.label})\n`;
+            items.forEach(item => {
+                const cleanContent = item.content.replace(/\s*#q[1-4]\b/g, '').trim();
+                markdown += `- [ ] ${cleanContent}${item.isPinned ? ' (📌 PINNED)' : ''}\n`;
+            });
+            markdown += '\n';
+        }
+    });
+
+    return markdown.trim();
+};
+
 
 
 export const generateWorryMarkdown = (

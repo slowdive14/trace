@@ -2,13 +2,14 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { format, subDays, startOfDay, isSameDay } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import type { Entry } from '../types/types';
+import { extractTags } from '../utils/tagUtils';
 import { deleteEntry, toggleEntryPin, updateEntry } from '../services/firestore';
 import { useAuth } from './AuthContext';
 import EntryItem from './EntryItem';
 import { onSnapshot, collection, query, orderBy } from 'firebase/firestore';
 import { db } from '../services/firebase';
-import { Share, Check, Pin, LayoutGrid, List, ChevronDown, ChevronUp } from 'lucide-react';
-import { generateMarkdown, copyToClipboard } from '../utils/exportUtils';
+import { Share, Check, Pin, LayoutGrid, List, ChevronDown, ChevronUp, Copy } from 'lucide-react';
+import { generateMarkdown, generateMatrixMarkdown, copyToClipboard } from '../utils/exportUtils';
 import { getLogicalDate } from '../utils/dateUtils';
 import { SleepStats } from './SleepStats';
 import {
@@ -42,7 +43,7 @@ type DateFilter = 'today' | '7days' | '30days' | 'all';
 const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, onTagClick, collectionName = 'entries', subFilter, onSubFilterChange }) => {
     const [allEntries, setAllEntries] = useState<Entry[]>([]);
     const [displayLimit, setDisplayLimit] = useState(50);
-    const [dateFilter, setDateFilter] = useState<DateFilter>('today');
+    const [dateFilter, setDateFilter] = useState<DateFilter>(category === 'chore' ? 'all' : 'today');
     const [viewMode, setViewMode] = useState<'list' | 'matrix'>('list');
     const [activeId, setActiveId] = useState<string | null>(null);
     const [matrixSearch, setMatrixSearch] = useState('');
@@ -115,7 +116,8 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
 
     const handleEdit = async (id: string, content: string) => {
         if (!user) return;
-        await updateEntry(user.uid, id, content, collectionName);
+        const tags = extractTags(content);
+        await updateEntry(user.uid, id, content, collectionName, { tags });
     };
 
     const sensors = useSensors(
@@ -381,6 +383,15 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
         }
     };
 
+    const handleCopyMatrix = async () => {
+        const markdown = generateMatrixMarkdown(matrixEntries, quadrantConfig);
+        const success = await copyToClipboard(markdown);
+        if (success) {
+            setShowToast(true);
+            setTimeout(() => setShowToast(false), 2000);
+        }
+    };
+
     const getPinnedEntries = useCallback(() => {
         return allEntries.filter(entry => {
             // Basic filters
@@ -510,6 +521,15 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
                             </button>
                         </div>
                         <div className="flex gap-1 bg-bg-secondary rounded-lg p-1">
+                            {viewMode === 'matrix' && (
+                                <button
+                                    onClick={handleCopyMatrix}
+                                    className="p-1.5 rounded-md text-text-secondary hover:text-accent transition-colors"
+                                    title="매트릭스 마크다운 복사"
+                                >
+                                    <Copy size={14} />
+                                </button>
+                            )}
                             <button
                                 onClick={() => setViewMode('list')}
                                 className={`p-1.5 rounded-md transition-colors ${viewMode === 'list'

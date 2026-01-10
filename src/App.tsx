@@ -204,6 +204,7 @@ const AppContent: React.FC = () => {
           ) : activeTab === 'chore' ? (
             <>
               <Timeline
+                key="chores"
                 category="chore"
                 selectedTag={selectedTag}
                 onTagClick={(tag: string) => setSelectedTag(tag)}
@@ -214,6 +215,7 @@ const AppContent: React.FC = () => {
           ) : activeTab === 'book' ? (
             <>
               <Timeline
+                key="books"
                 category="book"
                 selectedTag={selectedTag}
                 onTagClick={(tag: string) => setSelectedTag(tag)}
@@ -226,6 +228,7 @@ const AppContent: React.FC = () => {
           ) : (
             <>
               <Timeline
+                key={activeTab}
                 category={activeTab}
                 selectedTag={selectedTag}
                 onTagClick={(tag: string) => setSelectedTag(tag)}
