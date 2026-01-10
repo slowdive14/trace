@@ -6,6 +6,16 @@ import { format, subDays, startOfDay, endOfDay, startOfWeek, endOfWeek } from 'd
 import { ko } from 'date-fns/locale';
 import type { Todo } from '../types/types';
 import { getLogicalDate } from '../utils/dateUtils';
+import {
+    DndContext,
+    closestCenter,
+} from '@dnd-kit/core';
+import {
+    SortableContext,
+    verticalListSortingStrategy,
+    useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 interface TodoTabProps {
     collectionName?: string;
@@ -17,9 +27,10 @@ interface TodoItem {
     text: string;
     indent: number;
     lineIndex: number;
+    quadrant: 'q1' | 'q2' | 'q3' | 'q4' | 'inbox';
 }
 
-type ViewMode = 'edit' | 'history' | 'template';
+type ViewMode = 'edit' | 'history' | 'template' | 'matrix';
 
 // 레벨 시스템 (귀여운 사자 테마)
 const getLevelInfo = (percentage: number): { level: number; title: string } => {
@@ -241,10 +252,27 @@ const TodoTab: React.FC<TodoTabProps> = ({
             const uncheckedMatch = line.match(/^[\t ]*- \[ \] (.+)$/);
             const checkedMatch = line.match(/^[\t ]*- \[x\] (.+)$/);
 
-            if (uncheckedMatch) {
-                items.push({ checked: false, text: uncheckedMatch[1], indent, lineIndex: index });
-            } else if (checkedMatch) {
-                items.push({ checked: true, text: checkedMatch[1], indent, lineIndex: index });
+            if (uncheckedMatch || checkedMatch) {
+                const isChecked = !!checkedMatch;
+                const rawText = uncheckedMatch ? uncheckedMatch[1] : checkedMatch![1];
+
+                // Extract quadrant tag (#q1, #q2, #q3, #q4)
+                let quadrant: 'q1' | 'q2' | 'q3' | 'q4' | 'inbox' = 'inbox';
+                let cleanText = rawText;
+
+                const qMatch = rawText.match(/#(q[1-4])\b/);
+                if (qMatch) {
+                    quadrant = qMatch[1] as any;
+                    cleanText = rawText.replace(qMatch[0], '').trim();
+                }
+
+                items.push({
+                    checked: isChecked,
+                    text: cleanText,
+                    indent,
+                    lineIndex: index,
+                    quadrant
+                });
             }
         });
 
@@ -367,6 +395,95 @@ const TodoTab: React.FC<TodoTabProps> = ({
 
     const todos = parseTodos(content);
 
+    const onDragEnd = (event: any) => {
+        const { active, over } = event;
+        if (!over) return;
+
+        const activeId = active.id.toString();
+        const overId = over.id.toString();
+
+        // activeId is the lineIndex
+        const lineIndex = parseInt(activeId);
+
+        // overId is the quadrant (q1, q2, q3, q4, inbox)
+        const targetQuadrant = overId as 'q1' | 'q2' | 'q3' | 'q4' | 'inbox';
+
+        const lines = content.split('\n');
+        let line = lines[lineIndex];
+
+        // Remove existing #q tags
+        line = line.replace(/#q[1-4]\b/g, '').trim();
+
+        // Add new tag if not inbox
+        if (targetQuadrant !== 'inbox') {
+            line = `${line} #${targetQuadrant}`;
+        }
+
+        lines[lineIndex] = line;
+        const newContent = lines.join('\n');
+        setContent(newContent);
+        handleSave(newContent);
+    };
+
+    const MatrixItem = ({ item }: { item: TodoItem }) => {
+        const {
+            attributes,
+            listeners,
+            setNodeRef,
+            transform,
+            transition,
+            isDragging
+        } = useSortable({ id: item.lineIndex.toString() });
+
+        const style = {
+            transform: CSS.Translate.toString(transform),
+            transition,
+            opacity: isDragging ? 0.5 : 1,
+        };
+
+        return (
+            <div
+                ref={setNodeRef}
+                style={style}
+                {...attributes}
+                {...listeners}
+                className={`p-2 mb-1 bg-bg-primary rounded border border-bg-tertiary shadow-sm text-xs cursor-grab active:cursor-grabbing group flex items-center gap-2`}
+            >
+                <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${item.checked ? 'bg-text-tertiary' : 'bg-accent'}`} />
+                <span className={`truncate ${item.checked ? 'line-through text-text-tertiary' : 'text-text-primary'}`}>
+                    {item.text}
+                </span>
+            </div>
+        );
+    };
+
+    const Quadrant = ({ id, title, label, color, items }: { id: string, title: string, label: string, color: string, items: TodoItem[] }) => {
+        const { setNodeRef, isOver } = useSortable({ id });
+
+        return (
+            <div
+                ref={setNodeRef}
+                className={`flex-1 flex flex-col p-2 rounded-lg border-2 transition-colors overflow-hidden ${isOver ? 'border-accent bg-accent/5' : 'border-bg-tertiary bg-bg-secondary/30'}`}
+                style={{ minHeight: '120px' }}
+            >
+                <div className="flex items-center justify-between mb-2 px-1">
+                    <span className={`text-[10px] font-bold uppercase tracking-wider ${color}`}>{title}</span>
+                    <span className="text-[9px] text-text-tertiary">{label}</span>
+                </div>
+                <div className="flex-1 overflow-y-auto space-y-1 scrollbar-hide">
+                    {items.map(item => (
+                        <MatrixItem key={item.lineIndex} item={item} />
+                    ))}
+                    {items.length === 0 && !isOver && (
+                        <div className="flex-1 flex items-center justify-center border border-dashed border-bg-tertiary rounded opacity-30">
+                            <span className="text-[10px] text-text-tertiary">없음</span>
+                        </div>
+                    )}
+                </div>
+            </div>
+        );
+    };
+
     return (
         <div className="flex flex-col relative" style={{ height: 'calc(100vh - 160px)' }}>
             {/* Mode Tabs */}
@@ -389,6 +506,15 @@ const TodoTab: React.FC<TodoTabProps> = ({
                             }`}
                     >
                         히스토리
+                    </button>
+                    <button
+                        onClick={() => setViewMode('matrix')}
+                        className={`flex-1 py-2 px-4 text-sm font-medium rounded-md transition-colors ${viewMode === 'matrix'
+                            ? 'bg-accent text-white'
+                            : 'bg-bg-secondary text-text-secondary hover:bg-bg-tertiary'
+                            }`}
+                    >
+                        매트릭스
                     </button>
                     <button
                         onClick={() => setViewMode('template')}
@@ -442,6 +568,73 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                 <p>최근 30일간 작성된 투두가 없습니다.</p>
                             </div>
                         )}
+                    </div>
+                </div>
+            ) : viewMode === 'matrix' ? (
+                /* Matrix Mode */
+                <div className="flex-1 flex flex-col p-4 overflow-hidden">
+                    <DndContext
+                        collisionDetection={closestCenter}
+                        onDragEnd={onDragEnd}
+                    >
+                        <div className="flex-1 grid grid-cols-2 grid-rows-2 gap-3 mb-4">
+                            <Quadrant
+                                id="q1"
+                                title="Q1: Do First"
+                                label="긴급 & 중요"
+                                color="text-red-400"
+                                items={todos.filter(t => t.quadrant === 'q1')}
+                            />
+                            <Quadrant
+                                id="q2"
+                                title="Q2: Schedule"
+                                label="중요"
+                                color="text-green-400"
+                                items={todos.filter(t => t.quadrant === 'q2')}
+                            />
+                            <Quadrant
+                                id="q3"
+                                title="Q3: Delegate"
+                                label="긴급"
+                                color="text-yellow-400"
+                                items={todos.filter(t => t.quadrant === 'q3')}
+                            />
+                            <Quadrant
+                                id="q4"
+                                title="Q4: Eliminate"
+                                label="보관"
+                                color="text-blue-400"
+                                items={todos.filter(t => t.quadrant === 'q4')}
+                            />
+                        </div>
+
+                        {/* Inbox / Unassigned */}
+                        <div className="h-1/4 bg-bg-secondary/50 rounded-lg p-3 border border-bg-tertiary flex flex-col">
+                            <div className="flex items-center justify-between mb-2">
+                                <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Inbox</span>
+                                <span className="text-[9px] text-text-tertiary">분류 전 할 일</span>
+                            </div>
+                            <div className="flex-1 overflow-x-auto overflow-y-hidden pb-1 scrollbar-hide">
+                                <div className="flex gap-2 h-full items-start">
+                                    <SortableContext
+                                        items={todos.filter(t => t.quadrant === 'inbox').map(t => t.lineIndex.toString())}
+                                        strategy={verticalListSortingStrategy}
+                                    >
+                                        <div ref={(el) => { if (el) { /* No-op to use ref on container */ } }} className="flex gap-2 h-full">
+                                            {todos.filter(t => t.quadrant === 'inbox').map(item => (
+                                                <div key={item.lineIndex} className="w-32 flex-shrink-0">
+                                                    <MatrixItem item={item} />
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </SortableContext>
+                                </div>
+                            </div>
+                        </div>
+                    </DndContext>
+
+                    <div className="mt-4 text-[10px] text-text-tertiary text-center">
+                        할 일을 드래그하여 우선순위를 분류하세요. 자동으로 저장됩니다.
                     </div>
                 </div>
             ) : (
