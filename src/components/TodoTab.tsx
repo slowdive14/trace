@@ -10,7 +10,6 @@ import {
     DndContext,
     closestCenter,
     DragOverlay,
-    defaultDropAnimationSideEffects,
     useDroppable,
     MouseSensor,
     TouchSensor,
@@ -400,25 +399,29 @@ const TodoTab: React.FC<TodoTabProps> = ({
         return groups;
     }, {});
 
+    const [activeId, setActiveId] = useState<string | null>(null);
     const todos = parseTodos(content);
 
     const sensors = useSensors(
         useSensor(MouseSensor, {
-            // Require the mouse to move by 10 pixels before activating
             activationConstraint: {
-                distance: 10,
+                distance: 5,
             },
         }),
         useSensor(TouchSensor, {
-            // Press and hold for 250ms to start dragging, with 5px tolerance
             activationConstraint: {
                 delay: 250,
-                tolerance: 5,
+                tolerance: 10,
             },
         })
     );
 
+    const onDragStart = (event: any) => {
+        setActiveId(event.active.id.toString());
+    };
+
     const onDragEnd = (event: any) => {
+        setActiveId(null);
         const { active, over } = event;
         if (!over) return;
 
@@ -492,6 +495,28 @@ const TodoTab: React.FC<TodoTabProps> = ({
         );
     };
 
+    const MatrixItemUI = React.forwardRef<HTMLDivElement, { item: TodoItem, isDragging?: boolean, isOverlay?: boolean, style?: React.CSSProperties, [key: string]: any }>(
+        ({ item, isDragging, isOverlay, style, ...props }, ref) => {
+            return (
+                <div
+                    ref={ref}
+                    style={{
+                        ...style,
+                        opacity: isDragging ? 0.3 : 1,
+                        touchAction: 'none',
+                    }}
+                    {...props}
+                    className={`p-2 mb-1 bg-bg-primary rounded border border-bg-tertiary shadow-sm text-xs cursor-grab active:cursor-grabbing group flex items-center gap-2 ${isOverlay ? 'shadow-xl ring-2 ring-accent border-accent z-50' : ''}`}
+                >
+                    <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${item.checked ? 'bg-text-tertiary' : 'bg-accent'}`} />
+                    <span className={`truncate ${item.checked ? 'line-through text-text-tertiary' : 'text-text-primary'}`}>
+                        {item.text}
+                    </span>
+                </div>
+            );
+        }
+    );
+
     const MatrixItem = ({ item }: { item: TodoItem }) => {
         const {
             attributes,
@@ -505,23 +530,16 @@ const TodoTab: React.FC<TodoTabProps> = ({
         const style = {
             transform: CSS.Translate.toString(transform),
             transition,
-            opacity: isDragging ? 0.5 : 1,
         };
 
-        return (
-            <div
-                ref={setNodeRef}
-                style={style}
-                {...attributes}
-                {...listeners}
-                className={`p-2 mb-1 bg-bg-primary rounded border border-bg-tertiary shadow-sm text-xs cursor-grab active:cursor-grabbing group flex items-center gap-2`}
-            >
-                <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${item.checked ? 'bg-text-tertiary' : 'bg-accent'}`} />
-                <span className={`truncate ${item.checked ? 'line-through text-text-tertiary' : 'text-text-primary'}`}>
-                    {item.text}
-                </span>
-            </div>
-        );
+        return <MatrixItemUI
+            ref={setNodeRef}
+            item={item}
+            style={style}
+            isDragging={isDragging}
+            {...attributes}
+            {...listeners}
+        />;
     };
 
     const Quadrant = ({ id, title, label, color, items }: { id: string, title: string, label: string, color: string, items: TodoItem[] }) => {
@@ -643,6 +661,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
                     <DndContext
                         sensors={sensors}
                         collisionDetection={closestCenter}
+                        onDragStart={onDragStart}
                         onDragEnd={onDragEnd}
                     >
                         <div className="flex-1 grid grid-cols-2 grid-rows-2 gap-3 mb-4">
@@ -680,6 +699,15 @@ const TodoTab: React.FC<TodoTabProps> = ({
                         <div className="h-1/4">
                             <DroppableInbox items={todos.filter(t => t.quadrant === 'inbox')} />
                         </div>
+
+                        <DragOverlay adjustScale={true}>
+                            {activeId ? (
+                                <MatrixItemUI
+                                    item={todos.find(t => t.lineIndex.toString() === activeId)!}
+                                    isOverlay
+                                />
+                            ) : null}
+                        </DragOverlay>
                     </DndContext>
 
                     <div className="mt-4 text-[10px] text-text-tertiary text-center">
