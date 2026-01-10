@@ -72,7 +72,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
 }) => {
     const [content, setContent] = useState('');
     const [isEditing, setIsEditing] = useState(false);
-    const [viewMode, setViewMode] = useState<ViewMode>('edit');
+    const [viewMode, setViewMode] = useState<ViewMode>('matrix');
     const [historyTodos, setHistoryTodos] = useState<Todo[]>([]);
     const [isSaving, setIsSaving] = useState(false);
     const [lastSaved, setLastSaved] = useState<Date | null>(null);
@@ -87,7 +87,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
             if (!user) return;
 
             try {
-                if (viewMode === 'edit') {
+                if (viewMode === 'edit' || viewMode === 'matrix') {
                     // Load logical today's todo (5AM cutoff)
                     const today = getLogicalDate();
                     const todo = await getTodo(user.uid, today, collectionName);
