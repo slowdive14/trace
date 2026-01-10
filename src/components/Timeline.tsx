@@ -7,7 +7,7 @@ import { useAuth } from './AuthContext';
 import EntryItem from './EntryItem';
 import { onSnapshot, collection, query, orderBy } from 'firebase/firestore';
 import { db } from '../services/firebase';
-import { Share, Check, Pin, LayoutGrid, List } from 'lucide-react';
+import { Share, Check, Pin, LayoutGrid, List, ChevronDown, ChevronUp } from 'lucide-react';
 import { generateMarkdown, copyToClipboard } from '../utils/exportUtils';
 import { getLogicalDate } from '../utils/dateUtils';
 import { SleepStats } from './SleepStats';
@@ -46,6 +46,7 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
     const [viewMode, setViewMode] = useState<'list' | 'matrix'>('list');
     const [activeId, setActiveId] = useState<string | null>(null);
     const [matrixSearch, setMatrixSearch] = useState('');
+    const [isInboxFolded, setIsInboxFolded] = useState(false);
     const [showToast, setShowToast] = useState(false);
     const { user } = useAuth();
     const [loadMoreNode, setLoadMoreNode] = useState<HTMLDivElement | null>(null);
@@ -300,9 +301,9 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
         return (
             <div
                 ref={setNodeRef}
-                className={`h-full bg-bg-secondary/50 rounded-xl p-4 border-2 flex flex-col transition-all duration-300 ${isOver ? 'bg-accent/10 border-accent' : 'border-bg-tertiary'}`}
+                className={`flex flex-col bg-bg-secondary/50 rounded-xl p-4 border-2 transition-all duration-300 ${isOver ? 'bg-accent/10 border-accent' : 'border-bg-tertiary'} ${isInboxFolded ? 'h-auto' : 'flex-1 overflow-hidden'}`}
             >
-                <div className="flex flex-col gap-3 mb-4">
+                <div className={`flex flex-col gap-3 ${isInboxFolded ? '' : 'flex-1 min-h-0'}`}>
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                             <span className="text-[11px] font-black text-text-primary uppercase tracking-widest">Inbox</span>
@@ -310,49 +311,61 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
                                 {items.length}
                             </span>
                         </div>
-                        <span className="text-[10px] text-text-tertiary italic">미분류 항목을 정렬해 보세요</span>
-                    </div>
-
-                    <div className="relative group">
-                        <input
-                            type="text"
-                            placeholder="Inbox 내 검색..."
-                            value={matrixSearch}
-                            onChange={(e) => setMatrixSearch(e.target.value)}
-                            className="w-full bg-bg-tertiary/50 border border-bg-tertiary rounded-lg px-3 py-1.5 text-xs text-text-primary focus:outline-none focus:ring-1 focus:ring-accent/50 focus:border-accent/50 transition-all"
-                        />
-                        {matrixSearch && (
+                        <div className="flex items-center gap-3">
+                            <span className="text-[10px] text-text-tertiary italic hidden sm:inline">미분류 항목을 정렬해 보세요</span>
                             <button
-                                onClick={() => setMatrixSearch('')}
-                                className="absolute right-2 top-1/2 -translate-y-1/2 text-text-tertiary hover:text-text-primary"
+                                onClick={() => setIsInboxFolded(!isInboxFolded)}
+                                className="p-1 hover:bg-bg-tertiary rounded-lg transition-colors text-text-secondary"
                             >
-                                <span className="text-xs">×</span>
+                                {isInboxFolded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                             </button>
-                        )}
-                    </div>
-                </div>
-
-                <div className="flex-1 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-bg-tertiary">
-                    <SortableContext
-                        items={filteredItems.map(e => e.id)}
-                        strategy={verticalListSortingStrategy}
-                    >
-                        <div className="space-y-2">
-                            {filteredItems.map(entry => (
-                                <MatrixItem key={entry.id} entry={entry} />
-                            ))}
-                            {items.length === 0 && !isOver && (
-                                <div className="h-24 flex items-center justify-center border-2 border-dashed border-bg-tertiary/50 rounded-xl opacity-40">
-                                    <span className="text-[10px] font-medium">관리할 항목이 없습니다</span>
-                                </div>
-                            )}
-                            {items.length > 0 && filteredItems.length === 0 && (
-                                <div className="h-24 flex items-center justify-center text-text-tertiary italic text-[10px]">
-                                    검색 결과가 없습니다
-                                </div>
-                            )}
                         </div>
-                    </SortableContext>
+                    </div>
+
+                    {!isInboxFolded && (
+                        <>
+                            <div className="relative group">
+                                <input
+                                    type="text"
+                                    placeholder="Inbox 내 검색..."
+                                    value={matrixSearch}
+                                    onChange={(e) => setMatrixSearch(e.target.value)}
+                                    className="w-full bg-bg-tertiary/50 border border-bg-tertiary rounded-lg px-3 py-1.5 text-xs text-text-primary focus:outline-none focus:ring-1 focus:ring-accent/50 focus:border-accent/50 transition-all"
+                                />
+                                {matrixSearch && (
+                                    <button
+                                        onClick={() => setMatrixSearch('')}
+                                        className="absolute right-2 top-1/2 -translate-y-1/2 text-text-tertiary hover:text-text-primary"
+                                    >
+                                        <span className="text-xs">×</span>
+                                    </button>
+                                )}
+                            </div>
+
+                            <div className="flex-1 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-bg-tertiary mt-2">
+                                <SortableContext
+                                    items={filteredItems.map(e => e.id)}
+                                    strategy={verticalListSortingStrategy}
+                                >
+                                    <div className="space-y-2">
+                                        {filteredItems.map(entry => (
+                                            <MatrixItem key={entry.id} entry={entry} />
+                                        ))}
+                                        {items.length === 0 && !isOver && (
+                                            <div className="h-24 flex items-center justify-center border-2 border-dashed border-bg-tertiary/50 rounded-xl opacity-40">
+                                                <span className="text-[10px] font-medium">관리할 항목이 없습니다</span>
+                                            </div>
+                                        )}
+                                        {items.length > 0 && filteredItems.length === 0 && (
+                                            <div className="h-24 flex items-center justify-center text-text-tertiary italic text-[10px]">
+                                                검색 결과가 없습니다
+                                            </div>
+                                        )}
+                                    </div>
+                                </SortableContext>
+                            </div>
+                        </>
+                    )}
                 </div>
             </div>
         );
@@ -635,7 +648,7 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
                             onDragStart={onDragStart}
                             onDragEnd={onDragEnd}
                         >
-                            <div className="h-[45%] grid grid-cols-2 grid-rows-2 gap-3 mb-4">
+                            <div className={`grid grid-cols-2 grid-rows-2 gap-3 mb-4 transition-all duration-300 ${isInboxFolded ? 'h-[85%]' : 'h-[45%]'}`}>
                                 <Quadrant
                                     id="q1"
                                     title={quadrantConfig.q1.title}
@@ -666,9 +679,7 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
                                 />
                             </div>
 
-                            <div className="flex-1 overflow-hidden min-h-0">
-                                <DroppableInbox items={matrixEntries.filter(e => getQuadrantFromEntry(e) === 'inbox')} />
-                            </div>
+                            <DroppableInbox items={matrixEntries.filter(e => getQuadrantFromEntry(e) === 'inbox')} />
 
                             <DragOverlay adjustScale={true}>
                                 {activeId ? (
