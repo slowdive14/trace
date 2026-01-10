@@ -502,7 +502,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
                     <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Inbox</span>
                     <span className="text-[9px] text-text-tertiary">분류 전 할 일</span>
                 </div>
-                <div className="flex-1 overflow-x-auto overflow-y-hidden pb-1 scrollbar-hide">
+                <div className="flex-1 overflow-x-auto overflow-y-hidden pb-1" style={{ WebkitOverflowScrolling: 'touch' }}>
                     <SortableContext
                         items={items.map(t => t.lineIndex.toString())}
                         strategy={verticalListSortingStrategy}
@@ -533,7 +533,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
                     style={{
                         ...style,
                         opacity: isDragging ? 0.3 : 1,
-                        touchAction: 'none',
+                        touchAction: isOverlay ? 'none' : 'auto',
                     }}
                     {...props}
                     className={`p-2 mb-1 bg-bg-primary rounded border border-bg-tertiary shadow-sm text-xs cursor-grab active:cursor-grabbing group flex items-center gap-2 ${isOverlay ? 'shadow-xl ring-2 ring-accent border-accent z-50' : ''}`}
@@ -585,7 +585,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
                     <span className={`text-[10px] font-bold uppercase tracking-wider ${color}`}>{title}</span>
                     <span className="text-[9px] text-text-tertiary">{label}</span>
                 </div>
-                <div className="flex-1 overflow-y-auto space-y-1 scrollbar-hide">
+                <div className="flex-1 overflow-y-auto space-y-1" style={{ WebkitOverflowScrolling: 'touch', overscrollBehaviorY: 'contain' }}>
                     {items.map(item => (
                         <MatrixItem key={item.lineIndex} item={item} />
                     ))}
@@ -687,7 +687,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
                 </div>
             ) : viewMode === 'matrix' ? (
                 /* Matrix Mode */
-                <div className="flex-1 flex flex-col p-4 overflow-hidden">
+                <div className="flex-1 flex flex-col p-4 overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
                     <DndContext
                         sensors={sensors}
                         collisionDetection={closestCenter}
