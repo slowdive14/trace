@@ -49,9 +49,27 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
     const [matrixSearch, setMatrixSearch] = useState('');
     const [isInboxFolded, setIsInboxFolded] = useState(false);
     const [showToast, setShowToast] = useState(false);
+    const [currentLogicalDay, setCurrentLogicalDay] = useState(format(getLogicalDate(), 'yyyy-MM-dd'));
     const { user } = useAuth();
     const [loadMoreNode, setLoadMoreNode] = useState<HTMLDivElement | null>(null);
     const isFirstLoadRef = useRef<Record<string, boolean>>({});
+
+    // Auto-refresh when logical day changes (5AM cutoff)
+    useEffect(() => {
+        const checkDayChange = () => {
+            const newDay = format(getLogicalDate(), 'yyyy-MM-dd');
+            if (newDay !== currentLogicalDay) {
+                setCurrentLogicalDay(newDay);
+            }
+        };
+
+        const interval = setInterval(checkDayChange, 30000); // 30s check
+        window.addEventListener('focus', checkDayChange);
+        return () => {
+            clearInterval(interval);
+            window.removeEventListener('focus', checkDayChange);
+        };
+    }, [currentLogicalDay]);
 
     useEffect(() => {
         if (!user) return;
@@ -199,7 +217,7 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
             .filter(entry => category === 'all' || entry.category === category)
             .filter(entry => !selectedTag || entry.tags.some(tag => tag.startsWith(selectedTag)));
         // Note: pinned status doesn't exclude from matrix
-    }, [allEntries, dateFilter, category, selectedTag]);
+    }, [allEntries, dateFilter, category, selectedTag, currentLogicalDay]);
 
     const quadrantConfig = category === 'chore' ? {
         q1: { title: "Q1: Do First", label: "긴급 & 중요", color: "text-red-400" },
@@ -443,7 +461,7 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
         }
 
         return filtered;
-    }, [allEntries, dateFilter, category, selectedTag, subFilter]);
+    }, [allEntries, dateFilter, category, selectedTag, subFilter, currentLogicalDay]);
 
     const pinnedEntries = getPinnedEntries();
     const filteredEntriesAll = getFilteredEntriesAll();

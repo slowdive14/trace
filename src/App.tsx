@@ -200,7 +200,7 @@ const AppContent: React.FC = () => {
               <ExpenseInput externalDate={selectedExpenseDate} />
             </>
           ) : activeTab === 'todo' ? (
-            <TodoTab />
+            <TodoTab key="todo-tab" />
           ) : activeTab === 'chore' ? (
             <>
               <Timeline

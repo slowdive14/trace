@@ -88,10 +88,28 @@ const TodoTab: React.FC<TodoTabProps> = ({
     const [historyTodos, setHistoryTodos] = useState<Todo[]>([]);
     const [isSaving, setIsSaving] = useState(false);
     const [lastSaved, setLastSaved] = useState<Date | null>(null);
+    const [currentLogicalDay, setCurrentLogicalDay] = useState(format(getLogicalDate(), 'yyyy-MM-dd'));
 
     const { user } = useAuth();
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // Auto-refresh when logical day changes (5AM cutoff)
+    useEffect(() => {
+        const checkDayChange = () => {
+            const newDay = format(getLogicalDate(), 'yyyy-MM-dd');
+            if (newDay !== currentLogicalDay) {
+                setCurrentLogicalDay(newDay);
+            }
+        };
+
+        const interval = setInterval(checkDayChange, 30000); // 30s check
+        window.addEventListener('focus', checkDayChange);
+        return () => {
+            clearInterval(interval);
+            window.removeEventListener('focus', checkDayChange);
+        };
+    }, [currentLogicalDay]);
 
     // Load content based on view mode
     useEffect(() => {
@@ -127,7 +145,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
             }
         };
         loadContent();
-    }, [user, collectionName, viewMode]);
+    }, [user, collectionName, viewMode, currentLogicalDay]);
 
     // Load history (last 30 days) - also used for stats in edit mode
     useEffect(() => {
@@ -147,7 +165,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
             }
         };
         loadHistory();
-    }, [user, viewMode, collectionName]);
+    }, [user, viewMode, collectionName, currentLogicalDay]);
 
     // Calculate weekly stats (Korean week: Monday start)
     const calculateWeeklyStats = () => {
