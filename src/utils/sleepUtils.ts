@@ -222,21 +222,35 @@ export function getWeeklyRecords(records: SleepRecord[], weekOffset: number = 0)
 export interface SleepScore {
     total: number;           // 0-100
     durationScore: number;   // 0-40
-    sleepRegularity: number; // 0-30
-    wakeRegularity: number;  // 0-30
+    sleepRegularity: number; // 0-15 (목표 달성)
+    wakeRegularity: number;  // 0-15 (목표 달성)
+    consistencyScore: number; // 0-30 (일관성: 취침 15 + 기상 15)
     details: {
         avgDuration: number | null;
         sleepGoalDays: number;
         wakeGoalDays: number;
         totalRecordedDays: number;
+        sleepConsistency: number; // 분 단위 편차
+        wakeConsistency: number;  // 분 단위 편차
     };
 }
 
 /**
+ * 평균 절대 편차(Mean Absolute Deviation) 계산
+ * 시간이 얼마나 일정한지 측정 (분 단위)
+ */
+function calculateMAD(minutes: number[]): number {
+    if (minutes.length < 2) return 0;
+    const avg = minutes.reduce((a, b) => a + b, 0) / minutes.length;
+    const deviationSum = minutes.reduce((sum, m) => sum + Math.abs(m - avg), 0);
+    return deviationSum / minutes.length;
+}
+
+/**
  * 수면 점수 계산 (100점 만점)
- * - 수면시간 충족도: 40점 (8시간 기준)
- * - 취침 규칙성: 30점 (목표 시간대 달성률)
- * - 기상 규칙성: 30점 (목표 시간대 달성률)
+ * - 수면시간 충족도: 40점 (7.5시간 기준)
+ * - 목표 달성(규칙성): 30점 (취침 15 + 기상 15)
+ * - 일관성 지표: 30점 (취침 15 + 기상 15)
  */
 export function calculateSleepScore(records: SleepRecord[]): SleepScore {
     if (records.length === 0) {
@@ -245,42 +259,65 @@ export function calculateSleepScore(records: SleepRecord[]): SleepScore {
             durationScore: 0,
             sleepRegularity: 0,
             wakeRegularity: 0,
-            details: { avgDuration: null, sleepGoalDays: 0, wakeGoalDays: 0, totalRecordedDays: 0 }
+            consistencyScore: 0,
+            details: {
+                avgDuration: null,
+                sleepGoalDays: 0,
+                wakeGoalDays: 0,
+                totalRecordedDays: 0,
+                sleepConsistency: 0,
+                wakeConsistency: 0
+            }
         };
     }
 
     const achievements = records.map(r => checkGoalAchievement(r));
 
-    // 수면시간 점수 (40점 만점)
+    // 1. 수면시간 점수 (40점 만점)
     const avgDuration = getAverageDuration(records);
     let durationScore = 0;
     if (avgDuration !== null) {
-        const idealHours = 7.5; // 목표 수면시간
+        const idealHours = 7.5;
         const deviation = Math.abs(avgDuration - idealHours);
-        // 0.5시간 이내 편차면 만점, 그 이후 감점
         durationScore = Math.max(0, 40 - (deviation * 8));
     }
 
-    // 취침 규칙성 점수 (30점 만점)
+    // 2. 목표 달성 점수 (30점 만점: 취침 15 + 기상 15)
     const sleepGoalDays = achievements.filter(a => a.sleepGoalMet).length;
-    const sleepRegularity = Math.round((sleepGoalDays / 7) * 30);
-
-    // 기상 규칙성 점수 (30점 만점)
     const wakeGoalDays = achievements.filter(a => a.wakeGoalMet).length;
-    const wakeRegularity = Math.round((wakeGoalDays / 7) * 30);
+    const sleepGoalScore = (sleepGoalDays / records.length) * 15;
+    const wakeGoalScore = (wakeGoalDays / records.length) * 15;
 
-    const total = Math.round(durationScore + sleepRegularity + wakeRegularity);
+    // 3. 일관성 점수 (30점 만점: 취침 15 + 기상 15)
+    const sleepMinutes = records.filter(r => r.sleepTime).map(r => timeToMinutes(r.sleepTime!));
+    const wakeMinutes = records.filter(r => r.wakeTime).map(r => {
+        const h = getHours(r.wakeTime!);
+        const m = getMinutes(r.wakeTime!);
+        return h * 60 + m;
+    });
+
+    const sleepMAD = calculateMAD(sleepMinutes);
+    const wakeMAD = calculateMAD(wakeMinutes);
+
+    // MAD가 0이면 15점, 60분(1시간) 이상이면 0점 (선형 감점)
+    const sleepConsistencyScore = Math.max(0, 15 - (sleepMAD / 4));
+    const wakeConsistencyScore = Math.max(0, 15 - (wakeMAD / 4));
+
+    const total = Math.round(durationScore + sleepGoalScore + wakeGoalScore + sleepConsistencyScore + wakeConsistencyScore);
 
     return {
         total,
         durationScore: Math.round(durationScore),
-        sleepRegularity,
-        wakeRegularity,
+        sleepRegularity: Math.round(sleepGoalScore),
+        wakeRegularity: Math.round(wakeGoalScore),
+        consistencyScore: Math.round(sleepConsistencyScore + wakeConsistencyScore),
         details: {
             avgDuration,
             sleepGoalDays,
             wakeGoalDays,
             totalRecordedDays: records.length,
+            sleepConsistency: Math.round(sleepMAD),
+            wakeConsistency: Math.round(wakeMAD),
         }
     };
 }

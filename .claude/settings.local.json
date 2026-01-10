@@ -18,7 +18,16 @@
       "Bash(taskkill /F /PID 19644)",
       "Bash(powershell -Command \"Stop-Process -Id 17076,61668,19644 -Force\")",
       "Bash(claude --version:*)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(npm run dev:*)",
+      "Bash(git -C \"C:\\\\Users\\\\user\\\\Downloads\\\\trace\" add src/components/TodoTab.tsx)",
+      "Bash(git -C \"C:\\\\Users\\\\user\\\\Downloads\\\\trace\" commit -m \"$\\(cat <<''EOF''\nfeat: Add gamified progress bar with lion theme to TodoTab\n\n- Add level system with cute lion titles \\(Lv.1-5\\)\n- Show encouragement messages based on completion percentage\n- Color gradient changes with progress \\(orange → green\\)\n- Pulse animation on 100% completion\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git -C \"C:\\\\Users\\\\user\\\\Downloads\\\\trace\" push)",
+      "Bash(git -C \"C:\\\\Users\\\\user\\\\Downloads\\\\trace\" commit -m \"$\\(cat <<''EOF''\nfeat: Add cumulative level system and weekly stats to TodoTab\n\n- Add real level system based on total completed tasks \\(Lv.1-10\\)\n- Show weekly average completion rate and weekly completed count\n- Level persists even during slump periods \\(30-day history\\)\n- Separate today''s progress from cumulative progress\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git -C \"C:\\\\Users\\\\user\\\\Downloads\\\\trace\" commit -m \"$\\(cat <<''EOF''\nfix: Use Korean week \\(Monday start\\) and show last week stats\n\n- Changed from rolling 7 days to proper week calculation\n- Week starts on Monday \\(weekStartsOn: 1\\)\n- Show both this week and last week average percentage\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git -C \"C:\\\\Users\\\\user\\\\Downloads\\\\trace\" commit -m \"$\\(cat <<''EOF''\nfix: Rebalance level system \\(max Lv.10 = 2000 completions\\)\n\nLevel requirements adjusted:\n- Lv.2: 30, Lv.3: 80, Lv.4: 150, Lv.5: 250\n- Lv.6: 400, Lv.7: 600, Lv.8: 900, Lv.9: 1300, Lv.10: 2000\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git -C \"C:\\\\Users\\\\user\\\\Downloads\\\\trace\" commit -m \"fix: Adjust level system to max 1700 completions\")",
+      "Bash(git -C \"C:\\\\Users\\\\user\\\\Downloads\\\\trace\" commit -m \"fix: Real-time progress update when checking todos\")"
     ],
     "deny": [],
     "ask": []

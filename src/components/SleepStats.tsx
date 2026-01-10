@@ -106,48 +106,54 @@ function ScoreSection({ score, streak }: { score: SleepScore; streak: WeeklyStre
                     </div>
                 </div>
 
-                {/* 취침 규칙성 */}
+                {/* 취침 점수 (목표 15 + 일관성 15) */}
                 <div className="flex items-center justify-between text-xs">
                     <span className="text-text-secondary">취침 규칙성</span>
                     <div className="flex items-center gap-2">
                         <div className="w-16 h-1.5 bg-bg-tertiary rounded-full overflow-hidden">
                             <div
                                 className="h-full bg-purple-400 rounded-full"
-                                style={{ width: `${(score.sleepRegularity / 30) * 100}%` }}
+                                style={{ width: `${((score.sleepRegularity + (score.consistencyScore / 2)) / 30) * 100}%` }}
                             />
                         </div>
-                        <span className="w-12 text-right text-text-secondary">{score.sleepRegularity}/30</span>
+                        <span className="w-12 text-right text-text-secondary">{score.sleepRegularity + Math.round(score.consistencyScore / 2)}/30</span>
                     </div>
                 </div>
 
-                {/* 기상 규칙성 */}
+                {/* 기상 점수 (목표 15 + 일관성 15) */}
                 <div className="flex items-center justify-between text-xs">
                     <span className="text-text-secondary">기상 규칙성</span>
                     <div className="flex items-center gap-2">
                         <div className="w-16 h-1.5 bg-bg-tertiary rounded-full overflow-hidden">
                             <div
                                 className="h-full bg-amber-400 rounded-full"
-                                style={{ width: `${(score.wakeRegularity / 30) * 100}%` }}
+                                style={{ width: `${((score.wakeRegularity + (score.consistencyScore / 2)) / 30) * 100}%` }}
                             />
                         </div>
-                        <span className="w-12 text-right text-text-secondary">{score.wakeRegularity}/30</span>
+                        <span className="w-12 text-right text-text-secondary">{score.wakeRegularity + Math.round(score.consistencyScore / 2)}/30</span>
                     </div>
+                </div>
+
+                {/* 일관성 상세 */}
+                <div className="flex justify-end gap-3 mt-1 text-[9px] text-text-secondary">
+                    <span>취침 편차: {score.details.sleepConsistency}분</span>
+                    <span>기상 편차: {score.details.wakeConsistency}분</span>
                 </div>
             </div>
 
             {/* 5일 달성 배지 */}
             <div className="flex items-center gap-2 mt-3 pt-3 border-t border-bg-tertiary">
                 <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-[10px] ${streak.sleepStreakMet
-                        ? 'bg-purple-500/20 text-purple-300'
-                        : 'bg-bg-tertiary text-text-secondary'
+                    ? 'bg-purple-500/20 text-purple-300'
+                    : 'bg-bg-tertiary text-text-secondary'
                     }`}>
                     <Moon size={10} />
                     취침 {streak.sleepStreak}/5
                     {streak.sleepStreakMet && <Check size={10} />}
                 </div>
                 <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-[10px] ${streak.wakeStreakMet
-                        ? 'bg-amber-500/20 text-amber-300'
-                        : 'bg-bg-tertiary text-text-secondary'
+                    ? 'bg-amber-500/20 text-amber-300'
+                    : 'bg-bg-tertiary text-text-secondary'
                     }`}>
                     <Sun size={10} />
                     기상 {streak.wakeStreak}/5
