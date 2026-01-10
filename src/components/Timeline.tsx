@@ -221,7 +221,7 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
                     style={{
                         ...style,
                         opacity: isDragging ? 0.3 : 1,
-                        touchAction: 'none',
+                        touchAction: isOverlay ? 'none' : 'auto',
                     }}
                     {...props}
                     className={`p-2.5 mb-1.5 bg-bg-primary rounded-lg border border-bg-tertiary shadow-sm text-[11px] cursor-grab active:cursor-grabbing group flex items-start gap-2.5 transition-all hover:border-accent/30 ${isOverlay ? 'shadow-xl ring-2 ring-accent border-accent z-50 w-64' : ''}`}
@@ -280,7 +280,7 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
                     <span className={`text-[10px] font-bold uppercase tracking-wider ${color}`}>{title}</span>
                     <span className="text-[9px] text-text-tertiary">{label}</span>
                 </div>
-                <div className="flex-1 overflow-y-auto space-y-1 scrollbar-hide">
+                <div className="flex-1 overflow-y-auto space-y-1" style={{ WebkitOverflowScrolling: 'touch', overscrollBehaviorY: 'contain' }}>
                     {items.map(entry => (
                         <MatrixItem key={entry.id} entry={entry} />
                     ))}
@@ -344,7 +344,7 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
                                 )}
                             </div>
 
-                            <div className="flex-1 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-bg-tertiary mt-2">
+                            <div className="flex-1 overflow-y-auto pr-1 mt-2" style={{ WebkitOverflowScrolling: 'touch', overscrollBehaviorY: 'contain' }}>
                                 <SortableContext
                                     items={filteredItems.map(e => e.id)}
                                     strategy={verticalListSortingStrategy}
