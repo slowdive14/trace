@@ -251,8 +251,10 @@ function calculateMAD(minutes: number[]): number {
  * - 수면시간 충족도: 40점 (7.5시간 기준)
  * - 목표 달성(규칙성): 30점 (취침 15 + 기상 15)
  * - 일관성 지표: 30점 (취침 15 + 기상 15)
+ * 
+ * @param contextRecords 일관성(MAD) 계산을 위한 맥락 데이터 (예: 지난 주 기록). 점수 계산 자체는 records 기준이지만, 편차 계산 시에는 더 많은 샘플을 사용함.
  */
-export function calculateSleepScore(records: SleepRecord[]): SleepScore {
+export function calculateSleepScore(records: SleepRecord[], contextRecords: SleepRecord[] = []): SleepScore {
     if (records.length === 0) {
         return {
             total: 0,
@@ -283,14 +285,23 @@ export function calculateSleepScore(records: SleepRecord[]): SleepScore {
     }
 
     // 2. 목표 달성 점수 (30점 만점: 취침 15 + 기상 15)
+    // 기록 수에 비례하여 점수 부여 (100% 달성 시 만점)
     const sleepGoalDays = achievements.filter(a => a.sleepGoalMet).length;
     const wakeGoalDays = achievements.filter(a => a.wakeGoalMet).length;
     const sleepGoalScore = (sleepGoalDays / records.length) * 15;
     const wakeGoalScore = (wakeGoalDays / records.length) * 15;
 
+
     // 3. 일관성 점수 (30점 만점: 취침 15 + 기상 15)
-    const sleepMinutes = records.filter(r => r.sleepTime).map(r => timeToMinutes(r.sleepTime!));
-    const wakeMinutes = records.filter(r => r.wakeTime).map(r => {
+    // 일관성은 '최근 흐름'을 반영해야 하므로 contextRecords를 포함해 최소 3일 이상의 데이터로 계산 권장
+    const consistencySample = [...contextRecords, ...records];
+
+    // 중복 제거 (혹시 context와 current가 겹칠 경우)
+    const uniqueSample = Array.from(new Map(consistencySample.map(item => [item.date, item])).values())
+        .filter(r => r.sleepTime || r.wakeTime); // 유효한 기록만
+
+    const sleepMinutes = uniqueSample.filter(r => r.sleepTime).map(r => timeToMinutes(r.sleepTime!));
+    const wakeMinutes = uniqueSample.filter(r => r.wakeTime).map(r => {
         const h = getHours(r.wakeTime!);
         const m = getMinutes(r.wakeTime!);
         return h * 60 + m;

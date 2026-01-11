@@ -8,7 +8,8 @@ import {
     getAverageSleepTime,
     getAverageWakeTime,
     getWeeklyBarData,
-    compareWeeks,
+    getWeeklyRecords,
+    calculateSleepScore,
     checkWeeklyGoalStreak,
     type DailyBarData,
     type SleepScore,
@@ -267,7 +268,34 @@ export function SleepStats({ entries }: Props) {
         const recentRecords = getRecentRecords(allRecords, 7);
         const monthlyRecords = getRecentRecords(allRecords, 30);
         const weeklyBar = getWeeklyBarData(allRecords);
-        const comparison = compareWeeks(allRecords);
+
+        // 주간 비교 데이터 생성
+        const thisWeekData = getWeeklyRecords(allRecords, 0);
+        const lastWeekData = getWeeklyRecords(allRecords, 1);
+
+        // 이번 주 점수 계산 시, 지난 주 데이터를 '맥락'으로 전달하여 일관성 점수 보정
+        const thisWeekScore = calculateSleepScore(thisWeekData.records, lastWeekData.records);
+        const lastWeekScore = calculateSleepScore(lastWeekData.records); // 지난 주는 그 전주 데이터까지 굳이 안 봐도 됨 (이미 완료된 주니까)
+
+        const scoreDiff = thisWeekScore.total - lastWeekScore.total;
+
+        let durationDiff: number | null = null;
+        if (thisWeekScore.details.avgDuration !== null && lastWeekScore.details.avgDuration !== null) {
+            durationDiff = thisWeekScore.details.avgDuration - lastWeekScore.details.avgDuration;
+        }
+
+        let trend: 'improved' | 'declined' | 'stable' = 'stable';
+        if (scoreDiff > 5) trend = 'improved';
+        else if (scoreDiff < -5) trend = 'declined';
+
+        const comparison: WeeklyComparison = {
+            thisWeek: thisWeekScore,
+            lastWeek: lastWeekScore,
+            scoreDiff,
+            durationDiff,
+            trend
+        };
+
         const streak = checkWeeklyGoalStreak(allRecords);
 
         return {
