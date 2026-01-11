@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Moon, Sun, Clock, ChevronDown, Check, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { Moon, Sun, Clock, ChevronDown, Check, TrendingUp, TrendingDown, Minus, HelpCircle } from 'lucide-react';
 import type { Entry } from '../types/types';
 import {
     extractSleepRecords,
@@ -19,6 +19,18 @@ import {
 
 interface Props {
     entries: Entry[];
+}
+
+function InfoTooltip({ content }: { content: string }) {
+    return (
+        <div className="group relative flex items-center ml-1 z-10">
+            <HelpCircle size={10} className="text-text-tertiary cursor-help hover:text-text-secondary transition-colors" />
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-gray-800 border border-gray-700 text-text-primary text-[10px] rounded shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all pointer-events-none text-center leading-tight">
+                {content}
+                <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-800" />
+            </div>
+        </div>
+    );
 }
 
 // 주간 바 차트 컴포넌트
@@ -85,7 +97,10 @@ function ScoreSection({ score, streak }: { score: SleepScore; streak: WeeklyStre
     return (
         <div className="bg-bg-tertiary/50 rounded-lg p-3">
             <div className="flex items-center justify-between mb-3">
-                <span className="text-xs text-text-secondary">수면 점수</span>
+                <div className="flex items-center">
+                    <span className="text-xs text-text-secondary">수면 점수</span>
+                    <InfoTooltip content="수면 충족도(40) + 규칙성(60) 종합 점수" />
+                </div>
                 <span className={`text-2xl font-bold ${getScoreColor(score.total)}`}>
                     {score.total}점
                 </span>
@@ -95,7 +110,10 @@ function ScoreSection({ score, streak }: { score: SleepScore; streak: WeeklyStre
             <div className="space-y-2">
                 {/* 수면시간 충족도 */}
                 <div className="flex items-center justify-between text-xs">
-                    <span className="text-text-secondary">수면시간</span>
+                    <div className="flex items-center">
+                        <span className="text-text-secondary">수면시간</span>
+                        <InfoTooltip content="적정 수면 시간 7.5시간 달성도 (40점 만점)" />
+                    </div>
                     <div className="flex items-center gap-2">
                         <div className="w-16 h-1.5 bg-bg-tertiary rounded-full overflow-hidden">
                             <div
@@ -109,7 +127,10 @@ function ScoreSection({ score, streak }: { score: SleepScore; streak: WeeklyStre
 
                 {/* 취침 점수 (목표 15 + 일관성 15) */}
                 <div className="flex items-center justify-between text-xs">
-                    <span className="text-text-secondary">취침 규칙성</span>
+                    <div className="flex items-center">
+                        <span className="text-text-secondary">취침 규칙성</span>
+                        <InfoTooltip content="취침 목표(23:00~00:30) 달성 및 매일 일정한 시간에 잠드는지 평가 (30점 만점)" />
+                    </div>
                     <div className="flex items-center gap-2">
                         <div className="w-16 h-1.5 bg-bg-tertiary rounded-full overflow-hidden">
                             <div
@@ -123,7 +144,10 @@ function ScoreSection({ score, streak }: { score: SleepScore; streak: WeeklyStre
 
                 {/* 기상 점수 (목표 15 + 일관성 15) */}
                 <div className="flex items-center justify-between text-xs">
-                    <span className="text-text-secondary">기상 규칙성</span>
+                    <div className="flex items-center">
+                        <span className="text-text-secondary">기상 규칙성</span>
+                        <InfoTooltip content="기상 목표(06:00~07:30) 달성 및 매일 일정한 시간에 일어나는지 평가 (30점 만점)" />
+                    </div>
                     <div className="flex items-center gap-2">
                         <div className="w-16 h-1.5 bg-bg-tertiary rounded-full overflow-hidden">
                             <div
