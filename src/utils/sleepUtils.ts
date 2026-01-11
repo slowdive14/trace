@@ -446,35 +446,38 @@ export interface IdealSchedule {
 
 /**
  * 수면 점수 최대화를 위한 적정 취침/기상 시간 계산
- * 1. 최근 평균 취침 시간을 구함
- * 2. 평균 취침 시간을 목표 범위(23:00~00:30) 내로 클램핑 (규칙성/일관성 최대화)
- * 3. 클램핑된 취침 시간으로부터 7.5시간 뒤를 기상 시간으로 설정 (충족도 최대화)
+ * - 궁극적 목표: 23:00 취침 / 06:30 기상 (기상 목표 06:00~07:30 만족)
+ * - 점진적 개선: 현재 평균이 목표와 멀다면, 한 번에 목표를 제시하지 않고 15~30분씩 당기도록 유도
  */
 export function getIdealSleepSchedule(records: SleepRecord[]): IdealSchedule {
-    /**
-     * 목표 1: 취침 규칙성 (23:00 ~ 00:30)
-     * 목표 2: 기상 규칙성 (06:00 ~ 07:30)
-     * 목표 3: 수면 충족도 (7.5시간)
-     * 
-     * 상충 해결:
-     * - 7.5시간 수면을 가정할 때, 기상 목표(06:00~07:30)를 달성하기 위한 취침 시간은 (22:30~00:00)임.
-     * - 취침 목표(23:00~00:30)와의 교집합은 (23:00~00:00)임.
-     * - 따라서 취침 시간을 23:00~00:00 사이로 유지하면 모든 점수가 최대화됨.
-     */
-    const IDEAL_BEDTIME_START = 23 * 60; // 23:00
-    const IDEAL_BEDTIME_END = 24 * 60;   // 00:00 (또는 1440분)
+    const TARGET_BEDTIME = 23 * 60; // 23:00
+    const SCORE_LIMIT_BEDTIME = 24 * 60; // 00:00 (이 이후는 기상 점수 감점 위험)
 
-    let idealBedtimeMinutes = IDEAL_BEDTIME_START;
+    // 기본값: 목표 시간
+    let idealBedtimeMinutes = TARGET_BEDTIME;
 
     const validRecentSleeps = records
         .filter(r => r.sleepTime)
         .slice(0, 10);
 
     if (validRecentSleeps.length > 0) {
-        const avgSleepMinutes = validRecentSleeps.reduce((sum, r) => sum + timeToMinutes(r.sleepTime!), 0) / validRecentSleeps.length;
+        const avgBedtimeMinutes = validRecentSleeps.reduce((sum, r) => sum + timeToMinutes(r.sleepTime!), 0) / validRecentSleeps.length;
 
-        // 사용자의 평균 취침 시간을 교집합 범위(23:00~00:00) 내로 클램핑
-        idealBedtimeMinutes = Math.min(Math.max(avgSleepMinutes, IDEAL_BEDTIME_START), IDEAL_BEDTIME_END);
+        // 점진적 Nudge 로직
+        if (avgBedtimeMinutes > TARGET_BEDTIME) {
+            // 목표보다 늦게 자는 경우
+            if (avgBedtimeMinutes > SCORE_LIMIT_BEDTIME) {
+                // 00:00를 넘겨서 자는 경우 (매우 늦음) -> 30분씩 당기기
+                // 단, 당긴 결과가 00:00보다 늦으면 그대로, 00:00 안쪽으로 들어오면 00:00으로 제한하진 않고 자연스럽게
+                idealBedtimeMinutes = avgBedtimeMinutes - 30;
+            } else {
+                // 23:00 ~ 00:00 사이인 경우 (비교적 양호) -> 15분씩 당기기
+                idealBedtimeMinutes = Math.max(TARGET_BEDTIME, avgBedtimeMinutes - 15);
+            }
+        } else {
+            // 목표보다 일찍 자는 경우 (23:00 이전) -> 15분씩 늦춰서 23:00에 맞춤
+            idealBedtimeMinutes = Math.min(TARGET_BEDTIME, avgBedtimeMinutes + 15);
+        }
     }
 
     const idealWaketimeMinutes = idealBedtimeMinutes + (7.5 * 60);
