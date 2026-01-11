@@ -21,11 +21,11 @@ interface Props {
     entries: Entry[];
 }
 
-function InfoTooltip({ content }: { content: string }) {
+function InfoTooltip({ content }: { content: React.ReactNode }) {
     return (
         <div className="group relative flex items-center ml-1 z-10">
             <HelpCircle size={10} className="text-text-tertiary cursor-help hover:text-text-secondary transition-colors" />
-            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2 bg-gray-800 border border-gray-700 text-text-primary text-[10px] rounded shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all pointer-events-none text-center leading-tight">
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-gray-800 border border-gray-700 text-text-primary text-[10px] rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all pointer-events-none z-50">
                 {content}
                 <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-800" />
             </div>
@@ -99,7 +99,14 @@ function ScoreSection({ score, streak }: { score: SleepScore; streak: WeeklyStre
             <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center">
                     <span className="text-xs text-text-secondary">수면 점수</span>
-                    <InfoTooltip content="수면 충족도(40) + 규칙성(60) 종합 점수" />
+                    <InfoTooltip content={
+                        <div className="space-y-1 text-left">
+                            <div className="font-bold text-indigo-300 mb-1">총점 100점 만점</div>
+                            <div>• 수면 시간: <span className="text-white">40점</span></div>
+                            <div>• 규칙성(목표 달성): <span className="text-white">30점</span> (취침15+기상15)</div>
+                            <div>• 일관성(편차): <span className="text-white">30점</span> (취침15+기상15)</div>
+                        </div>
+                    } />
                 </div>
                 <span className={`text-2xl font-bold ${getScoreColor(score.total)}`}>
                     {score.total}점
@@ -112,7 +119,14 @@ function ScoreSection({ score, streak }: { score: SleepScore; streak: WeeklyStre
                 <div className="flex items-center justify-between text-xs">
                     <div className="flex items-center">
                         <span className="text-text-secondary">수면시간</span>
-                        <InfoTooltip content="적정 수면 시간 7.5시간 달성도 (40점 만점)" />
+                        <InfoTooltip content={
+                            <div className="space-y-1 text-left">
+                                <div className="font-bold text-indigo-300">목표: 7.5시간 (40점)</div>
+                                <div className="text-gray-400">7.5시간에서 멀어질수록 감점됩니다.</div>
+                                <div>• 1시간 차이: -8점</div>
+                                <div>• 30분 차이: -4점</div>
+                            </div>
+                        } />
                     </div>
                     <div className="flex items-center gap-2">
                         <div className="w-16 h-1.5 bg-bg-tertiary rounded-full overflow-hidden">
@@ -129,7 +143,13 @@ function ScoreSection({ score, streak }: { score: SleepScore; streak: WeeklyStre
                 <div className="flex items-center justify-between text-xs">
                     <div className="flex items-center">
                         <span className="text-text-secondary">취침 규칙성</span>
-                        <InfoTooltip content="취침 목표(23:00~00:30) 달성 및 매일 일정한 시간에 잠드는지 평가 (30점 만점)" />
+                        <InfoTooltip content={
+                            <div className="space-y-1 text-left">
+                                <div className="font-bold text-purple-300">규칙성 30점 만점</div>
+                                <div>• <span className="text-white">목표 달성 (15점)</span>: <br />23:00 ~ 00:30 사이 취침</div>
+                                <div>• <span className="text-white">일관성 (15점)</span>: <br />매일 비슷한 시간에 자는지 평가 (편차↓ 점수↑)</div>
+                            </div>
+                        } />
                     </div>
                     <div className="flex items-center gap-2">
                         <div className="w-16 h-1.5 bg-bg-tertiary rounded-full overflow-hidden">
@@ -146,7 +166,13 @@ function ScoreSection({ score, streak }: { score: SleepScore; streak: WeeklyStre
                 <div className="flex items-center justify-between text-xs">
                     <div className="flex items-center">
                         <span className="text-text-secondary">기상 규칙성</span>
-                        <InfoTooltip content="기상 목표(06:00~07:30) 달성 및 매일 일정한 시간에 일어나는지 평가 (30점 만점)" />
+                        <InfoTooltip content={
+                            <div className="space-y-1 text-left">
+                                <div className="font-bold text-amber-300">규칙성 30점 만점</div>
+                                <div>• <span className="text-white">목표 달성 (15점)</span>: <br />06:00 ~ 07:30 사이 기상</div>
+                                <div>• <span className="text-white">일관성 (15점)</span>: <br />매일 비슷한 시간에 일어나는지 평가 (편차↓ 점수↑)</div>
+                            </div>
+                        } />
                     </div>
                     <div className="flex items-center gap-2">
                         <div className="w-16 h-1.5 bg-bg-tertiary rounded-full overflow-hidden">
