@@ -25,9 +25,9 @@ function InfoTooltip({ content }: { content: React.ReactNode }) {
     return (
         <div className="group relative flex items-center ml-1 z-10">
             <HelpCircle size={10} className="text-text-tertiary cursor-help hover:text-text-secondary transition-colors" />
-            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 bg-gray-800 border border-gray-700 text-text-primary text-[10px] rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all pointer-events-none z-50">
+            <div className="absolute bottom-full left-[-12px] mb-2 w-60 p-3 bg-gray-800 border border-gray-700 text-text-primary text-[10px] rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all pointer-events-none z-50 whitespace-normal break-keep">
                 {content}
-                <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-800" />
+                <div className="absolute top-full left-[15px] border-4 border-transparent border-t-gray-800" />
             </div>
         </div>
     );
