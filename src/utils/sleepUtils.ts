@@ -440,23 +440,30 @@ export interface IdealSchedule {
  * 3. 클램핑된 취침 시간으로부터 7.5시간 뒤를 기상 시간으로 설정 (충족도 최대화)
  */
 export function getIdealSleepSchedule(records: SleepRecord[]): IdealSchedule {
-    // 기본값: 23:00 취침, 06:30 기상 (7.5시간)
-    let idealBedtimeMinutes = 23 * 60;
+    /**
+     * 목표 1: 취침 규칙성 (23:00 ~ 00:30)
+     * 목표 2: 기상 규칙성 (06:00 ~ 07:30)
+     * 목표 3: 수면 충족도 (7.5시간)
+     * 
+     * 상충 해결:
+     * - 7.5시간 수면을 가정할 때, 기상 목표(06:00~07:30)를 달성하기 위한 취침 시간은 (22:30~00:00)임.
+     * - 취침 목표(23:00~00:30)와의 교집합은 (23:00~00:00)임.
+     * - 따라서 취침 시간을 23:00~00:00 사이로 유지하면 모든 점수가 최대화됨.
+     */
+    const IDEAL_BEDTIME_START = 23 * 60; // 23:00
+    const IDEAL_BEDTIME_END = 24 * 60;   // 00:00 (또는 1440분)
+
+    let idealBedtimeMinutes = IDEAL_BEDTIME_START;
 
     const validRecentSleeps = records
         .filter(r => r.sleepTime)
-        .slice(0, 10); // 최근 10개 기록만 참고
+        .slice(0, 10);
 
     if (validRecentSleeps.length > 0) {
         const avgSleepMinutes = validRecentSleeps.reduce((sum, r) => sum + timeToMinutes(r.sleepTime!), 0) / validRecentSleeps.length;
 
-        // 목표 범위: 23:00 (1380분) ~ 00:30 (1470분)
-        // timeToMinutes는 00:00~06:00 사이를 +1440분 처리함
-        const GOAL_START = 23 * 60; // 1380
-        const GOAL_END = 24 * 60 + 30; // 1470
-
-        // 평균을 목표 범위 내로 제한하여 일관성과 목표 점수를 동시에 잡음
-        idealBedtimeMinutes = Math.min(Math.max(avgSleepMinutes, GOAL_START), GOAL_END);
+        // 사용자의 평균 취침 시간을 교집합 범위(23:00~00:00) 내로 클램핑
+        idealBedtimeMinutes = Math.min(Math.max(avgSleepMinutes, IDEAL_BEDTIME_START), IDEAL_BEDTIME_END);
     }
 
     const idealWaketimeMinutes = idealBedtimeMinutes + (7.5 * 60);
