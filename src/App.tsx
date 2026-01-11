@@ -210,7 +210,7 @@ const AppContent: React.FC = () => {
                 onTagClick={(tag: string) => setSelectedTag(tag)}
                 collectionName="chores"
               />
-              <InputBar activeCategory="chore" collectionName="chores" />
+              <InputBar activeCategory="chore" collectionName="chores" entries={entries} />
             </>
           ) : activeTab === 'book' ? (
             <>
@@ -223,7 +223,7 @@ const AppContent: React.FC = () => {
                 subFilter={bookSubFilter}
                 onSubFilterChange={setBookSubFilter}
               />
-              <InputBar activeCategory="book" collectionName="books" />
+              <InputBar activeCategory="book" collectionName="books" entries={entries} />
             </>
           ) : (
             <>
@@ -233,7 +233,7 @@ const AppContent: React.FC = () => {
                 selectedTag={selectedTag}
                 onTagClick={(tag: string) => setSelectedTag(tag)}
               />
-              <InputBar activeCategory={activeTab} />
+              <InputBar activeCategory={activeTab} entries={entries} />
             </>
           )}
 

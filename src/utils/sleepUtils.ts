@@ -427,3 +427,42 @@ export function checkWeeklyGoalStreak(records: SleepRecord[]): WeeklyStreak {
         wakeStreakMet: wakeStreak >= 5,
     };
 }
+
+export interface IdealSchedule {
+    bedtime: string;
+    waketime: string;
+}
+
+/**
+ * 수면 점수 최대화를 위한 적정 취침/기상 시간 계산
+ * 1. 최근 평균 취침 시간을 구함
+ * 2. 평균 취침 시간을 목표 범위(23:00~00:30) 내로 클램핑 (규칙성/일관성 최대화)
+ * 3. 클램핑된 취침 시간으로부터 7.5시간 뒤를 기상 시간으로 설정 (충족도 최대화)
+ */
+export function getIdealSleepSchedule(records: SleepRecord[]): IdealSchedule {
+    // 기본값: 23:00 취침, 06:30 기상 (7.5시간)
+    let idealBedtimeMinutes = 23 * 60;
+
+    const validRecentSleeps = records
+        .filter(r => r.sleepTime)
+        .slice(0, 10); // 최근 10개 기록만 참고
+
+    if (validRecentSleeps.length > 0) {
+        const avgSleepMinutes = validRecentSleeps.reduce((sum, r) => sum + timeToMinutes(r.sleepTime!), 0) / validRecentSleeps.length;
+
+        // 목표 범위: 23:00 (1380분) ~ 00:30 (1470분)
+        // timeToMinutes는 00:00~06:00 사이를 +1440분 처리함
+        const GOAL_START = 23 * 60; // 1380
+        const GOAL_END = 24 * 60 + 30; // 1470
+
+        // 평균을 목표 범위 내로 제한하여 일관성과 목표 점수를 동시에 잡음
+        idealBedtimeMinutes = Math.min(Math.max(avgSleepMinutes, GOAL_START), GOAL_END);
+    }
+
+    const idealWaketimeMinutes = idealBedtimeMinutes + (7.5 * 60);
+
+    return {
+        bedtime: minutesToTimeString(idealBedtimeMinutes),
+        waketime: minutesToTimeString(idealWaketimeMinutes),
+    };
+}

@@ -6,13 +6,16 @@ import { useAuth } from './AuthContext';
 import { format, isSameDay } from 'date-fns';
 import { searchEmotions, type EmotionTag } from '../utils/emotionTags';
 import EmotionPickerModal from './EmotionPickerModal';
+import { extractSleepRecords, getIdealSleepSchedule } from '../utils/sleepUtils';
+import type { Entry } from '../types/types';
 
 interface InputBarProps {
     activeCategory?: 'action' | 'thought' | 'chore' | 'book';
     collectionName?: string;
+    entries?: Entry[];
 }
 
-const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collectionName = 'entries' }) => {
+const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collectionName = 'entries', entries = [] }) => {
     const [content, setContent] = useState('');
     const [isExpanded, setIsExpanded] = useState(false);
     // Use null to represent "Now/Today". This prevents stale timestamps when the app is left open.
@@ -256,12 +259,37 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
     const displayDate = selectedDate || new Date();
     const isDisplayDateToday = isSameDay(displayDate, new Date());
 
+    // 적정 수면 시간 계산
+    const idealSchedule = React.useMemo(() => {
+        if (!entries || entries.length === 0) return null;
+        const records = extractSleepRecords(entries);
+        return getIdealSleepSchedule(records);
+    }, [entries]);
+
     return (
         <>
             {/* 수면 기록 버튼 바 - 일상 탭에서만 표시 */}
             {activeCategory === 'action' && !isExpanded && (
                 <div className="fixed bottom-[136px] left-0 right-0 flex justify-center z-[60]">
                     <div className="max-w-md w-full px-4">
+                        {/* 적정 수면 가이드 */}
+                        {idealSchedule && (
+                            <div className="flex justify-center mb-2">
+                                <div className="bg-bg-secondary/80 backdrop-blur-sm border border-bg-tertiary px-3 py-1.5 rounded-full flex items-center gap-3 shadow-sm">
+                                    <div className="flex items-center gap-1.5 whitespace-nowrap">
+                                        <Moon size={12} className="text-indigo-400" />
+                                        <span className="text-[10px] text-text-secondary">적정 취침</span>
+                                        <span className="text-[11px] font-bold text-indigo-400">{idealSchedule.bedtime}</span>
+                                    </div>
+                                    <div className="w-[1px] h-2.5 bg-bg-tertiary" />
+                                    <div className="flex items-center gap-1.5 whitespace-nowrap">
+                                        <Sun size={12} className="text-amber-400" />
+                                        <span className="text-[10px] text-text-secondary">적정 기상</span>
+                                        <span className="text-[11px] font-bold text-amber-400">{idealSchedule.waketime}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                         <div className="flex gap-2 p-2 bg-bg-secondary rounded-lg border border-bg-tertiary shadow-lg justify-center">
                             <button
                                 type="button"
