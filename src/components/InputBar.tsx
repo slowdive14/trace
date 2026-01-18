@@ -318,6 +318,36 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
                 </div>
             )}
 
+            {/* 자동완성 드롭다운 - Fixed positioning above everything */}
+            {showAutocomplete && (
+                <div className="fixed bottom-[120px] left-0 right-0 flex justify-center z-[100] pointer-events-none">
+                    <div className="max-w-md w-full px-4 pointer-events-auto">
+                        <div
+                            ref={autocompleteRef}
+                            className="bg-bg-tertiary border border-bg-primary rounded-lg shadow-2xl max-h-64 overflow-y-auto"
+                        >
+                            {autocompleteEmotions.map((emotion, index) => (
+                                <button
+                                    key={emotion.tag}
+                                    onClick={() => selectAutocompleteEmotion(emotion.tag)}
+                                    className={`w-full text-left p-3 transition-colors border-b border-bg-primary last:border-b-0 ${index === selectedAutocompleteIndex
+                                        ? 'bg-accent text-white'
+                                        : 'hover:bg-bg-secondary'
+                                        }`}
+                                >
+                                    <div className={`font-medium text-sm ${index === selectedAutocompleteIndex ? 'text-white' : 'text-accent'}`}>
+                                        {emotion.tag}
+                                    </div>
+                                    <div className={`text-xs mt-1 ${index === selectedAutocompleteIndex ? 'text-white/80' : 'text-text-secondary'}`}>
+                                        {emotion.meaning}
+                                    </div>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* 책 태그 버튼 바 - Fixed positioning (only when not expanded) */}
             {activeCategory === 'book' && !isExpanded && (
                 <div className="fixed bottom-[136px] left-0 right-0 flex justify-center z-[60]">
@@ -367,32 +397,6 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
                     {!isDisplayDateToday && (
                         <div className="text-xs text-accent text-center">
                             📅 {format(displayDate, 'yyyy년 M월 d일')} 기록
-                        </div>
-                    )}
-
-                    {/* 자동완성 드롭다운 */}
-                    {showAutocomplete && (
-                        <div
-                            ref={autocompleteRef}
-                            className="absolute bottom-full left-0 right-0 mb-2 bg-bg-tertiary border border-bg-primary rounded-lg shadow-lg max-h-64 overflow-y-auto z-50"
-                        >
-                            {autocompleteEmotions.map((emotion, index) => (
-                                <button
-                                    key={emotion.tag}
-                                    onClick={() => selectAutocompleteEmotion(emotion.tag)}
-                                    className={`w-full text-left p-3 transition-colors border-b border-bg-primary last:border-b-0 ${index === selectedAutocompleteIndex
-                                        ? 'bg-accent text-white'
-                                        : 'hover:bg-bg-secondary'
-                                        }`}
-                                >
-                                    <div className={`font-medium text-sm ${index === selectedAutocompleteIndex ? 'text-white' : 'text-accent'}`}>
-                                        {emotion.tag}
-                                    </div>
-                                    <div className={`text-xs mt-1 ${index === selectedAutocompleteIndex ? 'text-white/80' : 'text-text-secondary'}`}>
-                                        {emotion.meaning}
-                                    </div>
-                                </button>
-                            ))}
                         </div>
                     )}
 

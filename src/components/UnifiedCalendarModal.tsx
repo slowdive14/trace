@@ -119,7 +119,7 @@ const UnifiedCalendarModal: React.FC<UnifiedCalendarModalProps> = ({ onClose, en
     const selectedMarkdown = selectedDate ? exportDailyMarkdown(selectedDate, entries, [], expenses, selectedTodo, worryEntries, worries) : '';
 
     return (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
+        <div className="fixed inset-0 bg-black/50 z-[200] flex items-center justify-center p-4" onClick={onClose}>
             <div className="bg-bg-secondary rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
                 <div className="flex justify-between items-center p-6 border-b border-bg-tertiary">
                     <h2 className="text-xl font-bold text-text-primary">📅 통합 캘린더</h2>
