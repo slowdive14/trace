@@ -89,7 +89,6 @@ const TodoTab: React.FC<TodoTabProps> = ({
     const [isSaving, setIsSaving] = useState(false);
     const [lastSaved, setLastSaved] = useState<Date | null>(null);
     const [currentLogicalDay, setCurrentLogicalDay] = useState(format(getLogicalDate(), 'yyyy-MM-dd'));
-    const [isInboxCollapsed, setIsInboxCollapsed] = useState(true);
 
     const { user } = useAuth();
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -499,40 +498,29 @@ const TodoTab: React.FC<TodoTabProps> = ({
                 ref={setNodeRef}
                 className={`h-full bg-bg-secondary/50 rounded-lg p-3 border border-bg-tertiary flex flex-col transition-colors ${isOver ? 'bg-accent/10 border-accent' : ''}`}
             >
-                <button
-                    onClick={() => setIsInboxCollapsed(!isInboxCollapsed)}
-                    className="flex items-center justify-between mb-2 w-full text-left hover:opacity-80 transition-opacity"
-                >
-                    <div className="flex items-center gap-2">
-                        <span className={`text-[10px] transition-transform ${isInboxCollapsed ? '' : 'rotate-90'}`}>▶</span>
-                        <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Inbox</span>
-                        {items.length > 0 && (
-                            <span className="text-[9px] bg-accent/20 text-accent px-1.5 py-0.5 rounded-full">{items.length}</span>
-                        )}
-                    </div>
+                <div className="flex items-center justify-between mb-2">
+                    <span className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Inbox</span>
                     <span className="text-[9px] text-text-tertiary">분류 전 할 일</span>
-                </button>
-                {!isInboxCollapsed && (
-                    <div className="flex-1 overflow-x-auto overflow-y-hidden pb-1" style={{ WebkitOverflowScrolling: 'touch' }}>
-                        <SortableContext
-                            items={items.map(t => t.lineIndex.toString())}
-                            strategy={verticalListSortingStrategy}
-                        >
-                            <div className="flex gap-2 h-full items-start">
-                                {items.map(item => (
-                                    <div key={item.lineIndex} className="w-32 flex-shrink-0">
-                                        <MatrixItem item={item} />
-                                    </div>
-                                ))}
-                                {items.length === 0 && !isOver && (
-                                    <div className="flex-1 self-stretch flex items-center justify-center border border-dashed border-bg-tertiary rounded opacity-30 min-w-[200px]">
-                                        <span className="text-[10px]">드래그하여 이쪽으로 옮길 수 있습니다</span>
-                                    </div>
-                                )}
-                            </div>
-                        </SortableContext>
-                    </div>
-                )}
+                </div>
+                <div className="flex-1 overflow-x-auto overflow-y-hidden pb-1" style={{ WebkitOverflowScrolling: 'touch' }}>
+                    <SortableContext
+                        items={items.map(t => t.lineIndex.toString())}
+                        strategy={verticalListSortingStrategy}
+                    >
+                        <div className="flex gap-2 h-full items-start">
+                            {items.map(item => (
+                                <div key={item.lineIndex} className="w-32 flex-shrink-0">
+                                    <MatrixItem item={item} />
+                                </div>
+                            ))}
+                            {items.length === 0 && !isOver && (
+                                <div className="flex-1 self-stretch flex items-center justify-center border border-dashed border-bg-tertiary rounded opacity-30 min-w-[200px]">
+                                    <span className="text-[10px]">드래그하여 이쪽으로 옮길 수 있습니다</span>
+                                </div>
+                            )}
+                        </div>
+                    </SortableContext>
+                </div>
             </div>
         );
     };

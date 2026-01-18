@@ -47,7 +47,7 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
     const [viewMode, setViewMode] = useState<'list' | 'matrix'>('list');
     const [activeId, setActiveId] = useState<string | null>(null);
     const [matrixSearch, setMatrixSearch] = useState('');
-    const [isInboxFolded, setIsInboxFolded] = useState(false);
+    const [isInboxFolded, setIsInboxFolded] = useState(true);
     const [showToast, setShowToast] = useState(false);
     const [currentLogicalDay, setCurrentLogicalDay] = useState(format(getLogicalDate(), 'yyyy-MM-dd'));
     const { user } = useAuth();
