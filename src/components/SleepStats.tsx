@@ -1,5 +1,7 @@
 import { useState, useMemo } from 'react';
-import { Moon, Sun, Clock, ChevronDown, Check, TrendingUp, TrendingDown, Minus, HelpCircle } from 'lucide-react';
+import { Moon, Sun, Clock, ChevronDown, ChevronLeft, ChevronRight, Check, TrendingUp, TrendingDown, Minus, HelpCircle } from 'lucide-react';
+import { startOfWeek, endOfWeek, format, subWeeks } from 'date-fns';
+import { ko } from 'date-fns/locale';
 import type { Entry } from '../types/types';
 import {
     extractSleepRecords,
@@ -34,13 +36,41 @@ function InfoTooltip({ content }: { content: React.ReactNode }) {
 }
 
 // 주간 바 차트 컴포넌트
-function WeeklyBarChart({ data }: { data: DailyBarData[] }) {
+function WeeklyBarChart({ data, weekOffset, onPrevWeek, onNextWeek }: { 
+    data: DailyBarData[]; 
+    weekOffset: number;
+    onPrevWeek: () => void;
+    onNextWeek: () => void;
+}) {
     const maxDuration = 9; // 9시간 기준 스케일
     const maxBarHeight = 60; // 바 최대 높이 (픽셀)
 
+    const weekStart = startOfWeek(subWeeks(new Date(), weekOffset), { weekStartsOn: 1 });
+    const weekEnd = endOfWeek(subWeeks(new Date(), weekOffset), { weekStartsOn: 1 });
+    const weekLabel = weekOffset === 0 
+        ? '이번 주' 
+        : weekOffset === 1 
+            ? '지난 주' 
+            : `${format(weekStart, 'M/d', { locale: ko })} ~ ${format(weekEnd, 'M/d', { locale: ko })}`;
+
     return (
         <div className="bg-bg-tertiary/50 rounded-lg p-3">
-            <div className="text-xs text-text-secondary mb-2">이번 주 수면</div>
+            <div className="flex items-center justify-between mb-2">
+                <button 
+                    onClick={onPrevWeek}
+                    className="p-1 text-text-secondary hover:text-text-primary transition-colors"
+                >
+                    <ChevronLeft size={16} />
+                </button>
+                <span className="text-xs text-text-secondary">{weekLabel} 수면</span>
+                <button 
+                    onClick={onNextWeek}
+                    disabled={weekOffset === 0}
+                    className={`p-1 transition-colors ${weekOffset === 0 ? 'text-text-tertiary cursor-not-allowed' : 'text-text-secondary hover:text-text-primary'}`}
+                >
+                    <ChevronRight size={16} />
+                </button>
+            </div>
 
             {/* 바 차트 */}
             <div className="flex items-end justify-between gap-1">
@@ -312,26 +342,38 @@ function AverageTimesSection({
 
 export function SleepStats({ entries }: Props) {
     const [isExpanded, setIsExpanded] = useState(false);
+    const [weekOffset, setWeekOffset] = useState(0);
+
+    const allRecords = useMemo(() => extractSleepRecords(entries), [entries]);
 
     const stats = useMemo(() => {
-        const allRecords = extractSleepRecords(entries);
         const recentRecords = getRecentRecords(allRecords, 7);
         const monthlyRecords = getRecentRecords(allRecords, 30);
-        const weeklyBar = getWeeklyBarData(allRecords);
+        
+        return {
+            avgDuration: getAverageDuration(recentRecords),
+            avgSleepTime: getAverageSleepTime(recentRecords),
+            avgWakeTime: getAverageWakeTime(recentRecords),
+            monthlyAvgSleepTime: getAverageSleepTime(monthlyRecords),
+            monthlyAvgWakeTime: getAverageWakeTime(monthlyRecords),
+            recordCount: recentRecords.length,
+        };
+    }, [allRecords]);
 
-        // 주간 비교 데이터 생성
-        const thisWeekData = getWeeklyRecords(allRecords, 0);
-        const lastWeekData = getWeeklyRecords(allRecords, 1);
+    const weeklyStats = useMemo(() => {
+        const weeklyBar = getWeeklyBarData(allRecords, weekOffset);
 
-        // 이번 주 점수 계산 시, 지난 주 데이터를 '맥락'으로 전달하여 일관성 점수 보정
-        const thisWeekScore = calculateSleepScore(thisWeekData.records, lastWeekData.records);
-        const lastWeekScore = calculateSleepScore(lastWeekData.records); // 지난 주는 그 전주 데이터까지 굳이 안 봐도 됨 (이미 완료된 주니까)
+        const currentWeekData = getWeeklyRecords(allRecords, weekOffset);
+        const prevWeekData = getWeeklyRecords(allRecords, weekOffset + 1);
 
-        const scoreDiff = thisWeekScore.total - lastWeekScore.total;
+        const currentWeekScore = calculateSleepScore(currentWeekData.records, prevWeekData.records);
+        const prevWeekScore = calculateSleepScore(prevWeekData.records);
+
+        const scoreDiff = currentWeekScore.total - prevWeekScore.total;
 
         let durationDiff: number | null = null;
-        if (thisWeekScore.details.avgDuration !== null && lastWeekScore.details.avgDuration !== null) {
-            durationDiff = thisWeekScore.details.avgDuration - lastWeekScore.details.avgDuration;
+        if (currentWeekScore.details.avgDuration !== null && prevWeekScore.details.avgDuration !== null) {
+            durationDiff = currentWeekScore.details.avgDuration - prevWeekScore.details.avgDuration;
         }
 
         let trend: 'improved' | 'declined' | 'stable' = 'stable';
@@ -339,33 +381,33 @@ export function SleepStats({ entries }: Props) {
         else if (scoreDiff < -5) trend = 'declined';
 
         const comparison: WeeklyComparison = {
-            thisWeek: thisWeekScore,
-            lastWeek: lastWeekScore,
+            thisWeek: currentWeekScore,
+            lastWeek: prevWeekScore,
             scoreDiff,
             durationDiff,
             trend
         };
 
-        const streak = checkWeeklyGoalStreak(allRecords);
+        const streak = checkWeeklyGoalStreak(allRecords, weekOffset);
 
         return {
             weeklyBar,
             comparison,
             streak,
-            avgDuration: getAverageDuration(recentRecords),
-            avgSleepTime: getAverageSleepTime(recentRecords),
-            avgWakeTime: getAverageWakeTime(recentRecords),
-            // 이번 달 평균
-            monthlyAvgSleepTime: getAverageSleepTime(monthlyRecords),
-            monthlyAvgWakeTime: getAverageWakeTime(monthlyRecords),
-            recordCount: recentRecords.length,
         };
-    }, [entries]);
+    }, [allRecords, weekOffset]);
 
     // 기록이 없으면 표시하지 않음
     if (stats.recordCount === 0) {
         return null;
     }
+
+    const weekStart = startOfWeek(subWeeks(new Date(), weekOffset), { weekStartsOn: 1 });
+    const weekLabel = weekOffset === 0 
+        ? '이번 주' 
+        : weekOffset === 1 
+            ? '지난 주' 
+            : `${format(weekStart, 'M/d', { locale: ko })} 주`;
 
     return (
         <div className="bg-bg-secondary rounded-xl overflow-hidden mb-4">
@@ -378,7 +420,7 @@ export function SleepStats({ entries }: Props) {
                     <Moon size={16} className="text-indigo-400" />
                     <span className="text-sm font-medium">수면</span>
                     <span className="text-xs text-text-secondary">
-                        이번 주 {stats.comparison.thisWeek.total}점
+                        {weekLabel} {weeklyStats.comparison.thisWeek.total}점
                     </span>
                     <span className="text-[10px] text-text-secondary">
                         · 월평균 {stats.monthlyAvgSleepTime || '--:--'}~{stats.monthlyAvgWakeTime || '--:--'}
@@ -393,9 +435,14 @@ export function SleepStats({ entries }: Props) {
             {/* 펼친 상태 */}
             {isExpanded && (
                 <div className="px-3 pb-4 space-y-3">
-                    <WeeklyBarChart data={stats.weeklyBar} />
-                    <ScoreSection score={stats.comparison.thisWeek} streak={stats.streak} />
-                    <ComparisonSection comparison={stats.comparison} />
+                    <WeeklyBarChart 
+                        data={weeklyStats.weeklyBar} 
+                        weekOffset={weekOffset}
+                        onPrevWeek={() => setWeekOffset(prev => prev + 1)}
+                        onNextWeek={() => setWeekOffset(prev => Math.max(0, prev - 1))}
+                    />
+                    <ScoreSection score={weeklyStats.comparison.thisWeek} streak={weeklyStats.streak} />
+                    <ComparisonSection comparison={weeklyStats.comparison} />
                     <AverageTimesSection
                         avgSleepTime={stats.avgSleepTime}
                         avgWakeTime={stats.avgWakeTime}

@@ -377,8 +377,8 @@ export interface DailyBarData {
 /**
  * 주간 바 차트 데이터 생성 (월~일)
  */
-export function getWeeklyBarData(records: SleepRecord[]): DailyBarData[] {
-    const weekData = getWeeklyRecords(records, 0);
+export function getWeeklyBarData(records: SleepRecord[], weekOffset: number = 0): DailyBarData[] {
+    const weekData = getWeeklyRecords(records, weekOffset);
     const days = ['월', '화', '수', '목', '금', '토', '일'];
 
     const result: DailyBarData[] = [];
@@ -424,8 +424,8 @@ export interface WeeklyStreak {
 /**
  * 주 5일 목표 달성 여부 체크
  */
-export function checkWeeklyGoalStreak(records: SleepRecord[]): WeeklyStreak {
-    const weekData = getWeeklyRecords(records, 0);
+export function checkWeeklyGoalStreak(records: SleepRecord[], weekOffset: number = 0): WeeklyStreak {
+    const weekData = getWeeklyRecords(records, weekOffset);
     const achievements = weekData.records.map(r => checkGoalAchievement(r));
 
     const sleepStreak = achievements.filter(a => a.sleepGoalMet).length;
