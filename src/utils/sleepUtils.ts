@@ -456,9 +456,10 @@ export function getIdealSleepSchedule(records: SleepRecord[]): IdealSchedule {
     // 기본값: 목표 시간
     let idealBedtimeMinutes = TARGET_BEDTIME;
 
-    const validRecentSleeps = records
-        .filter(r => r.sleepTime)
-        .slice(0, 10);
+    // 최근 7일 데이터만 사용 (UI의 "최근 7일 평균"과 일치)
+    const recentRecords = getRecentRecords(records, 7);
+    const validRecentSleeps = recentRecords
+        .filter(r => r.sleepTime);
 
     if (validRecentSleeps.length > 0) {
         const avgBedtimeMinutes = validRecentSleeps.reduce((sum, r) => sum + timeToMinutes(r.sleepTime!), 0) / validRecentSleeps.length;
