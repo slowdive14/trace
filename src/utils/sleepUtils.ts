@@ -451,7 +451,6 @@ export interface IdealSchedule {
  */
 export function getIdealSleepSchedule(records: SleepRecord[]): IdealSchedule {
     const TARGET_BEDTIME = 23 * 60; // 23:00
-    const SCORE_LIMIT_BEDTIME = 24 * 60; // 00:00 (이 이후는 기상 점수 감점 위험)
 
     // 기본값: 목표 시간
     let idealBedtimeMinutes = TARGET_BEDTIME;
@@ -464,20 +463,19 @@ export function getIdealSleepSchedule(records: SleepRecord[]): IdealSchedule {
     if (validRecentSleeps.length > 0) {
         const avgBedtimeMinutes = validRecentSleeps.reduce((sum, r) => sum + timeToMinutes(r.sleepTime!), 0) / validRecentSleeps.length;
 
-        // 점진적 Nudge 로직
+        // 점진적 Nudge 로직: 격차의 10%만 조정 (최소 5분, 최대 20분)
+        // 예: 00:22 취침 → 목표 23:00과 82분 차이 → 8분만 앞당김 → 00:14 권장
+        // 매주 꾸준히 지키면 자연스럽게 목표에 수렴
         if (avgBedtimeMinutes > TARGET_BEDTIME) {
-            // 목표보다 늦게 자는 경우
-            if (avgBedtimeMinutes > SCORE_LIMIT_BEDTIME) {
-                // 00:00를 넘겨서 자는 경우 (매우 늦음) -> 30분씩 당기기
-                // 단, 당긴 결과가 00:00보다 늦으면 그대로, 00:00 안쪽으로 들어오면 00:00으로 제한하진 않고 자연스럽게
-                idealBedtimeMinutes = avgBedtimeMinutes - 30;
-            } else {
-                // 23:00 ~ 00:00 사이인 경우 (비교적 양호) -> 15분씩 당기기
-                idealBedtimeMinutes = Math.max(TARGET_BEDTIME, avgBedtimeMinutes - 15);
-            }
+            // 목표보다 늦게 자는 경우 → 격차의 10%만 앞당기기
+            const gap = avgBedtimeMinutes - TARGET_BEDTIME;
+            const nudge = Math.min(20, Math.max(5, Math.round(gap * 0.1)));
+            idealBedtimeMinutes = avgBedtimeMinutes - nudge;
         } else {
-            // 목표보다 일찍 자는 경우 (23:00 이전) -> 15분씩 늦춰서 23:00에 맞춤
-            idealBedtimeMinutes = Math.min(TARGET_BEDTIME, avgBedtimeMinutes + 15);
+            // 목표보다 일찍 자는 경우 → 격차의 10%만 늦추기 (최대 23:00까지)
+            const gap = TARGET_BEDTIME - avgBedtimeMinutes;
+            const nudge = Math.min(20, Math.max(5, Math.round(gap * 0.1)));
+            idealBedtimeMinutes = Math.min(TARGET_BEDTIME, avgBedtimeMinutes + nudge);
         }
     }
 
