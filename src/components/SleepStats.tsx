@@ -15,7 +15,6 @@ import {
     checkWeeklyGoalStreak,
     type DailyBarData,
     type SleepScore,
-    type WeeklyComparison,
     type WeeklyStreak,
 } from '../utils/sleepUtils';
 
@@ -246,50 +245,74 @@ function ScoreSection({ score, streak }: { score: SleepScore; streak: WeeklyStre
 }
 
 // 주간 비교 컴포넌트
-function ComparisonSection({ comparison }: { comparison: WeeklyComparison }) {
-    const { thisWeek, lastWeek, scoreDiff, trend } = comparison;
+interface WeeklyTrendData {
+    label: string;
+    score: number;
+    isCurrentView: boolean;
+}
 
-    const trendIcon = trend === 'improved'
-        ? <TrendingUp size={14} className="text-green-400" />
-        : trend === 'declined'
-            ? <TrendingDown size={14} className="text-red-400" />
-            : <Minus size={14} className="text-text-secondary" />;
+function WeeklyTrendSection({ weeks }: { weeks: WeeklyTrendData[] }) {
+    const maxScore = Math.max(...weeks.map(w => w.score), 1);
+    const minScore = Math.min(...weeks.filter(w => w.score > 0).map(w => w.score), 0);
+    
+    const getBarHeight = (score: number) => {
+        if (score === 0) return 4;
+        const range = Math.max(maxScore - minScore, 20);
+        const normalized = (score - minScore) / range;
+        return Math.max(20, normalized * 60 + 20);
+    };
 
-    const trendColor = trend === 'improved'
-        ? 'text-green-400'
-        : trend === 'declined'
-            ? 'text-red-400'
-            : 'text-text-secondary';
+    const getScoreColor = (score: number) => {
+        if (score === 0) return 'bg-bg-tertiary';
+        if (score >= 70) return 'bg-green-500';
+        if (score >= 50) return 'bg-yellow-500';
+        return 'bg-red-400';
+    };
+
+    const currentIdx = weeks.findIndex(w => w.isCurrentView);
+    const prevIdx = currentIdx > 0 ? currentIdx - 1 : -1;
+    const scoreDiff = prevIdx >= 0 && weeks[prevIdx].score > 0 
+        ? weeks[currentIdx].score - weeks[prevIdx].score 
+        : null;
 
     return (
         <div className="bg-bg-tertiary/50 rounded-lg p-3">
-            <div className="text-xs text-text-secondary mb-2">주간 비교</div>
-
-            <div className="flex items-center justify-between">
-                {/* 지난 주 */}
-                <div className="text-center">
-                    <div className="text-[10px] text-text-secondary">지난 주</div>
-                    <div className="text-lg font-medium text-text-secondary">
-                        {lastWeek.total}점
+            <div className="text-xs text-text-secondary mb-3">4주 흐름</div>
+            
+            <div className="flex items-end justify-between gap-2 h-20">
+                {weeks.map((week, idx) => (
+                    <div key={idx} className="flex-1 flex flex-col items-center">
+                        <div 
+                            className="text-[10px] font-medium mb-1"
+                            style={{ color: week.score >= 70 ? '#22c55e' : week.score >= 50 ? '#eab308' : week.score > 0 ? '#f87171' : '#6b7280' }}
+                        >
+                            {week.score > 0 ? week.score : '-'}
+                        </div>
+                        <div 
+                            className={`w-full rounded-t transition-all ${getScoreColor(week.score)} ${week.isCurrentView ? 'ring-2 ring-indigo-400 ring-offset-1 ring-offset-bg-tertiary' : ''}`}
+                            style={{ height: getBarHeight(week.score) }}
+                        />
+                        <div className={`text-[10px] mt-1 ${week.isCurrentView ? 'text-indigo-400 font-medium' : 'text-text-secondary'}`}>
+                            {week.label}
+                        </div>
                     </div>
-                </div>
+                ))}
+            </div>
 
-                {/* 화살표 & 차이 */}
-                <div className="flex flex-col items-center">
-                    {trendIcon}
-                    <span className={`text-xs font-medium ${trendColor}`}>
-                        {scoreDiff > 0 ? '+' : ''}{scoreDiff}점
+            {scoreDiff !== null && (
+                <div className="flex items-center justify-center gap-1 mt-2 pt-2 border-t border-bg-tertiary">
+                    {scoreDiff > 0 ? (
+                        <TrendingUp size={12} className="text-green-400" />
+                    ) : scoreDiff < 0 ? (
+                        <TrendingDown size={12} className="text-red-400" />
+                    ) : (
+                        <Minus size={12} className="text-text-secondary" />
+                    )}
+                    <span className={`text-xs ${scoreDiff > 0 ? 'text-green-400' : scoreDiff < 0 ? 'text-red-400' : 'text-text-secondary'}`}>
+                        지난주 대비 {scoreDiff > 0 ? '+' : ''}{scoreDiff}점
                     </span>
                 </div>
-
-                {/* 이번 주 */}
-                <div className="text-center">
-                    <div className="text-[10px] text-text-secondary">이번 주</div>
-                    <div className="text-lg font-bold text-text-primary">
-                        {thisWeek.total}점
-                    </div>
-                </div>
-            </div>
+            )}
         </div>
     );
 }
@@ -363,36 +386,45 @@ export function SleepStats({ entries }: Props) {
     const weeklyStats = useMemo(() => {
         const weeklyBar = getWeeklyBarData(allRecords, weekOffset);
 
-        const currentWeekData = getWeeklyRecords(allRecords, weekOffset);
-        const prevWeekData = getWeeklyRecords(allRecords, weekOffset + 1);
-
-        const currentWeekScore = calculateSleepScore(currentWeekData.records, prevWeekData.records);
-        const prevWeekScore = calculateSleepScore(prevWeekData.records);
-
-        const scoreDiff = currentWeekScore.total - prevWeekScore.total;
-
-        let durationDiff: number | null = null;
-        if (currentWeekScore.details.avgDuration !== null && prevWeekScore.details.avgDuration !== null) {
-            durationDiff = currentWeekScore.details.avgDuration - prevWeekScore.details.avgDuration;
+        // 4주 데이터 계산 (현재 보고 있는 주 기준 ±1~2주)
+        const weeksToShow = 4;
+        const weekScores: WeeklyTrendData[] = [];
+        
+        let currentWeekFullScore: ReturnType<typeof calculateSleepScore> | null = null;
+        
+        for (let i = weeksToShow - 1; i >= 0; i--) {
+            const offset = weekOffset + i;
+            const weekData = getWeeklyRecords(allRecords, offset);
+            const contextData = getWeeklyRecords(allRecords, offset + 1);
+            const score = calculateSleepScore(weekData.records, contextData.records);
+            
+            if (i === 0) {
+                currentWeekFullScore = score;
+            }
+            
+            const weekStartDate = startOfWeek(subWeeks(new Date(), offset), { weekStartsOn: 1 });
+            let label: string;
+            if (offset === 0) {
+                label = '이번주';
+            } else if (offset === 1) {
+                label = '지난주';
+            } else {
+                label = format(weekStartDate, 'M/d', { locale: ko });
+            }
+            
+            weekScores.push({
+                label,
+                score: score.total,
+                isCurrentView: i === 0
+            });
         }
-
-        let trend: 'improved' | 'declined' | 'stable' = 'stable';
-        if (scoreDiff > 5) trend = 'improved';
-        else if (scoreDiff < -5) trend = 'declined';
-
-        const comparison: WeeklyComparison = {
-            thisWeek: currentWeekScore,
-            lastWeek: prevWeekScore,
-            scoreDiff,
-            durationDiff,
-            trend
-        };
 
         const streak = checkWeeklyGoalStreak(allRecords, weekOffset);
 
         return {
             weeklyBar,
-            comparison,
+            weekScores,
+            currentScore: currentWeekFullScore!,
             streak,
         };
     }, [allRecords, weekOffset]);
@@ -420,7 +452,7 @@ export function SleepStats({ entries }: Props) {
                     <Moon size={16} className="text-indigo-400" />
                     <span className="text-sm font-medium">수면</span>
                     <span className="text-xs text-text-secondary">
-                        {weekLabel} {weeklyStats.comparison.thisWeek.total}점
+                        {weekLabel} {weeklyStats.currentScore.total}점
                     </span>
                     <span className="text-[10px] text-text-secondary">
                         · 월평균 {stats.monthlyAvgSleepTime || '--:--'}~{stats.monthlyAvgWakeTime || '--:--'}
@@ -441,8 +473,8 @@ export function SleepStats({ entries }: Props) {
                         onPrevWeek={() => setWeekOffset(prev => prev + 1)}
                         onNextWeek={() => setWeekOffset(prev => Math.max(0, prev - 1))}
                     />
-                    <ScoreSection score={weeklyStats.comparison.thisWeek} streak={weeklyStats.streak} />
-                    <ComparisonSection comparison={weeklyStats.comparison} />
+                    <ScoreSection score={weeklyStats.currentScore} streak={weeklyStats.streak} />
+                    <WeeklyTrendSection weeks={weeklyStats.weekScores} />
                     <AverageTimesSection
                         avgSleepTime={stats.avgSleepTime}
                         avgWakeTime={stats.avgWakeTime}

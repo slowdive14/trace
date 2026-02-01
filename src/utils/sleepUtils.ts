@@ -347,9 +347,10 @@ export interface WeeklyComparison {
 export function compareWeeks(records: SleepRecord[]): WeeklyComparison {
     const thisWeekData = getWeeklyRecords(records, 0);
     const lastWeekData = getWeeklyRecords(records, 1);
+    const prevLastWeekData = getWeeklyRecords(records, 2);
 
-    const thisWeek = calculateSleepScore(thisWeekData.records);
-    const lastWeek = calculateSleepScore(lastWeekData.records);
+    const thisWeek = calculateSleepScore(thisWeekData.records, lastWeekData.records);
+    const lastWeek = calculateSleepScore(lastWeekData.records, prevLastWeekData.records);
 
     const scoreDiff = thisWeek.total - lastWeek.total;
 
