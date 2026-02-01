@@ -252,21 +252,22 @@ interface WeeklyTrendData {
 }
 
 function WeeklyTrendSection({ weeks }: { weeks: WeeklyTrendData[] }) {
-    const maxScore = Math.max(...weeks.map(w => w.score), 1);
-    const minScore = Math.min(...weeks.filter(w => w.score > 0).map(w => w.score), 0);
+    const validScores = weeks.filter(w => w.score > 0).map(w => w.score);
+    const maxScore = Math.max(...validScores, 100);
+    const minScore = Math.min(...validScores, 0);
+    const range = Math.max(maxScore - minScore, 30);
     
-    const getBarHeight = (score: number) => {
-        if (score === 0) return 4;
-        const range = Math.max(maxScore - minScore, 20);
+    const getYPosition = (score: number) => {
+        if (score === 0) return 85;
         const normalized = (score - minScore) / range;
-        return Math.max(20, normalized * 60 + 20);
+        return 85 - (normalized * 50);
     };
 
     const getScoreColor = (score: number) => {
-        if (score === 0) return 'bg-bg-tertiary';
-        if (score >= 70) return 'bg-green-500';
-        if (score >= 50) return 'bg-yellow-500';
-        return 'bg-red-400';
+        if (score === 0) return '#4b5563';
+        if (score >= 70) return '#34d399';
+        if (score >= 50) return '#fbbf24';
+        return '#f87171';
     };
 
     const currentIdx = weeks.findIndex(w => w.isCurrentView);
@@ -275,40 +276,114 @@ function WeeklyTrendSection({ weeks }: { weeks: WeeklyTrendData[] }) {
         ? weeks[currentIdx].score - weeks[prevIdx].score 
         : null;
 
+    const points = weeks.map((week, idx) => ({
+        x: 12.5 + idx * 25,
+        y: getYPosition(week.score),
+        score: week.score,
+        color: getScoreColor(week.score),
+        isCurrentView: week.isCurrentView,
+        label: week.label
+    }));
+
+    const linePath = points
+        .filter(p => p.score > 0)
+        .map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`)
+        .join(' ');
+
     return (
-        <div className="bg-bg-tertiary/50 rounded-lg p-3">
-            <div className="text-xs text-text-secondary mb-3">4주 흐름</div>
+        <div className="bg-bg-tertiary/30 rounded-xl p-4">
+            <div className="text-[11px] text-text-secondary/70 mb-2 font-medium">4주 흐름</div>
             
-            <div className="flex items-end justify-between gap-2 h-20">
-                {weeks.map((week, idx) => (
-                    <div key={idx} className="flex-1 flex flex-col items-center">
-                        <div 
-                            className="text-[10px] font-medium mb-1"
-                            style={{ color: week.score >= 70 ? '#22c55e' : week.score >= 50 ? '#eab308' : week.score > 0 ? '#f87171' : '#6b7280' }}
-                        >
-                            {week.score > 0 ? week.score : '-'}
-                        </div>
-                        <div 
-                            className={`w-full rounded-t transition-all ${getScoreColor(week.score)} ${week.isCurrentView ? 'ring-2 ring-indigo-400 ring-offset-1 ring-offset-bg-tertiary' : ''}`}
-                            style={{ height: getBarHeight(week.score) }}
+            <div className="relative h-24">
+                <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+                    <defs>
+                        <linearGradient id="lineGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                            <stop offset="0%" stopColor="#818cf8" stopOpacity="0.3" />
+                            <stop offset="100%" stopColor="#818cf8" stopOpacity="0.8" />
+                        </linearGradient>
+                        <filter id="glow">
+                            <feGaussianBlur stdDeviation="1.5" result="coloredBlur"/>
+                            <feMerge>
+                                <feMergeNode in="coloredBlur"/>
+                                <feMergeNode in="SourceGraphic"/>
+                            </feMerge>
+                        </filter>
+                    </defs>
+                    
+                    {linePath && (
+                        <path
+                            d={linePath}
+                            fill="none"
+                            stroke="url(#lineGradient)"
+                            strokeWidth="1.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
                         />
-                        <div className={`text-[10px] mt-1 ${week.isCurrentView ? 'text-indigo-400 font-medium' : 'text-text-secondary'}`}>
-                            {week.label}
+                    )}
+                    
+                    {points.map((point, idx) => (
+                        <g key={idx}>
+                            {point.score > 0 && (
+                                <>
+                                    <circle
+                                        cx={point.x}
+                                        cy={point.y}
+                                        r={point.isCurrentView ? 4 : 2.5}
+                                        fill={point.color}
+                                        filter={point.isCurrentView ? "url(#glow)" : undefined}
+                                        className="transition-all duration-300"
+                                    />
+                                    {point.isCurrentView && (
+                                        <circle
+                                            cx={point.x}
+                                            cy={point.y}
+                                            r="6"
+                                            fill="none"
+                                            stroke={point.color}
+                                            strokeWidth="1"
+                                            opacity="0.4"
+                                        />
+                                    )}
+                                </>
+                            )}
+                        </g>
+                    ))}
+                </svg>
+                
+                <div className="absolute inset-x-0 top-0 flex justify-between px-1">
+                    {points.map((point, idx) => (
+                        <div key={idx} className="flex-1 text-center">
+                            <span 
+                                className={`text-[11px] font-semibold ${point.isCurrentView ? 'text-indigo-300' : ''}`}
+                                style={{ color: point.isCurrentView ? undefined : point.color }}
+                            >
+                                {point.score > 0 ? point.score : '-'}
+                            </span>
                         </div>
-                    </div>
-                ))}
+                    ))}
+                </div>
+                
+                <div className="absolute inset-x-0 bottom-0 flex justify-between px-1">
+                    {points.map((point, idx) => (
+                        <div key={idx} className="flex-1 text-center">
+                            <span className={`text-[10px] ${point.isCurrentView ? 'text-indigo-400 font-medium' : 'text-text-secondary/60'}`}>
+                                {point.label}
+                            </span>
+                        </div>
+                    ))}
+                </div>
             </div>
 
             {scoreDiff !== null && (
-                <div className="flex items-center justify-center gap-1 mt-2 pt-2 border-t border-bg-tertiary">
+                <div className="flex items-center justify-center gap-1.5 mt-1 pt-2 border-t border-white/5">
                     {scoreDiff > 0 ? (
-                        <TrendingUp size={12} className="text-green-400" />
+                        <TrendingUp size={11} className="text-emerald-400" />
                     ) : scoreDiff < 0 ? (
-                        <TrendingDown size={12} className="text-red-400" />
+                        <TrendingDown size={11} className="text-red-400" />
                     ) : (
-                        <Minus size={12} className="text-text-secondary" />
+                        <Minus size={11} className="text-text-secondary/50" />
                     )}
-                    <span className={`text-xs ${scoreDiff > 0 ? 'text-green-400' : scoreDiff < 0 ? 'text-red-400' : 'text-text-secondary'}`}>
+                    <span className={`text-[11px] font-medium ${scoreDiff > 0 ? 'text-emerald-400' : scoreDiff < 0 ? 'text-red-400' : 'text-text-secondary/50'}`}>
                         지난주 대비 {scoreDiff > 0 ? '+' : ''}{scoreDiff}점
                     </span>
                 </div>
