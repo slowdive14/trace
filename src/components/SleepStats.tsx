@@ -247,6 +247,7 @@ function ScoreSection({ score, streak }: { score: SleepScore; streak: WeeklyStre
 // 주간 비교 컴포넌트
 interface WeeklyTrendData {
     label: string;
+    dateRange: string;
     score: number;
     isCurrentView: boolean;
 }
@@ -282,7 +283,8 @@ function WeeklyTrendSection({ weeks }: { weeks: WeeklyTrendData[] }) {
         score: week.score,
         color: getScoreColor(week.score),
         isCurrentView: week.isCurrentView,
-        label: week.label
+        label: week.label,
+        dateRange: week.dateRange
     }));
 
     const linePath = points
@@ -294,7 +296,7 @@ function WeeklyTrendSection({ weeks }: { weeks: WeeklyTrendData[] }) {
         <div className="bg-bg-tertiary/30 rounded-xl p-4">
             <div className="text-[11px] text-text-secondary/70 mb-2 font-medium">4주 흐름</div>
             
-            <div className="relative h-24">
+            <div className="relative h-28">
                 <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
                     <defs>
                         <linearGradient id="lineGradient" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -366,9 +368,12 @@ function WeeklyTrendSection({ weeks }: { weeks: WeeklyTrendData[] }) {
                 <div className="absolute inset-x-0 bottom-0 flex justify-between px-1">
                     {points.map((point, idx) => (
                         <div key={idx} className="flex-1 text-center">
-                            <span className={`text-[10px] ${point.isCurrentView ? 'text-indigo-400 font-medium' : 'text-text-secondary/60'}`}>
+                            <div className={`text-[10px] ${point.isCurrentView ? 'text-indigo-400 font-medium' : 'text-text-secondary/60'}`}>
                                 {point.label}
-                            </span>
+                            </div>
+                            <div className="text-[8px] text-text-secondary/40">
+                                {point.dateRange}
+                            </div>
                         </div>
                     ))}
                 </div>
@@ -478,6 +483,7 @@ export function SleepStats({ entries }: Props) {
             }
             
             const weekStartDate = startOfWeek(subWeeks(new Date(), offset), { weekStartsOn: 1 });
+            const weekEndDate = endOfWeek(subWeeks(new Date(), offset), { weekStartsOn: 1 });
             let label: string;
             if (offset === 0) {
                 label = '이번주';
@@ -487,8 +493,11 @@ export function SleepStats({ entries }: Props) {
                 label = format(weekStartDate, 'M/d', { locale: ko });
             }
             
+            const dateRange = `${format(weekStartDate, 'M/d', { locale: ko })}~${format(weekEndDate, 'M/d', { locale: ko })}`;
+            
             weekScores.push({
                 label,
+                dateRange,
                 score: score.total,
                 isCurrentView: i === 0
             });
