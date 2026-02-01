@@ -372,6 +372,26 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
                 </div>
             )}
 
+            {/* 할일/정보 태그 버튼 바 - Fixed positioning (only when not expanded) */}
+            {activeCategory === 'chore' && !isExpanded && (
+                <div className="fixed bottom-[136px] left-0 right-0 flex justify-center z-[60]">
+                    <div className="max-w-md w-full px-4">
+                        <div className="flex gap-2 flex-wrap p-2 bg-bg-secondary rounded-lg border border-bg-tertiary shadow-lg">
+                            {['#q1', '#q2', '#q3', '#q4'].map((tag) => (
+                                <button
+                                    key={tag}
+                                    type="button"
+                                    onClick={() => insertBookTag(tag)}
+                                    className="py-1.5 px-3 text-xs font-medium rounded-md bg-orange-500 text-white hover:bg-orange-600 transition-colors"
+                                >
+                                    {tag}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <div className={`fixed bottom-0 left-0 right-0 bg-bg-secondary border-t border-bg-tertiary p-3 transition-all duration-300 ${isExpanded ? 'h-1/2 z-50' : 'h-auto z-40'}`}>
                 <div className="max-w-md mx-auto flex flex-col h-full gap-2 relative">
                     {/* 확장 모드에서 책 태그 버튼 바를 InputBar 상단에 표시 */}
@@ -391,6 +411,22 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
                             >
                                 #읽을책
                             </button>
+                        </div>
+                    )}
+
+                    {/* 확장 모드에서 할일/정보 태그 버튼 바를 InputBar 상단에 표시 */}
+                    {activeCategory === 'chore' && isExpanded && (
+                        <div className="flex gap-2 flex-wrap p-2 bg-bg-tertiary rounded-lg border-b border-bg-primary">
+                            {['#q1', '#q2', '#q3', '#q4'].map((tag) => (
+                                <button
+                                    key={tag}
+                                    type="button"
+                                    onClick={() => insertBookTag(tag)}
+                                    className="py-1.5 px-3 text-xs font-medium rounded-md bg-orange-500 text-white hover:bg-orange-600 transition-colors"
+                                >
+                                    {tag}
+                                </button>
+                            ))}
                         </div>
                     )}
 
