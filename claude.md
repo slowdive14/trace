@@ -2,17 +2,6 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## ⚠️ 환경 주의사항 (Windows PowerShell)
-
-**중요**: 이 프로젝트는 Windows PowerShell 환경에서 실행됩니다.
-
-- **명령어 체이닝 금지**: `&&`, `;`, `&` 연산자를 사용하지 마세요. PowerShell에서 지원하지 않습니다.
-- **명령어는 항상 개별 실행**: `git add -A` 후 별도로 `git commit -m "..."` 실행
-- **Git 작업 순서**: 
-  1. `git add -A`
-  2. `git commit -m "메시지"`
-  3. `git push`
-
 # Serein: AI 기반 지능형 일상 기록 & 가계부 관리
 
 ## 🔧 개발 명령어

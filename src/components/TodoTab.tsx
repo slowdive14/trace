@@ -40,9 +40,85 @@ interface TodoItem {
     indent: number;
     lineIndex: number;
     quadrant: 'q1' | 'q2' | 'q3' | 'q4' | 'inbox';
+    weight: number;
+}
+
+interface TodoNode {
+    item: TodoItem;
+    children: TodoNode[];
+    weight: number;
 }
 
 type ViewMode = 'edit' | 'history' | 'template' | 'matrix';
+
+const isHighlighted = (text: string): boolean => {
+    return /==.*==/.test(text);
+};
+
+const buildTaskTree = (items: TodoItem[]): TodoNode[] => {
+    const rootNodes: TodoNode[] = [];
+    const levelStack: { node: TodoNode; indent: number }[] = [];
+
+    items.forEach(item => {
+        const node: TodoNode = {
+            item,
+            children: [],
+            weight: item.weight
+        };
+
+        while (levelStack.length > 0 && levelStack[levelStack.length - 1].indent >= item.indent) {
+            levelStack.pop();
+        }
+
+        if (levelStack.length === 0) {
+            rootNodes.push(node);
+        } else {
+            levelStack[levelStack.length - 1].node.children.push(node);
+        }
+
+        levelStack.push({ node, indent: item.indent });
+    });
+
+    return rootNodes;
+};
+
+const calculateWeightedCompletion = (node: TodoNode, parentWeight: number): { weight: number; completedWeight: number } => {
+    if (node.children.length === 0) {
+        return {
+            weight: parentWeight,
+            completedWeight: node.item.checked ? parentWeight : 0
+        };
+    }
+
+    const childWeight = parentWeight / node.children.length;
+    let totalCompletedWeight = 0;
+
+    node.children.forEach(child => {
+        const result = calculateWeightedCompletion(child, childWeight * (child.weight / node.weight || 1));
+        totalCompletedWeight += result.completedWeight;
+    });
+
+    return {
+        weight: parentWeight,
+        completedWeight: totalCompletedWeight
+    };
+};
+
+const calculateTotalWeightedRate = (items: TodoItem[]): number => {
+    if (items.length === 0) return 0;
+
+    const rootNodes = buildTaskTree(items);
+    let totalWeight = 0;
+    let totalCompletedWeight = 0;
+
+    rootNodes.forEach(node => {
+        const result = calculateWeightedCompletion(node, node.weight);
+        totalWeight += result.weight;
+        totalCompletedWeight += result.completedWeight;
+    });
+
+    return totalWeight > 0 ? Math.round((totalCompletedWeight / totalWeight) * 100) : 0;
+};
 
 // 레벨 시스템 (귀여운 사자 테마)
 const getLevelInfo = (percentage: number): { level: number; title: string } => {
@@ -204,17 +280,23 @@ const TodoTab: React.FC<TodoTabProps> = ({
             let completed = 0;
             let total = 0;
 
+            let weightedPercentageSum = 0;
+            let dayCount = 0;
+
             todosInRange.forEach(todo => {
                 const todoDateStr = format(new Date(todo.date), 'yyyy-MM-dd');
-                // Use current content for today (real-time update)
                 const todoContent = todoDateStr === todayStr ? content : todo.content;
                 const items = parseTodos(todoContent);
+                if (items.length > 0) {
+                    weightedPercentageSum += calculateTotalWeightedRate(items);
+                    dayCount++;
+                }
                 completed += items.filter(item => item.checked).length;
                 total += items.length;
             });
 
             return {
-                avgPercentage: total > 0 ? Math.round((completed / total) * 100) : 0,
+                avgPercentage: dayCount > 0 ? Math.round(weightedPercentageSum / dayCount) : 0,
                 totalCompleted: completed
             };
         };
@@ -322,7 +404,8 @@ const TodoTab: React.FC<TodoTabProps> = ({
                     text: cleanText,
                     indent,
                     lineIndex: index,
-                    quadrant
+                    quadrant,
+                    weight: isHighlighted(rawText) ? 2 : 1
                 });
             }
         });
@@ -835,7 +918,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                 {todos.length > 0 && (() => {
                                     const completed = todos.filter(t => t.checked).length;
                                     const total = todos.length;
-                                    const percentage = Math.round((completed / total) * 100);
+                                    const percentage = calculateTotalWeightedRate(todos);
                                     const levelInfo = getLevelInfo(percentage);
                                     const message = getEncouragementMessage(percentage);
                                     const progressColor = getProgressColor(percentage);
