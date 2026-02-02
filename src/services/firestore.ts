@@ -257,6 +257,27 @@ export const getTodos = async (userId: string, startDate: Date, endDate: Date, c
     }
 };
 
+export const getAllTodos = async (userId: string, collectionName: string = 'todos') => {
+    try {
+        const q = query(
+            collection(db, `users/${userId}/${collectionName}`),
+            orderBy("date", "desc")
+        );
+
+        const querySnapshot = await getDocs(q);
+        return querySnapshot.docs
+            .filter(doc => doc.id !== 'template_default')
+            .map(doc => ({
+                id: doc.id,
+                ...doc.data(),
+                date: doc.data().date.toDate(),
+            })) as Todo[];
+    } catch (e) {
+        console.error("Error getting all todos: ", e);
+        throw e;
+    }
+};
+
 export const saveTemplate = async (userId: string, content: string, collectionName: string = 'todos') => {
     try {
         const docRef = doc(db, `users/${userId}/${collectionName}`, 'template_default');

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from './AuthContext';
-import { saveTodo, getTodo, getTodos, saveTemplate, getTemplate } from '../services/firestore';
+import { saveTodo, getTodo, getTodos, getAllTodos, saveTemplate, getTemplate } from '../services/firestore';
 import { CheckSquare, Square, Bold, Highlighter, ArrowRight, ArrowLeft, Edit3, Check } from 'lucide-react';
 import { format, subDays, startOfDay, endOfDay, startOfWeek, endOfWeek } from 'date-fns';
 import { ko } from 'date-fns/locale';
@@ -86,6 +86,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
     const [isEditing, setIsEditing] = useState(false);
     const [viewMode, setViewMode] = useState<ViewMode>('edit');
     const [historyTodos, setHistoryTodos] = useState<Todo[]>([]);
+    const [allTodos, setAllTodos] = useState<Todo[]>([]);
     const [isSaving, setIsSaving] = useState(false);
     const [lastSaved, setLastSaved] = useState<Date | null>(null);
     const [currentLogicalDay, setCurrentLogicalDay] = useState(format(getLogicalDate(), 'yyyy-MM-dd'));
@@ -167,6 +168,20 @@ const TodoTab: React.FC<TodoTabProps> = ({
         loadHistory();
     }, [user, viewMode, collectionName, currentLogicalDay]);
 
+    // Load all todos for level calculation (all time)
+    useEffect(() => {
+        const loadAllTodos = async () => {
+            if (!user) return;
+            try {
+                const todos = await getAllTodos(user.uid, collectionName);
+                setAllTodos(todos);
+            } catch (error) {
+                console.error("Failed to load all todos:", error);
+            }
+        };
+        loadAllTodos();
+    }, [user, collectionName, currentLogicalDay]);
+
     // Calculate weekly stats (Korean week: Monday start)
     const calculateWeeklyStats = () => {
         const logicalToday = getLogicalDate();
@@ -216,7 +231,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
         const todayStr = format(logicalToday, 'yyyy-MM-dd');
 
         let total = 0;
-        historyTodos.forEach(todo => {
+        allTodos.forEach(todo => {
             const todoDateStr = format(new Date(todo.date), 'yyyy-MM-dd');
             // Use current content for today (real-time update)
             const todoContent = todoDateStr === todayStr ? content : todo.content;
