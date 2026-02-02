@@ -90,12 +90,11 @@ const calculateWeightedCompletion = (node: TodoNode, parentWeight: number): { we
         };
     }
 
-    const totalChildWeight = node.children.reduce((sum, child) => sum + child.weight, 0);
+    const childWeight = parentWeight / node.children.length;
     let totalCompletedWeight = 0;
 
     node.children.forEach(child => {
-        const childShare = (child.weight / totalChildWeight) * parentWeight;
-        const result = calculateWeightedCompletion(child, childShare);
+        const result = calculateWeightedCompletion(child, childWeight);
         totalCompletedWeight += result.completedWeight;
     });
 
