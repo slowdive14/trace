@@ -8,10 +8,12 @@ import { useAuth } from './AuthContext';
 import EntryItem from './EntryItem';
 import { onSnapshot, collection, query, orderBy } from 'firebase/firestore';
 import { db } from '../services/firebase';
-import { Share, Check, Pin, LayoutGrid, List, ChevronDown, ChevronUp, Copy } from 'lucide-react';
+import { Share, Pin, LayoutGrid, List, ChevronDown, ChevronUp, Copy } from 'lucide-react';
 import { generateMarkdown, generateMatrixMarkdown, copyToClipboard } from '../utils/exportUtils';
 import { getLogicalDate } from '../utils/dateUtils';
 import { SleepStats } from './SleepStats';
+import Toast from './common/Toast';
+import { useToast } from '../hooks/useToast';
 import {
     DndContext,
     closestCenter,
@@ -48,11 +50,12 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
     const [activeId, setActiveId] = useState<string | null>(null);
     const [matrixSearch, setMatrixSearch] = useState('');
     const [isInboxFolded, setIsInboxFolded] = useState(true);
-    const [showToast, setShowToast] = useState(false);
     const [currentLogicalDay, setCurrentLogicalDay] = useState(format(getLogicalDate(), 'yyyy-MM-dd'));
+    const toast = useToast();
     const { user } = useAuth();
     const [loadMoreNode, setLoadMoreNode] = useState<HTMLDivElement | null>(null);
     const isFirstLoadRef = useRef<Record<string, boolean>>({});
+    const prevEntriesLengthRef = useRef<number>(0);
 
     // Auto-refresh when logical day changes (5AM cutoff)
     useEffect(() => {
@@ -93,16 +96,17 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
             })) as Entry[];
 
             // Scroll to top when new entries are added (but not on initial load for this collection)
-            if (!isFirstLoadRef.current[collectionKey] && newEntries.length > allEntries.length) {
+            if (!isFirstLoadRef.current[collectionKey] && newEntries.length > prevEntriesLengthRef.current) {
                 window.scrollTo({ top: 0, behavior: 'smooth' });
             }
 
+            prevEntriesLengthRef.current = newEntries.length;
             setAllEntries(newEntries);
             isFirstLoadRef.current[collectionKey] = false;
         });
 
         return () => unsubscribe();
-    }, [user, collectionName, allEntries.length]);
+    }, [user, collectionName]);
 
     // Infinite scroll observer - uses callback ref pattern for dynamic elements
     useEffect(() => {
@@ -396,8 +400,7 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
         const markdown = generateMarkdown(allEntries, date);
         const success = await copyToClipboard(markdown);
         if (success) {
-            setShowToast(true);
-            setTimeout(() => setShowToast(false), 2000);
+            toast.show();
         }
     };
 
@@ -405,8 +408,7 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
         const markdown = generateMatrixMarkdown(matrixEntries, quadrantConfig);
         const success = await copyToClipboard(markdown);
         if (success) {
-            setShowToast(true);
-            setTimeout(() => setShowToast(false), 2000);
+            toast.show();
         }
     };
 
@@ -489,12 +491,7 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
     return (
         <>
             {/* Toast Notification */}
-            {showToast && (
-                <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-accent text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 animate-fade-in">
-                    <Check size={16} />
-                    <span className="text-sm font-medium">복사 완료!</span>
-                </div>
-            )}
+            <Toast message="복사 완료!" isVisible={toast.isVisible} />
 
             {/* Header: Date Filter & View Toggle */}
             <div className="sticky top-0 bg-bg-primary/95 backdrop-blur border-b border-bg-tertiary z-20 px-4 py-3">
@@ -720,7 +717,7 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
                             <DroppableInbox items={matrixEntries.filter(e => getQuadrantFromEntry(e) === 'inbox')} />
 
                             <DragOverlay adjustScale={true}>
-                                {activeId ? (
+                                {activeId && matrixEntries.find(e => e.id === activeId) ? (
                                     <MatrixItemUI
                                         entry={matrixEntries.find(e => e.id === activeId)!}
                                         isOverlay

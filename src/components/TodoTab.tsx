@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useAuth } from './AuthContext';
 import { saveTodo, getTodo, getTodos, getAllTodos, saveTemplate, getTemplate } from '../services/firestore';
 import { CheckSquare, Square, Bold, Highlighter, ArrowRight, ArrowLeft, Edit3, Check } from 'lucide-react';
@@ -6,6 +6,15 @@ import { format, subDays, startOfDay, endOfDay, startOfWeek, endOfWeek } from 'd
 import { ko } from 'date-fns/locale';
 import type { Todo } from '../types/types';
 import { getLogicalDate } from '../utils/dateUtils';
+import {
+    type TodoItem,
+    parseTodos,
+    calculateTotalWeightedRate,
+    getLevelInfo,
+    getEncouragementMessage,
+    getProgressColor,
+    getRealLevel
+} from '../utils/todoUtils';
 import {
     DndContext,
     closestCenter,
@@ -34,119 +43,7 @@ interface TodoTabProps {
     };
 }
 
-interface TodoItem {
-    checked: boolean;
-    text: string;
-    indent: number;
-    lineIndex: number;
-    quadrant: 'q1' | 'q2' | 'q3' | 'q4' | 'inbox';
-    weight: number;
-}
-
-interface TodoNode {
-    item: TodoItem;
-    children: TodoNode[];
-    weight: number;
-}
-
 type ViewMode = 'edit' | 'history' | 'template' | 'matrix';
-
-const isHighlighted = (text: string): boolean => {
-    return /==.*==/.test(text);
-};
-
-const buildTaskTree = (items: TodoItem[]): TodoNode[] => {
-    const rootNodes: TodoNode[] = [];
-    const levelStack: { node: TodoNode; indent: number }[] = [];
-
-    items.forEach(item => {
-        const node: TodoNode = {
-            item,
-            children: [],
-            weight: item.weight
-        };
-
-        while (levelStack.length > 0 && levelStack[levelStack.length - 1].indent >= item.indent) {
-            levelStack.pop();
-        }
-
-        if (levelStack.length === 0) {
-            rootNodes.push(node);
-        } else {
-            levelStack[levelStack.length - 1].node.children.push(node);
-        }
-
-        levelStack.push({ node, indent: item.indent });
-    });
-
-    return rootNodes;
-};
-
-const calculateWeightedCompletion = (node: TodoNode, parentWeight: number): { weight: number; completedWeight: number } => {
-    if (node.children.length === 0) {
-        return {
-            weight: parentWeight,
-            completedWeight: node.item.checked ? parentWeight : 0
-        };
-    }
-
-    const childWeight = parentWeight / node.children.length;
-    let totalCompletedWeight = 0;
-
-    node.children.forEach(child => {
-        const result = calculateWeightedCompletion(child, childWeight);
-        totalCompletedWeight += result.completedWeight;
-    });
-
-    return {
-        weight: parentWeight,
-        completedWeight: totalCompletedWeight
-    };
-};
-
-const calculateTotalWeightedRate = (items: TodoItem[]): number => {
-    if (items.length === 0) return 0;
-
-    const rootNodes = buildTaskTree(items);
-    let totalWeight = 0;
-    let totalCompletedWeight = 0;
-
-    rootNodes.forEach(node => {
-        const result = calculateWeightedCompletion(node, node.weight);
-        totalWeight += result.weight;
-        totalCompletedWeight += result.completedWeight;
-    });
-
-    return totalWeight > 0 ? Math.round((totalCompletedWeight / totalWeight) * 100) : 0;
-};
-
-// 레벨 시스템 (귀여운 사자 테마)
-const getLevelInfo = (percentage: number): { level: number; title: string } => {
-    if (percentage >= 100) return { level: 5, title: '사자왕 👑' };
-    if (percentage >= 75) return { level: 4, title: '용감한 사자 ⚡' };
-    if (percentage >= 50) return { level: 3, title: '씩씩한 사자 💪' };
-    if (percentage >= 25) return { level: 2, title: '꼬마 사자 🦁' };
-    return { level: 1, title: '아기 사자 🐱' };
-};
-
-// 격려 메시지
-const getEncouragementMessage = (percentage: number): string => {
-    if (percentage >= 100) return '완벽한 하루! 오늘 정말 잘했어 🎉';
-    if (percentage >= 75) return '거의 다 왔어! 조금만 더!';
-    if (percentage >= 50) return '절반 넘었어! 잘하고 있어';
-    if (percentage >= 25) return '순조롭게 진행 중!';
-    if (percentage > 0) return '좋은 시작이야! 계속 가보자';
-    return '오늘도 화이팅! 하나씩 시작해볼까?';
-};
-
-// 프로그레스바 색상 (진행률에 따라)
-const getProgressColor = (percentage: number): string => {
-    if (percentage >= 100) return 'bg-gradient-to-r from-yellow-400 to-yellow-300';
-    if (percentage >= 75) return 'bg-gradient-to-r from-green-500 to-green-400';
-    if (percentage >= 50) return 'bg-gradient-to-r from-lime-500 to-lime-400';
-    if (percentage >= 25) return 'bg-gradient-to-r from-yellow-500 to-yellow-400';
-    return 'bg-gradient-to-r from-orange-500 to-orange-400';
-};
 
 const TodoTab: React.FC<TodoTabProps> = ({
     collectionName = 'todos',
@@ -258,8 +155,8 @@ const TodoTab: React.FC<TodoTabProps> = ({
         loadAllTodos();
     }, [user, collectionName, currentLogicalDay]);
 
-    // Calculate weekly stats (Korean week: Monday start)
-    const calculateWeeklyStats = () => {
+    // Calculate weekly stats (Korean week: Monday start) - memoized for performance
+    const weeklyStats = useMemo(() => {
         const logicalToday = getLogicalDate();
         const todayStr = format(logicalToday, 'yyyy-MM-dd');
 
@@ -305,10 +202,10 @@ const TodoTab: React.FC<TodoTabProps> = ({
             thisWeek: calcStats(thisWeekStart, thisWeekEnd),
             lastWeek: calcStats(lastWeekStart, lastWeekEnd)
         };
-    };
+    }, [historyTodos, content, currentLogicalDay]);
 
-    // Calculate total completed (all time) for real level
-    const calculateTotalCompleted = () => {
+    // Calculate total completed (all time) for real level - memoized for performance
+    const totalCompleted = useMemo(() => {
         const logicalToday = getLogicalDate();
         const todayStr = format(logicalToday, 'yyyy-MM-dd');
 
@@ -321,21 +218,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
             total += items.filter(item => item.checked).length;
         });
         return total;
-    };
-
-    // Real level based on total completed tasks (max Lv.10 = 1700)
-    const getRealLevel = (totalCompleted: number): { level: number; title: string; nextLevelAt: number } => {
-        if (totalCompleted >= 1700) return { level: 10, title: '전설의 사자왕 🏆', nextLevelAt: 9999 };
-        if (totalCompleted >= 1100) return { level: 9, title: '위대한 사자 ✨', nextLevelAt: 1700 };
-        if (totalCompleted >= 750) return { level: 8, title: '현명한 사자 📚', nextLevelAt: 1100 };
-        if (totalCompleted >= 500) return { level: 7, title: '강인한 사자 🔥', nextLevelAt: 750 };
-        if (totalCompleted >= 330) return { level: 6, title: '늠름한 사자 🌟', nextLevelAt: 500 };
-        if (totalCompleted >= 210) return { level: 5, title: '사자왕 👑', nextLevelAt: 330 };
-        if (totalCompleted >= 130) return { level: 4, title: '용감한 사자 ⚡', nextLevelAt: 210 };
-        if (totalCompleted >= 70) return { level: 3, title: '씩씩한 사자 💪', nextLevelAt: 130 };
-        if (totalCompleted >= 25) return { level: 2, title: '꼬마 사자 🦁', nextLevelAt: 70 };
-        return { level: 1, title: '아기 사자 🐱', nextLevelAt: 25 };
-    };
+    }, [allTodos, content, currentLogicalDay]);
 
     const handleSave = useCallback((newContent: string) => {
         if (!user) return;
@@ -370,49 +253,6 @@ const TodoTab: React.FC<TodoTabProps> = ({
         handleSave(newContent);
     };
 
-    const parseTodos = (content: string): TodoItem[] => {
-        const lines = content.split('\n');
-        const items: TodoItem[] = [];
-
-        lines.forEach((line, index) => {
-            const indentMatch = line.match(/^(\t| )*/);
-            let indent = 0;
-            if (indentMatch && indentMatch[0]) {
-                const indentStr = indentMatch[0];
-                indent = (indentStr.match(/\t/g) || []).length + Math.floor((indentStr.match(/ /g) || []).length / 2);
-            }
-
-            const uncheckedMatch = line.match(/^[\t ]*- \[ \] (.+)$/);
-            const checkedMatch = line.match(/^[\t ]*- \[x\] (.+)$/);
-
-            if (uncheckedMatch || checkedMatch) {
-                const isChecked = !!checkedMatch;
-                const rawText = uncheckedMatch ? uncheckedMatch[1] : checkedMatch![1];
-
-                // Extract quadrant tag (#q1, #q2, #q3, #q4)
-                let quadrant: 'q1' | 'q2' | 'q3' | 'q4' | 'inbox' = 'inbox';
-                let cleanText = rawText;
-
-                const qMatch = rawText.match(/#(q[1-4])\b/);
-                if (qMatch) {
-                    quadrant = qMatch[1] as any;
-                    cleanText = rawText.replace(qMatch[0], '').trim();
-                }
-
-                items.push({
-                    checked: isChecked,
-                    text: cleanText,
-                    indent,
-                    lineIndex: index,
-                    quadrant,
-                    weight: isHighlighted(rawText) ? 2 : 1
-                });
-            }
-        });
-
-        return items;
-    };
-
     const toggleCheckbox = (lineIndex: number) => {
         const lines = content.split('\n');
         const line = lines[lineIndex];
@@ -428,11 +268,44 @@ const TodoTab: React.FC<TodoTabProps> = ({
         handleSave(newContent);
     };
 
-    const renderText = (text: string) => {
-        let rendered = text;
-        rendered = rendered.replace(/\*\*(.+?)\*\*/g, '<strong class="font-bold">$1</strong>');
-        rendered = rendered.replace(/==(.+?)==/g, '<mark class="bg-yellow-300 px-1">$1</mark>');
-        return <span dangerouslySetInnerHTML={{ __html: rendered }} />;
+    const renderText = (text: string): React.ReactNode => {
+        // Safe parsing without dangerouslySetInnerHTML
+        const parts: React.ReactNode[] = [];
+        let remaining = text;
+        let keyIndex = 0;
+
+        while (remaining.length > 0) {
+            // Find the earliest match
+            const boldMatch = remaining.match(/\*\*(.+?)\*\*/);
+            const highlightMatch = remaining.match(/==(.+?)==/);
+
+            const boldIndex = boldMatch ? remaining.indexOf(boldMatch[0]) : Infinity;
+            const highlightIndex = highlightMatch ? remaining.indexOf(highlightMatch[0]) : Infinity;
+
+            if (boldIndex === Infinity && highlightIndex === Infinity) {
+                // No more matches, add remaining text
+                parts.push(remaining);
+                break;
+            }
+
+            if (boldIndex <= highlightIndex && boldMatch) {
+                // Bold comes first
+                if (boldIndex > 0) {
+                    parts.push(remaining.substring(0, boldIndex));
+                }
+                parts.push(<strong key={keyIndex++} className="font-bold">{boldMatch[1]}</strong>);
+                remaining = remaining.substring(boldIndex + boldMatch[0].length);
+            } else if (highlightMatch) {
+                // Highlight comes first
+                if (highlightIndex > 0) {
+                    parts.push(remaining.substring(0, highlightIndex));
+                }
+                parts.push(<mark key={keyIndex++} className="bg-yellow-300 px-1">{highlightMatch[1]}</mark>);
+                remaining = remaining.substring(highlightIndex + highlightMatch[0].length);
+            }
+        }
+
+        return <span>{parts}</span>;
     };
 
     const insertText = (text: string, cursorOffset = 0) => {
@@ -829,7 +702,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
                         </div>
 
                         <DragOverlay adjustScale={true}>
-                            {activeId ? (
+                            {activeId && todos.find(t => t.lineIndex.toString() === activeId) ? (
                                 <MatrixItemUI
                                     item={todos.find(t => t.lineIndex.toString() === activeId)!}
                                     isOverlay
@@ -923,9 +796,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                     const message = getEncouragementMessage(percentage);
                                     const progressColor = getProgressColor(percentage);
 
-                                    // Stats
-                                    const weeklyStats = calculateWeeklyStats();
-                                    const totalCompleted = calculateTotalCompleted();
+                                    // Stats - using memoized values
                                     const realLevel = getRealLevel(totalCompleted);
 
                                     return (

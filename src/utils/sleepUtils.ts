@@ -155,7 +155,7 @@ export function getAverageWakeTime(records: SleepRecord[]): string | null {
 // ============================================
 
 // 목표 시간 상수 (분 단위)
-const WAKE_GOAL_START = 6 * 60;      // 06:00 = 360분
+const WAKE_GOAL_START = 5 * 60 + 45; // 05:45 = 345분
 const WAKE_GOAL_GRACE = 7 * 60 + 30; // 07:30 = 450분 (허용 한계)
 
 const SLEEP_GOAL_START = 23 * 60;    // 23:00 = 1380분
@@ -168,14 +168,14 @@ export interface GoalAchievement {
 
 /**
  * 개별 기록의 목표 달성 여부 체크
- * - 기상 목표: 06:00~07:30
+ * - 기상 목표: 05:45~07:30
  * - 취침 목표: 23:00~00:30
  */
 export function checkGoalAchievement(record: SleepRecord): GoalAchievement {
     let wakeGoalMet = false;
     let sleepGoalMet = false;
 
-    // 기상 목표 체크: 06:00 ~ 07:30
+    // 기상 목표 체크: 05:45 ~ 07:30
     if (record.wakeTime) {
         const wakeMinutes = getHours(record.wakeTime) * 60 + getMinutes(record.wakeTime);
         wakeGoalMet = wakeMinutes >= WAKE_GOAL_START && wakeMinutes <= WAKE_GOAL_GRACE;
@@ -447,7 +447,7 @@ export interface IdealSchedule {
 
 /**
  * 수면 점수 최대화를 위한 적정 취침/기상 시간 계산
- * - 궁극적 목표: 23:00 취침 / 06:30 기상 (기상 목표 06:00~07:30 만족)
+ * - 궁극적 목표: 23:00 취침 / 06:30 기상 (기상 목표 05:45~07:30 만족)
  * - 점진적 개선: 현재 평균이 목표와 멀다면, 한 번에 목표를 제시하지 않고 15~30분씩 당기도록 유도
  */
 export function getIdealSleepSchedule(records: SleepRecord[]): IdealSchedule {

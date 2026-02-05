@@ -23,6 +23,7 @@ import WorrySection from './WorrySection';
 import WorryCloseModal from './WorryCloseModal';
 import WorryInput from './WorryInput';
 import { Plus, ChevronDown, ChevronUp, Archive } from 'lucide-react';
+import { logError, getErrorMessage } from '../utils/errorUtils';
 
 const WorryTab: React.FC = () => {
     const { user } = useAuth();
@@ -104,8 +105,8 @@ const WorryTab: React.FC = () => {
             setNewTitle('');
             setIsCreating(false);
         } catch (error) {
-            console.error("Failed to create worry:", error);
-            alert("고민 생성 중 오류가 발생했습니다.");
+            logError('WorryTab.handleCreateWorry', error);
+            alert(getErrorMessage(error));
         }
     };
 
@@ -115,8 +116,8 @@ const WorryTab: React.FC = () => {
             await deleteWorry(user.uid, worryId);
             await loadActiveWorries();
         } catch (error) {
-            console.error("Failed to delete worry:", error);
-            alert("고민 삭제 중 오류가 발생했습니다.");
+            logError('WorryTab.handleDeleteWorry', error);
+            alert(getErrorMessage(error));
         }
     };
 
@@ -131,8 +132,8 @@ const WorryTab: React.FC = () => {
                 setExpandedWorryId(null);
             }
         } catch (error) {
-            console.error("Failed to close worry:", error);
-            alert("고민 마무리 중 오류가 발생했습니다.");
+            logError('WorryTab.handleCloseWorry', error);
+            alert(getErrorMessage(error));
         }
     };
 
@@ -156,8 +157,8 @@ const WorryTab: React.FC = () => {
             await addWorryEntry(user.uid, expandedWorryId, entryData.type, entryData.content, entryData.week, entryData.parentId);
             await loadEntries(expandedWorryId);
         } catch (error) {
-            console.error("Failed to add entry:", error);
-            alert("기록 저장 중 오류가 발생했습니다.");
+            logError('WorryTab.handleAddEntry', error);
+            alert(getErrorMessage(error));
         }
     };
 
@@ -174,8 +175,8 @@ const WorryTab: React.FC = () => {
             await updateWorryEntry(user.uid, entryId, content);
             if (expandedWorryId) await loadEntries(expandedWorryId);
         } catch (error) {
-            console.error('Error updating entry:', error);
-            alert("수정 중 오류가 발생했습니다.");
+            logError('WorryTab.handleUpdateEntry', error);
+            alert(getErrorMessage(error));
         }
     };
 
@@ -185,8 +186,8 @@ const WorryTab: React.FC = () => {
             await deleteWorryEntry(user.uid, entryId);
             if (expandedWorryId) await loadEntries(expandedWorryId);
         } catch (error) {
-            console.error('Error deleting entry:', error);
-            alert("삭제 중 오류가 발생했습니다.");
+            logError('WorryTab.handleDeleteEntry', error);
+            alert(getErrorMessage(error));
         }
     };
 

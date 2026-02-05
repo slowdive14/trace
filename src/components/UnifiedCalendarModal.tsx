@@ -89,7 +89,30 @@ const UnifiedCalendarModal: React.FC<UnifiedCalendarModalProps> = ({ onClose, en
     // 선택된 날짜의 감정 태그 빈도 계산
     const getSelectedDateEmotions = useMemo(() => {
         if (!selectedDate) return null;
-        const data = getEmotionData(selectedDate);
+
+        // Inline getEmotionData logic to ensure proper dependency tracking
+        const dateStr = format(selectedDate, 'yyyy-MM-dd');
+        const dayEntries = entries.filter(e => format(getLogicalDate(e.timestamp), 'yyyy-MM-dd') === dateStr);
+
+        let positive: EmotionTag[] = [];
+        let negative: EmotionTag[] = [];
+        let neutral: EmotionTag[] = [];
+
+        dayEntries.forEach(entry => {
+            const analysis = analyzeEmotionsInText(entry.content);
+            positive = [...positive, ...analysis.positive];
+            negative = [...negative, ...analysis.negative];
+            neutral = [...neutral, ...analysis.neutral];
+        });
+
+        const data = {
+            positive,
+            negative,
+            neutral,
+            hasEmotions: positive.length > 0 || negative.length > 0 || neutral.length > 0,
+            dominant: positive.length > negative.length ? 'positive' :
+                negative.length > positive.length ? 'negative' : 'neutral'
+        };
 
         // 태그별 빈도수 계산
         const tagCounts = new Map<string, { emotion: EmotionTag; count: number; type: 'positive' | 'negative' | 'neutral' }>();
