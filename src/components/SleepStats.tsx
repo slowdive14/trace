@@ -184,10 +184,10 @@ function ScoreSection({ score, streak }: { score: SleepScore; streak: WeeklyStre
                         <div className="w-16 h-1.5 bg-bg-tertiary rounded-full overflow-hidden">
                             <div
                                 className="h-full bg-purple-400 rounded-full"
-                                style={{ width: `${((score.sleepRegularity + (score.consistencyScore / 2)) / 30) * 100}%` }}
+                                style={{ width: `${((score.sleepRegularity + score.sleepConsistencyScore) / 30) * 100}%` }}
                             />
                         </div>
-                        <span className="w-12 text-right text-text-secondary">{score.sleepRegularity + Math.round(score.consistencyScore / 2)}/30</span>
+                        <span className="w-12 text-right text-text-secondary">{score.sleepRegularity + score.sleepConsistencyScore}/30</span>
                     </div>
                 </div>
 
@@ -207,10 +207,10 @@ function ScoreSection({ score, streak }: { score: SleepScore; streak: WeeklyStre
                         <div className="w-16 h-1.5 bg-bg-tertiary rounded-full overflow-hidden">
                             <div
                                 className="h-full bg-amber-400 rounded-full"
-                                style={{ width: `${((score.wakeRegularity + (score.consistencyScore / 2)) / 30) * 100}%` }}
+                                style={{ width: `${((score.wakeRegularity + score.wakeConsistencyScore) / 30) * 100}%` }}
                             />
                         </div>
-                        <span className="w-12 text-right text-text-secondary">{score.wakeRegularity + Math.round(score.consistencyScore / 2)}/30</span>
+                        <span className="w-12 text-right text-text-secondary">{score.wakeRegularity + score.wakeConsistencyScore}/30</span>
                     </div>
                 </div>
 

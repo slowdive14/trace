@@ -224,7 +224,8 @@ export interface SleepScore {
     durationScore: number;   // 0-40
     sleepRegularity: number; // 0-15 (목표 달성)
     wakeRegularity: number;  // 0-15 (목표 달성)
-    consistencyScore: number; // 0-30 (일관성: 취침 15 + 기상 15)
+    sleepConsistencyScore: number; // 0-15 (취침 일관성)
+    wakeConsistencyScore: number;  // 0-15 (기상 일관성)
     details: {
         avgDuration: number | null;
         sleepGoalDays: number;
@@ -261,7 +262,8 @@ export function calculateSleepScore(records: SleepRecord[], contextRecords: Slee
             durationScore: 0,
             sleepRegularity: 0,
             wakeRegularity: 0,
-            consistencyScore: 0,
+            sleepConsistencyScore: 0,
+            wakeConsistencyScore: 0,
             details: {
                 avgDuration: null,
                 sleepGoalDays: 0,
@@ -311,17 +313,25 @@ export function calculateSleepScore(records: SleepRecord[], contextRecords: Slee
     const wakeMAD = calculateMAD(wakeMinutes);
 
     // MAD가 0이면 15점, 60분(1시간) 이상이면 0점 (선형 감점)
-    const sleepConsistencyScore = Math.max(0, 15 - (sleepMAD / 4));
-    const wakeConsistencyScore = Math.max(0, 15 - (wakeMAD / 4));
+    const sleepConsistencyRaw = Math.max(0, 15 - (sleepMAD / 4));
+    const wakeConsistencyRaw = Math.max(0, 15 - (wakeMAD / 4));
 
-    const total = Math.round(durationScore + sleepGoalScore + wakeGoalScore + sleepConsistencyScore + wakeConsistencyScore);
+    // 개별 점수를 먼저 round한 뒤 합산하여 total = 세부 합과 일치하도록 보장
+    const roundedDuration = Math.round(durationScore);
+    const roundedSleepGoal = Math.round(sleepGoalScore);
+    const roundedWakeGoal = Math.round(wakeGoalScore);
+    const roundedSleepConsistency = Math.round(sleepConsistencyRaw);
+    const roundedWakeConsistency = Math.round(wakeConsistencyRaw);
+
+    const total = roundedDuration + roundedSleepGoal + roundedWakeGoal + roundedSleepConsistency + roundedWakeConsistency;
 
     return {
         total,
-        durationScore: Math.round(durationScore),
-        sleepRegularity: Math.round(sleepGoalScore),
-        wakeRegularity: Math.round(wakeGoalScore),
-        consistencyScore: Math.round(sleepConsistencyScore + wakeConsistencyScore),
+        durationScore: roundedDuration,
+        sleepRegularity: roundedSleepGoal,
+        wakeRegularity: roundedWakeGoal,
+        sleepConsistencyScore: roundedSleepConsistency,
+        wakeConsistencyScore: roundedWakeConsistency,
         details: {
             avgDuration,
             sleepGoalDays,
