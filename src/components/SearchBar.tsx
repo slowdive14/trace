@@ -1,11 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { Search } from 'lucide-react';
 import type { Entry, SearchResult } from '../types/types';
-import { getEntries, getTodos } from '../services/firestore';
+import { getEntries, getTodos, deleteEntry, updateEntry } from '../services/firestore';
+import { extractTags } from '../utils/tagUtils';
 import { useAuth } from './AuthContext';
 import EntryItem from './EntryItem';
 import TodoSearchItem from './TodoSearchItem';
 import { subDays, startOfDay, endOfDay } from 'date-fns';
+
+function getCollectionName(category?: string): string {
+    if (category === 'chore') return 'chores';
+    if (category === 'book') return 'books';
+    return 'entries';
+}
 
 interface SearchBarProps {
     onClose: () => void;
@@ -64,6 +71,27 @@ const SearchBar: React.FC<SearchBarProps> = ({ onClose }) => {
         fetchData();
     }, [user]);
 
+    const handleDelete = async (id: string) => {
+        if (!user) return;
+        const target = results.find(r => r.id === id);
+        if (!target || target.type !== 'entry') return;
+        const col = getCollectionName(target.category);
+        await deleteEntry(user.uid, id, col);
+        setResults(prev => prev.filter(r => r.id !== id));
+    };
+
+    const handleEdit = async (id: string, content: string) => {
+        if (!user) return;
+        const target = results.find(r => r.id === id);
+        if (!target || target.type !== 'entry') return;
+        const col = getCollectionName(target.category);
+        const tags = extractTags(content);
+        await updateEntry(user.uid, id, content, col, { tags });
+        setResults(prev => prev.map(r =>
+            r.id === id ? { ...r, content, tags } : r
+        ));
+    };
+
     useEffect(() => {
         if (!query.trim()) {
             setFilteredResults([]);
@@ -117,7 +145,8 @@ const SearchBar: React.FC<SearchBarProps> = ({ onClose }) => {
                                 <EntryItem
                                     key={result.id}
                                     entry={result as Entry}
-                                    onDelete={() => {}}
+                                    onDelete={handleDelete}
+                                    onEdit={handleEdit}
                                     highlightQuery={query}
                                     showDate={true}
                                 />
