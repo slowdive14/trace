@@ -158,7 +158,7 @@ export function getAverageWakeTime(records: SleepRecord[]): string | null {
 const WAKE_GOAL_START = 5 * 60 + 45; // 05:45 = 345분
 const WAKE_GOAL_GRACE = 7 * 60 + 30; // 07:30 = 450분 (허용 한계)
 
-const SLEEP_GOAL_START = 23 * 60;    // 23:00 = 1380분
+const SLEEP_GOAL_START = 22 * 60;    // 22:00 = 1320분
 const SLEEP_GOAL_GRACE = 30;         // 00:30 = 30분 (다음날)
 
 export interface GoalAchievement {
@@ -169,7 +169,7 @@ export interface GoalAchievement {
 /**
  * 개별 기록의 목표 달성 여부 체크
  * - 기상 목표: 05:45~07:30
- * - 취침 목표: 23:00~00:30
+ * - 취침 목표: 22:00~00:30
  */
 export function checkGoalAchievement(record: SleepRecord): GoalAchievement {
     let wakeGoalMet = false;
@@ -181,7 +181,7 @@ export function checkGoalAchievement(record: SleepRecord): GoalAchievement {
         wakeGoalMet = wakeMinutes >= WAKE_GOAL_START && wakeMinutes <= WAKE_GOAL_GRACE;
     }
 
-    // 취침 목표 체크: 23:00 ~ 00:30 (자정 넘김 처리)
+    // 취침 목표 체크: 22:00 ~ 00:30 (자정 넘김 처리)
     if (record.sleepTime) {
         const sleepMinutes = getHours(record.sleepTime) * 60 + getMinutes(record.sleepTime);
         // 23:00~23:59 OR 00:00~00:30
@@ -277,12 +277,15 @@ export function calculateSleepScore(records: SleepRecord[], contextRecords: Slee
 
     const achievements = records.map(r => checkGoalAchievement(r));
 
-    // 1. 수면시간 점수 (40점 만점)
-    const avgDuration = getAverageDuration(records);
+    // 1. 수면시간 점수 (40점 만점) - 원시값으로 정밀 계산 (이중 반올림 방지)
+    const avgDuration = getAverageDuration(records); // 표시용 (소수점 1자리)
+    const validDurationRecords = records.filter(r => r.duration !== undefined);
     let durationScore = 0;
-    if (avgDuration !== null) {
+    if (validDurationRecords.length > 0) {
+        const totalMinutes = validDurationRecords.reduce((sum, r) => sum + (r.duration || 0), 0);
+        const rawAvgHours = totalMinutes / validDurationRecords.length / 60;
         const idealHours = 7.5;
-        const deviation = Math.abs(avgDuration - idealHours);
+        const deviation = Math.abs(rawAvgHours - idealHours);
         durationScore = Math.max(0, 40 - (deviation * 8));
     }
 

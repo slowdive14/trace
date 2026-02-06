@@ -175,7 +175,7 @@ function ScoreSection({ score, streak }: { score: SleepScore; streak: WeeklyStre
                         <InfoTooltip content={
                             <div className="space-y-1 text-left">
                                 <div className="font-bold text-purple-300">규칙성 30점 만점</div>
-                                <div>• <span className="text-white">목표 달성 (15점)</span>: <br />23:00 ~ 00:30 사이 취침</div>
+                                <div>• <span className="text-white">목표 달성 (15점)</span>: <br />22:00 ~ 00:30 사이 취침</div>
                                 <div>• <span className="text-white">일관성 (15점)</span>: <br />매일 비슷한 시간에 자는지 평가 (편차↓ 점수↑)</div>
                             </div>
                         } />
