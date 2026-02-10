@@ -222,10 +222,10 @@ export function getWeeklyRecords(records: SleepRecord[], weekOffset: number = 0)
 export interface SleepScore {
     total: number;           // 0-100
     durationScore: number;   // 0-40
-    sleepRegularity: number; // 0-15 (목표 달성)
-    wakeRegularity: number;  // 0-15 (목표 달성)
-    sleepConsistencyScore: number; // 0-15 (취침 일관성)
-    wakeConsistencyScore: number;  // 0-15 (기상 일관성)
+    sleepRegularity: number; // 0-18 (목표 달성)
+    wakeRegularity: number;  // 0-18 (목표 달성)
+    sleepConsistencyScore: number; // 0-12 (취침 일관성)
+    wakeConsistencyScore: number;  // 0-12 (기상 일관성)
     details: {
         avgDuration: number | null;
         sleepGoalDays: number;
@@ -250,8 +250,8 @@ function calculateMAD(minutes: number[]): number {
 /**
  * 수면 점수 계산 (100점 만점)
  * - 수면시간 충족도: 40점 (7.5시간 기준)
- * - 목표 달성(규칙성): 30점 (취침 15 + 기상 15)
- * - 일관성 지표: 30점 (취침 15 + 기상 15)
+ * - 목표 달성(규칙성): 36점 (취침 18 + 기상 18)
+ * - 일관성 지표: 24점 (취침 12 + 기상 12)
  * 
  * @param contextRecords 일관성(MAD) 계산을 위한 맥락 데이터 (예: 지난 주 기록). 점수 계산 자체는 records 기준이지만, 편차 계산 시에는 더 많은 샘플을 사용함.
  */
@@ -289,15 +289,15 @@ export function calculateSleepScore(records: SleepRecord[], contextRecords: Slee
         durationScore = Math.max(0, 40 - (deviation * 8));
     }
 
-    // 2. 목표 달성 점수 (30점 만점: 취침 15 + 기상 15)
+    // 2. 목표 달성 점수 (36점 만점: 취침 18 + 기상 18)
     // 기록 수에 비례하여 점수 부여 (100% 달성 시 만점)
     const sleepGoalDays = achievements.filter(a => a.sleepGoalMet).length;
     const wakeGoalDays = achievements.filter(a => a.wakeGoalMet).length;
-    const sleepGoalScore = (sleepGoalDays / records.length) * 15;
-    const wakeGoalScore = (wakeGoalDays / records.length) * 15;
+    const sleepGoalScore = (sleepGoalDays / records.length) * 18;
+    const wakeGoalScore = (wakeGoalDays / records.length) * 18;
 
 
-    // 3. 일관성 점수 (30점 만점: 취침 15 + 기상 15)
+    // 3. 일관성 점수 (24점 만점: 취침 12 + 기상 12)
     // 일관성은 '최근 흐름'을 반영해야 하므로 contextRecords를 포함해 최소 3일 이상의 데이터로 계산 권장
     const consistencySample = [...contextRecords, ...records];
 
@@ -315,9 +315,9 @@ export function calculateSleepScore(records: SleepRecord[], contextRecords: Slee
     const sleepMAD = calculateMAD(sleepMinutes);
     const wakeMAD = calculateMAD(wakeMinutes);
 
-    // MAD가 0이면 15점, 60분(1시간) 이상이면 0점 (선형 감점)
-    const sleepConsistencyRaw = Math.max(0, 15 - (sleepMAD / 4));
-    const wakeConsistencyRaw = Math.max(0, 15 - (wakeMAD / 4));
+    // MAD가 0이면 12점, 48분 이상이면 0점 (선형 감점)
+    const sleepConsistencyRaw = Math.max(0, 12 - (sleepMAD / 4));
+    const wakeConsistencyRaw = Math.max(0, 12 - (wakeMAD / 4));
 
     // 개별 점수를 먼저 round한 뒤 합산하여 total = 세부 합과 일치하도록 보장
     const roundedDuration = Math.round(durationScore);

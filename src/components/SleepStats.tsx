@@ -132,8 +132,8 @@ function ScoreSection({ score, streak }: { score: SleepScore; streak: WeeklyStre
                         <div className="space-y-1 text-left">
                             <div className="font-bold text-indigo-300 mb-1">총점 100점 만점</div>
                             <div>• 수면 시간: <span className="text-white">40점</span></div>
-                            <div>• 규칙성(목표 달성): <span className="text-white">30점</span> (취침15+기상15)</div>
-                            <div>• 일관성(편차): <span className="text-white">30점</span> (취침15+기상15)</div>
+                            <div>• 규칙성(목표 달성): <span className="text-white">36점</span> (취침18+기상18)</div>
+                            <div>• 일관성(편차): <span className="text-white">24점</span> (취침12+기상12)</div>
                         </div>
                     } />
                 </div>
@@ -175,8 +175,8 @@ function ScoreSection({ score, streak }: { score: SleepScore; streak: WeeklyStre
                         <InfoTooltip content={
                             <div className="space-y-1 text-left">
                                 <div className="font-bold text-purple-300">규칙성 30점 만점</div>
-                                <div>• <span className="text-white">목표 달성 (15점)</span>: <br />22:00 ~ 00:30 사이 취침</div>
-                                <div>• <span className="text-white">일관성 (15점)</span>: <br />매일 비슷한 시간에 자는지 평가 (편차↓ 점수↑)</div>
+                                <div>• <span className="text-white">목표 달성 (18점)</span>: <br />22:00 ~ 00:30 사이 취침</div>
+                                <div>• <span className="text-white">일관성 (12점)</span>: <br />매일 비슷한 시간에 자는지 평가 (편차↓ 점수↑)</div>
                             </div>
                         } />
                     </div>
@@ -198,8 +198,8 @@ function ScoreSection({ score, streak }: { score: SleepScore; streak: WeeklyStre
                         <InfoTooltip content={
                             <div className="space-y-1 text-left">
                                 <div className="font-bold text-amber-300">규칙성 30점 만점</div>
-                                <div>• <span className="text-white">목표 달성 (15점)</span>: <br />05:45 ~ 07:30 사이 기상</div>
-                                <div>• <span className="text-white">일관성 (15점)</span>: <br />매일 비슷한 시간에 일어나는지 평가 (편차↓ 점수↑)</div>
+                                <div>• <span className="text-white">목표 달성 (18점)</span>: <br />05:45 ~ 07:30 사이 기상</div>
+                                <div>• <span className="text-white">일관성 (12점)</span>: <br />매일 비슷한 시간에 일어나는지 평가 (편차↓ 점수↑)</div>
                             </div>
                         } />
                     </div>

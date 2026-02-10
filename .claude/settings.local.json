@@ -30,7 +30,10 @@
       "Bash(git -C \"C:\\\\Users\\\\user\\\\Downloads\\\\trace\" commit -m \"fix: Real-time progress update when checking todos\")",
       "Bash(npx tsc:*)",
       "Bash(timeout /t 3 /nobreak)",
-      "Bash(npx vite:*)"
+      "Bash(npx vite:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(gh api:*)",
+      "WebFetch(domain:api.github.com)"
     ],
     "deny": [],
     "ask": []
