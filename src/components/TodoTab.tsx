@@ -819,7 +819,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                                     오늘의 {levelInfo.title}
                                                 </span>
                                                 <span className="text-sm text-text-secondary">
-                                                    {completed}/{total}
+                                                    {percentage}% ({completed}/{total})
                                                 </span>
                                             </div>
 
