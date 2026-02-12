@@ -8,7 +8,7 @@ import { useAuth } from './AuthContext';
 import EntryItem from './EntryItem';
 import { onSnapshot, collection, query, orderBy } from 'firebase/firestore';
 import { db } from '../services/firebase';
-import { Share, Pin, LayoutGrid, List, ChevronDown, ChevronUp, Copy } from 'lucide-react';
+import { Share, Pin, LayoutGrid, List, ChevronDown, ChevronUp, Copy, X } from 'lucide-react';
 import { generateMarkdown, generateMatrixMarkdown, copyToClipboard } from '../utils/exportUtils';
 import { getLogicalDate } from '../utils/dateUtils';
 import { SleepStats } from './SleepStats';
@@ -235,8 +235,8 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
         q4: { title: "Q4: Eliminate", label: "보관", color: "text-blue-400" },
     };
 
-    const MatrixItemUI = React.forwardRef<HTMLDivElement, { entry: Entry, isDragging?: boolean, isOverlay?: boolean, style?: React.CSSProperties, [key: string]: any }>(
-        ({ entry, isDragging, isOverlay, style, ...props }, ref) => {
+    const MatrixItemUI = React.forwardRef<HTMLDivElement, { entry: Entry, isDragging?: boolean, isOverlay?: boolean, onDelete?: (id: string) => void, style?: React.CSSProperties, [key: string]: any }>(
+        ({ entry, isDragging, isOverlay, onDelete, style, ...props }, ref) => {
             return (
                 <div
                     ref={ref}
@@ -259,6 +259,15 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
                             </div>
                         )}
                     </div>
+                    {onDelete && !isOverlay && (
+                        <button
+                            onClick={(e) => { e.stopPropagation(); onDelete(entry.id); }}
+                            onPointerDown={(e) => e.stopPropagation()}
+                            className="flex-shrink-0 opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-500/20 text-text-tertiary hover:text-red-400 transition-all"
+                        >
+                            <X size={12} />
+                        </button>
+                    )}
                 </div>
             );
         }
@@ -284,6 +293,7 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
             entry={entry}
             style={style}
             isDragging={isDragging}
+            onDelete={handleDelete}
             {...attributes}
             {...listeners}
         />;
