@@ -268,6 +268,45 @@ const TodoTab: React.FC<TodoTabProps> = ({
         handleSave(newContent);
     };
 
+    const toggleHistoryCheckbox = async (dateStr: string, lineIndex: number) => {
+        const todo = historyTodos.find(t => format(t.date, 'yyyy-MM-dd') === dateStr);
+        if (!todo || !user) return;
+
+        const lines = todo.content.split('\n');
+        const line = lines[lineIndex];
+
+        if (line.includes('- [ ]')) {
+            lines[lineIndex] = line.replace('- [ ]', '- [x]');
+        } else if (line.includes('- [x]')) {
+            lines[lineIndex] = line.replace('- [x]', '- [ ]');
+        }
+
+        const newContent = lines.join('\n');
+
+        // Update local state
+        setHistoryTodos(prev => prev.map(t => {
+            if (format(t.date, 'yyyy-MM-dd') === dateStr) {
+                return { ...t, content: newContent };
+            }
+            return t;
+        }));
+
+        // Also update today's content state if it's today
+        const logicalToday = format(getLogicalDate(), 'yyyy-MM-dd');
+        if (dateStr === logicalToday) {
+            setContent(newContent);
+        }
+
+        // Save to Firestore
+        try {
+            const [year, month, day] = dateStr.split('-').map(Number);
+            const date = new Date(year, month - 1, day);
+            await saveTodo(user.uid, date, newContent, collectionName);
+        } catch (error) {
+            console.error('Failed to save history checkbox toggle:', error);
+        }
+    };
+
     const renderText = (text: string): React.ReactNode => {
         // Safe parsing without dangerouslySetInnerHTML
         const parts: React.ReactNode[] = [];
@@ -638,8 +677,8 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                             <input
                                                 type="checkbox"
                                                 checked={item.checked}
-                                                readOnly
-                                                className="mt-1 w-4 h-4 rounded border-text-secondary pointer-events-none"
+                                                onChange={() => toggleHistoryCheckbox(date, item.lineIndex)}
+                                                className="mt-1 w-4 h-4 rounded border-text-secondary focus:ring-accent focus:ring-2 cursor-pointer"
                                             />
                                             <span className={`flex-1 leading-relaxed ${item.checked ? 'line-through text-text-secondary' : 'text-text-primary'}`}>
                                                 {renderText(item.text)}
@@ -750,30 +789,6 @@ const TodoTab: React.FC<TodoTabProps> = ({
 
                     {isEditing || viewMode === 'template' ? (
                         <>
-                            {/* Checkbox list for toggling in edit mode */}
-                            {viewMode === 'edit' && todos.length > 0 && (
-                                <div className="flex-shrink-0 px-4 pt-14 pb-2 border-b border-bg-tertiary overflow-y-auto" style={{ maxHeight: '40%' }}>
-                                    <div className="space-y-1">
-                                        {todos.map((item, idx) => (
-                                            <div
-                                                key={idx}
-                                                className="flex items-start gap-2 py-0.5"
-                                                style={{ paddingLeft: `${item.indent * 24}px` }}
-                                            >
-                                                <input
-                                                    type="checkbox"
-                                                    checked={item.checked}
-                                                    onChange={() => toggleCheckbox(item.lineIndex)}
-                                                    className="mt-0.5 w-4 h-4 rounded border-text-secondary focus:ring-accent focus:ring-2 cursor-pointer"
-                                                />
-                                                <span className={`flex-1 text-sm leading-relaxed ${item.checked ? 'line-through text-text-secondary' : 'text-text-primary'}`}>
-                                                    {renderText(item.text)}
-                                                </span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
                             {/* Editor */}
                             <textarea
                                 ref={textareaRef}
@@ -781,7 +796,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                 onChange={handleChange}
                                 onKeyDown={handleKeyDown}
                                 placeholder={viewMode === 'template' ? "매일 반복할 루틴을 입력하세요..." : placeholder}
-                                className={`flex-1 w-full bg-transparent text-text-primary p-4 ${viewMode === 'edit' && todos.length > 0 ? 'pt-4' : 'pt-16'} pb-8 resize-none focus:outline-none font-mono text-sm leading-relaxed overflow-y-auto`}
+                                className="flex-1 w-full bg-transparent text-text-primary p-4 pt-16 pb-8 resize-none focus:outline-none font-mono text-sm leading-relaxed overflow-y-auto"
                                 spellCheck={false}
                             />
 
