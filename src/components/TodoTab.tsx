@@ -750,6 +750,30 @@ const TodoTab: React.FC<TodoTabProps> = ({
 
                     {isEditing || viewMode === 'template' ? (
                         <>
+                            {/* Checkbox list for toggling in edit mode */}
+                            {viewMode === 'edit' && todos.length > 0 && (
+                                <div className="flex-shrink-0 px-4 pt-14 pb-2 border-b border-bg-tertiary overflow-y-auto" style={{ maxHeight: '40%' }}>
+                                    <div className="space-y-1">
+                                        {todos.map((item, idx) => (
+                                            <div
+                                                key={idx}
+                                                className="flex items-start gap-2 py-0.5"
+                                                style={{ paddingLeft: `${item.indent * 24}px` }}
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    checked={item.checked}
+                                                    onChange={() => toggleCheckbox(item.lineIndex)}
+                                                    className="mt-0.5 w-4 h-4 rounded border-text-secondary focus:ring-accent focus:ring-2 cursor-pointer"
+                                                />
+                                                <span className={`flex-1 text-sm leading-relaxed ${item.checked ? 'line-through text-text-secondary' : 'text-text-primary'}`}>
+                                                    {renderText(item.text)}
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                             {/* Editor */}
                             <textarea
                                 ref={textareaRef}
@@ -757,7 +781,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                 onChange={handleChange}
                                 onKeyDown={handleKeyDown}
                                 placeholder={viewMode === 'template' ? "매일 반복할 루틴을 입력하세요..." : placeholder}
-                                className="flex-1 w-full bg-transparent text-text-primary p-4 pt-16 pb-8 resize-none focus:outline-none font-mono text-sm leading-relaxed overflow-y-auto"
+                                className={`flex-1 w-full bg-transparent text-text-primary p-4 ${viewMode === 'edit' && todos.length > 0 ? 'pt-4' : 'pt-16'} pb-8 resize-none focus:outline-none font-mono text-sm leading-relaxed overflow-y-auto`}
                                 spellCheck={false}
                             />
 
