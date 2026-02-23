@@ -43,6 +43,14 @@ export interface SearchResult {
     date?: Date;
 }
 
+export interface NavigationTarget {
+    id: string;
+    type: 'entry' | 'todo';
+    category?: 'action' | 'thought' | 'chore' | 'book';
+    timestamp: Date;
+    date?: Date;
+}
+
 export type ExpenseCategory =
     | '커피/음료'
     | '식사'

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Search } from 'lucide-react';
-import type { Entry, SearchResult } from '../types/types';
+import { Search, ArrowRight } from 'lucide-react';
+import type { Entry, SearchResult, NavigationTarget } from '../types/types';
 import { getEntries, getTodos, deleteEntry, updateEntry } from '../services/firestore';
 import { extractTags } from '../utils/tagUtils';
 import { useAuth } from './AuthContext';
@@ -16,9 +16,10 @@ function getCollectionName(category?: string): string {
 
 interface SearchBarProps {
     onClose: () => void;
+    onNavigate?: (target: NavigationTarget) => void;
 }
 
-const SearchBar: React.FC<SearchBarProps> = ({ onClose }) => {
+const SearchBar: React.FC<SearchBarProps> = ({ onClose, onNavigate }) => {
     const [query, setQuery] = useState('');
     const [results, setResults] = useState<SearchResult[]>([]);
     const [filteredResults, setFilteredResults] = useState<SearchResult[]>([]);
@@ -92,6 +93,17 @@ const SearchBar: React.FC<SearchBarProps> = ({ onClose }) => {
         ));
     };
 
+    const handleResultClick = (result: SearchResult) => {
+        if (!onNavigate) return;
+        onNavigate({
+            id: result.id,
+            type: result.type,
+            category: result.category,
+            timestamp: result.timestamp,
+            date: result.date,
+        });
+    };
+
     useEffect(() => {
         if (!query.trim()) {
             setFilteredResults([]);
@@ -141,22 +153,31 @@ const SearchBar: React.FC<SearchBarProps> = ({ onClose }) => {
                 {filteredResults.length > 0 ? (
                     <div className="space-y-1 max-w-md mx-auto">
                         {filteredResults.map(result => (
-                            result.type === 'entry' ? (
-                                <EntryItem
-                                    key={result.id}
-                                    entry={result as Entry}
-                                    onDelete={handleDelete}
-                                    onEdit={handleEdit}
-                                    highlightQuery={query}
-                                    showDate={true}
-                                />
-                            ) : (
-                                <TodoSearchItem
-                                    key={result.id}
-                                    todo={result as SearchResult & { type: 'todo' }}
-                                    highlightQuery={query}
-                                />
-                            )
+                            <div
+                                key={result.id}
+                                onClick={() => handleResultClick(result)}
+                                className="cursor-pointer group/nav relative"
+                            >
+                                {onNavigate && (
+                                    <div className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover/nav:opacity-100 transition-opacity z-10 bg-bg-secondary/80 rounded-full p-1">
+                                        <ArrowRight size={14} className="text-accent" />
+                                    </div>
+                                )}
+                                {result.type === 'entry' ? (
+                                    <EntryItem
+                                        entry={result as Entry}
+                                        onDelete={handleDelete}
+                                        onEdit={handleEdit}
+                                        highlightQuery={query}
+                                        showDate={true}
+                                    />
+                                ) : (
+                                    <TodoSearchItem
+                                        todo={result as SearchResult & { type: 'todo' }}
+                                        highlightQuery={query}
+                                    />
+                                )}
+                            </div>
                         ))}
                     </div>
                 ) : query ? (

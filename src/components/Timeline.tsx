@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { format, subDays, startOfDay, isSameDay } from 'date-fns';
 import { ko } from 'date-fns/locale';
-import type { Entry } from '../types/types';
+import type { Entry, NavigationTarget } from '../types/types';
 import { extractTags } from '../utils/tagUtils';
 import { deleteEntry, toggleEntryPin, updateEntry } from '../services/firestore';
 import { useAuth } from './AuthContext';
@@ -38,11 +38,13 @@ interface TimelineProps {
     collectionName?: string;
     subFilter?: string | null;
     onSubFilterChange?: (filter: string | null) => void;
+    navigationTarget?: NavigationTarget | null;
+    onNavigationComplete?: () => void;
 }
 
 type DateFilter = 'today' | '7days' | '30days' | 'all';
 
-const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, onTagClick, collectionName = 'entries', subFilter, onSubFilterChange }) => {
+const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, onTagClick, collectionName = 'entries', subFilter, onSubFilterChange, navigationTarget, onNavigationComplete }) => {
     const [allEntries, setAllEntries] = useState<Entry[]>([]);
     const [displayLimit, setDisplayLimit] = useState(50);
     const [dateFilter, setDateFilter] = useState<DateFilter>(category === 'chore' ? 'all' : 'today');
@@ -125,6 +127,55 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
 
         return () => observer.disconnect();
     }, [loadMoreNode]);
+
+    // Navigation: scroll to a specific entry when navigationTarget is set
+    useEffect(() => {
+        if (!navigationTarget || navigationTarget.type !== 'entry') return;
+        if (allEntries.length === 0) return; // Wait for data to load
+
+        // Switch to list view if in matrix mode
+        if (viewMode !== 'list') {
+            setViewMode('list');
+        }
+
+        // Switch to 'all' date filter to ensure entry is visible
+        if (dateFilter !== 'all') {
+            setDateFilter('all');
+            return; // Let re-render happen with new filter, then this effect runs again
+        }
+
+        // Find the target entry index in the full filtered list
+        const targetIndex = allEntries.findIndex(e => e.id === navigationTarget.id);
+        if (targetIndex === -1) {
+            onNavigationComplete?.();
+            return;
+        }
+
+        // Expand displayLimit if needed
+        if (targetIndex >= displayLimit) {
+            setDisplayLimit(targetIndex + 20);
+            return; // Let re-render happen with expanded limit
+        }
+
+        // Try to find and scroll to the element
+        const scrollToElement = () => {
+            const el = document.querySelector(`[data-entry-id="${navigationTarget.id}"]`);
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                el.classList.add('search-highlight');
+                setTimeout(() => {
+                    el.classList.remove('search-highlight');
+                    onNavigationComplete?.();
+                }, 2000);
+            } else {
+                onNavigationComplete?.();
+            }
+        };
+
+        // Small delay to let DOM update after filter/limit changes
+        const timer = setTimeout(scrollToElement, 300);
+        return () => clearTimeout(timer);
+    }, [navigationTarget, allEntries.length, dateFilter, displayLimit, viewMode]);
 
     const handleDelete = async (id: string) => {
         if (!user) return;

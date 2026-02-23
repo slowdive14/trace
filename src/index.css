@@ -21,3 +21,13 @@
   background: #262626;
   border-radius: 3px;
 }
+
+/* Search result navigation highlight */
+@keyframes searchHighlight {
+  0%, 30% { background-color: rgba(99, 102, 241, 0.25); }
+  100% { background-color: transparent; }
+}
+.search-highlight {
+  animation: searchHighlight 2s ease-out;
+  border-radius: 0.5rem;
+}

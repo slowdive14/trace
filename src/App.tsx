@@ -10,7 +10,7 @@ import ExpenseInput from './components/ExpenseInput';
 import UnifiedCalendarModal from './components/UnifiedCalendarModal';
 import TodoTab from './components/TodoTab';
 import WorryTab from './components/WorryTab';
-import type { Entry, Expense, Todo, Worry, WorryEntry } from './types/types';
+import type { Entry, Expense, Todo, Worry, WorryEntry, NavigationTarget } from './types/types';
 import { onSnapshot, collection, query, orderBy } from 'firebase/firestore';
 import { db } from './services/firebase';
 
@@ -23,6 +23,7 @@ const AppContent: React.FC = () => {
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [selectedExpenseDate, setSelectedExpenseDate] = useState<Date | undefined>(undefined);
   const [bookSubFilter, setBookSubFilter] = useState<string | null>(null);
+  const [navigationTarget, setNavigationTarget] = useState<NavigationTarget | null>(null);
 
   // Data for unified calendar
   const [entries, setEntries] = useState<Entry[]>([]);
@@ -161,6 +162,23 @@ const AppContent: React.FC = () => {
     return () => unsubscribe();
   }, [user]);
 
+  const handleSearchNavigate = (target: NavigationTarget) => {
+    setShowSearch(false);
+
+    if (target.type === 'entry' && target.category) {
+      setActiveTab(target.category);
+      setSelectedTag(null);
+    } else if (target.type === 'todo') {
+      setActiveTab('todo');
+    }
+
+    setNavigationTarget(target);
+  };
+
+  const handleNavigationComplete = () => {
+    setNavigationTarget(null);
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-bg-primary flex items-center justify-center text-text-secondary">
@@ -200,7 +218,7 @@ const AppContent: React.FC = () => {
               <ExpenseInput externalDate={selectedExpenseDate} />
             </>
           ) : activeTab === 'todo' ? (
-            <TodoTab key="todo-tab" />
+            <TodoTab key="todo-tab" navigationTarget={navigationTarget} onNavigationComplete={handleNavigationComplete} />
           ) : activeTab === 'chore' ? (
             <>
               <Timeline
@@ -209,6 +227,8 @@ const AppContent: React.FC = () => {
                 selectedTag={selectedTag}
                 onTagClick={(tag: string) => setSelectedTag(tag)}
                 collectionName="chores"
+                navigationTarget={navigationTarget}
+                onNavigationComplete={handleNavigationComplete}
               />
               <InputBar activeCategory="chore" collectionName="chores" entries={entries} />
             </>
@@ -222,6 +242,8 @@ const AppContent: React.FC = () => {
                 collectionName="books"
                 subFilter={bookSubFilter}
                 onSubFilterChange={setBookSubFilter}
+                navigationTarget={navigationTarget}
+                onNavigationComplete={handleNavigationComplete}
               />
               <InputBar activeCategory="book" collectionName="books" entries={entries} />
             </>
@@ -232,6 +254,8 @@ const AppContent: React.FC = () => {
                 category={activeTab}
                 selectedTag={selectedTag}
                 onTagClick={(tag: string) => setSelectedTag(tag)}
+                navigationTarget={navigationTarget}
+                onNavigationComplete={handleNavigationComplete}
               />
               <InputBar activeCategory={activeTab} entries={entries} />
             </>
@@ -340,7 +364,7 @@ const AppContent: React.FC = () => {
             />
           )}
           {showSearch && (
-            <SearchBar onClose={() => setShowSearch(false)} />
+            <SearchBar onClose={() => setShowSearch(false)} onNavigate={handleSearchNavigate} />
           )}
 
           {showUnifiedCalendar && (

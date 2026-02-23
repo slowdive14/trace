@@ -4,7 +4,7 @@ import { saveTodo, getTodo, getTodos, getAllTodos, saveTemplate, getTemplate } f
 import { CheckSquare, Square, Bold, Highlighter, ArrowRight, ArrowLeft, Edit3, Check } from 'lucide-react';
 import { format, subDays, startOfDay, endOfDay, startOfWeek, endOfWeek } from 'date-fns';
 import { ko } from 'date-fns/locale';
-import type { Todo } from '../types/types';
+import type { Todo, NavigationTarget } from '../types/types';
 import { getLogicalDate } from '../utils/dateUtils';
 import {
     type TodoItem,
@@ -41,6 +41,8 @@ interface TodoTabProps {
         q3: { title: string; label: string; color: string };
         q4: { title: string; label: string; color: string };
     };
+    navigationTarget?: NavigationTarget | null;
+    onNavigationComplete?: () => void;
 }
 
 type ViewMode = 'edit' | 'history' | 'template' | 'matrix';
@@ -53,7 +55,9 @@ const TodoTab: React.FC<TodoTabProps> = ({
         q2: { title: "Q2: Schedule", label: "중요", color: "text-green-400" },
         q3: { title: "Q3: Delegate", label: "긴급", color: "text-yellow-400" },
         q4: { title: "Q4: Eliminate", label: "보관", color: "text-blue-400" },
-    }
+    },
+    navigationTarget,
+    onNavigationComplete,
 }) => {
     const [content, setContent] = useState('');
     const [isEditing, setIsEditing] = useState(false);
@@ -154,6 +158,40 @@ const TodoTab: React.FC<TodoTabProps> = ({
         };
         loadAllTodos();
     }, [user, collectionName, currentLogicalDay]);
+
+    // Navigation: scroll to a specific todo date when navigationTarget is set
+    useEffect(() => {
+        if (!navigationTarget || navigationTarget.type !== 'todo') return;
+
+        // Switch to history view
+        if (viewMode !== 'history') {
+            setViewMode('history');
+            return; // Let re-render happen, then this effect runs again
+        }
+
+        if (historyTodos.length === 0) return; // Wait for history to load
+
+        const targetDateStr = navigationTarget.date
+            ? format(navigationTarget.date, 'yyyy-MM-dd')
+            : format(navigationTarget.timestamp, 'yyyy-MM-dd');
+
+        const scrollToDate = () => {
+            const el = document.querySelector(`[data-todo-date="${targetDateStr}"]`);
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                el.classList.add('search-highlight');
+                setTimeout(() => {
+                    el.classList.remove('search-highlight');
+                    onNavigationComplete?.();
+                }, 2000);
+            } else {
+                onNavigationComplete?.();
+            }
+        };
+
+        const timer = setTimeout(scrollToDate, 300);
+        return () => clearTimeout(timer);
+    }, [navigationTarget, viewMode, historyTodos.length]);
 
     // Calculate weekly stats (Korean week: Monday start) - memoized for performance
     const weeklyStats = useMemo(() => {
@@ -658,7 +696,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
                 <div className="flex-1 overflow-y-auto px-4 pb-8">
                     <div className="max-w-md mx-auto pt-4">
                         {Object.entries(groupedTodos).map(([date, todo]) => (
-                            <div key={date} className="mb-8">
+                            <div key={date} data-todo-date={date} className="mb-8">
                                 <div
                                     className="sticky top-0 bg-bg-primary/95 backdrop-blur py-3 border-b border-bg-tertiary mb-4"
                                     style={{ zIndex: 10 }}

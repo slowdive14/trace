@@ -132,7 +132,7 @@ const EntryItem: React.FC<EntryItemProps> = ({ entry, onDelete, onEdit, highligh
     };
 
     return (
-        <div className={`flex gap-4 py-3 group relative transition-colors rounded-lg px-2 -mx-2 ${entry.isPinned ? 'bg-accent/5' : 'hover:bg-bg-secondary/50'}`}>
+        <div data-entry-id={entry.id} className={`flex gap-4 py-3 group relative transition-colors rounded-lg px-2 -mx-2 ${entry.isPinned ? 'bg-accent/5' : 'hover:bg-bg-secondary/50'}`}>
             {showCopyToast && (
                 <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-accent text-white px-3 py-1 rounded text-xs flex items-center gap-1 z-10">
                     <Check size={12} />
