@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useAuth } from './AuthContext';
 import { saveTodo, getTodo, getTodos, getAllTodos, saveTemplate, getTemplate } from '../services/firestore';
-import { CheckSquare, Square, Bold, Highlighter, ArrowRight, ArrowLeft, Edit3, Check } from 'lucide-react';
-import { format, subDays, startOfDay, endOfDay, startOfWeek, endOfWeek } from 'date-fns';
+import { CheckSquare, Square, Bold, Highlighter, ArrowRight, ArrowLeft, Edit3, Check, ChevronLeft, ChevronRight } from 'lucide-react';
+import { format, subDays, addDays, startOfDay, endOfDay, startOfWeek, endOfWeek, isSameDay } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import type { Todo, NavigationTarget } from '../types/types';
 import { getLogicalDate } from '../utils/dateUtils';
@@ -67,6 +67,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
     const [isSaving, setIsSaving] = useState(false);
     const [lastSaved, setLastSaved] = useState<Date | null>(null);
     const [currentLogicalDay, setCurrentLogicalDay] = useState(format(getLogicalDate(), 'yyyy-MM-dd'));
+    const [selectedDate, setSelectedDate] = useState<Date>(getLogicalDate());
 
     const { user } = useAuth();
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -89,6 +90,35 @@ const TodoTab: React.FC<TodoTabProps> = ({
         };
     }, [currentLogicalDay]);
 
+    // Keep selectedDate in sync when logical day changes (if user was on "today")
+    useEffect(() => {
+        const logicalToday = getLogicalDate();
+        if (isSameDay(selectedDate, subDays(logicalToday, 1))) {
+            // Day rolled over while user was on "today" — update to new today
+            setSelectedDate(logicalToday);
+        }
+    }, [currentLogicalDay]);
+
+    const isToday = isSameDay(selectedDate, getLogicalDate());
+
+    const handleDateChange = useCallback((direction: 'prev' | 'next' | 'today') => {
+        // Flush pending save before switching date
+        if (saveTimeoutRef.current) {
+            clearTimeout(saveTimeoutRef.current);
+            saveTimeoutRef.current = null;
+        }
+
+        if (direction === 'today') {
+            setSelectedDate(getLogicalDate());
+        } else if (direction === 'prev') {
+            setSelectedDate(prev => subDays(prev, 1));
+        } else {
+            setSelectedDate(prev => addDays(prev, 1));
+        }
+        setContent('');
+        setLastSaved(null);
+    }, []);
+
     // Load content based on view mode
     useEffect(() => {
         const loadContent = async () => {
@@ -96,22 +126,21 @@ const TodoTab: React.FC<TodoTabProps> = ({
 
             try {
                 if (viewMode === 'edit' || viewMode === 'matrix') {
-                    // Load logical today's todo (5AM cutoff)
-                    const today = getLogicalDate();
-                    const todo = await getTodo(user.uid, today, collectionName);
+                    // Load selected date's todo
+                    const todo = await getTodo(user.uid, selectedDate, collectionName);
                     if (todo) {
                         setContent(todo.content);
                         setLastSaved(todo.updatedAt || new Date());
-                    } else {
-                        // If no todo for today, try to load template
+                    } else if (isToday) {
+                        // Only load template when editing today and no existing todo
                         const template = await getTemplate(user.uid, collectionName);
                         if (template) {
                             setContent(template);
-                            // Optional: Auto-save the template as today's todo immediately?
-                            // For now, we just pre-fill it. It will be saved when user edits.
                         } else {
                             setContent('');
                         }
+                    } else {
+                        setContent('');
                     }
                 } else if (viewMode === 'template') {
                     // Load template
@@ -123,7 +152,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
             }
         };
         loadContent();
-    }, [user, collectionName, viewMode, currentLogicalDay]);
+    }, [user, collectionName, viewMode, currentLogicalDay, selectedDate]);
 
     // Load history (last 30 days) - also used for stats in edit mode
     useEffect(() => {
@@ -269,9 +298,8 @@ const TodoTab: React.FC<TodoTabProps> = ({
         saveTimeoutRef.current = setTimeout(async () => {
             try {
                 if (viewMode === 'edit' || viewMode === 'matrix') {
-                    // Save to logical today's date
-                    const today = getLogicalDate();
-                    await saveTodo(user.uid, today, newContent, collectionName);
+                    // Save to selected date
+                    await saveTodo(user.uid, selectedDate, newContent, collectionName);
                 } else if (viewMode === 'template') {
                     // Save as template
                     await saveTemplate(user.uid, newContent, collectionName);
@@ -283,7 +311,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
                 setIsSaving(false);
             }
         }, 500);
-    }, [user, collectionName, viewMode]);
+    }, [user, collectionName, viewMode, selectedDate]);
 
     const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
         const newContent = e.target.value;
@@ -691,6 +719,39 @@ const TodoTab: React.FC<TodoTabProps> = ({
                 </div>
             </div>
 
+            {/* Date Navigation (edit/matrix mode only) */}
+            {(viewMode === 'edit' || viewMode === 'matrix') && (
+                <div className="flex-shrink-0 bg-bg-primary border-b border-bg-tertiary px-4 py-2 z-10">
+                    <div className="max-w-md mx-auto flex items-center justify-between">
+                        <button
+                            onClick={() => handleDateChange('prev')}
+                            className="p-1.5 text-text-secondary hover:text-text-primary transition-colors rounded-md hover:bg-bg-secondary"
+                        >
+                            <ChevronLeft size={20} />
+                        </button>
+                        <button
+                            onClick={() => handleDateChange('today')}
+                            className="flex items-center gap-2 px-3 py-1 rounded-md transition-colors hover:bg-bg-secondary"
+                        >
+                            <span className={`text-sm font-medium ${isToday ? 'text-text-primary' : 'text-accent'}`}>
+                                {format(selectedDate, 'M월 d일 (EEE)', { locale: ko })}
+                            </span>
+                            {isToday ? (
+                                <span className="text-[10px] bg-accent/15 text-accent px-1.5 py-0.5 rounded-full font-bold">오늘</span>
+                            ) : (
+                                <span className="text-[10px] text-text-tertiary">← 오늘로</span>
+                            )}
+                        </button>
+                        <button
+                            onClick={() => handleDateChange('next')}
+                            className="p-1.5 text-text-secondary hover:text-text-primary transition-colors rounded-md hover:bg-bg-secondary"
+                        >
+                            <ChevronRight size={20} />
+                        </button>
+                    </div>
+                </div>
+            )}
+
             {viewMode === 'history' ? (
                 /* History Mode */
                 <div className="flex-1 overflow-y-auto px-4 pb-8">
@@ -864,8 +925,8 @@ const TodoTab: React.FC<TodoTabProps> = ({
                         <>
                             {/* Reading Mode (Only for Edit Mode) */}
                             <div className="flex-1 overflow-y-auto p-4 pt-16 pb-20 w-full">
-                                {/* Progress Bar */}
-                                {todos.length > 0 && (() => {
+                                {/* Progress Bar (today only) */}
+                                {isToday && todos.length > 0 && (() => {
                                     const completed = todos.filter(t => t.checked).length;
                                     const total = todos.length;
                                     const percentage = calculateTotalWeightedRate(todos);
