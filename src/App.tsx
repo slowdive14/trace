@@ -267,94 +267,36 @@ const AppContent: React.FC = () => {
           )}
 
           {/* Category Tabs */}
-          <div className={`fixed left-0 right-0 bg-bg-primary/95 backdrop-blur border-t border-bg-tertiary z-[45] ${['worry', 'braindump'].includes(activeTab) ? 'bottom-0' : 'bottom-20'
+          <div className={`fixed left-0 right-0 bg-bg-primary/80 backdrop-blur-xl border-t border-white/5 z-[45] safe-area-bottom transition-all duration-300 ${['worry', 'braindump'].includes(activeTab) ? 'bottom-0' : 'bottom-20'
             }`}>
-            <div className="max-w-md mx-auto flex">
-              <button
-                onClick={() => {
-                  setActiveTab('action');
-                  setSelectedTag(null);
-                }}
-                className={`flex-1 py-4 text-sm font-medium transition-colors ${activeTab === 'action'
-                  ? 'text-blue-500 border-b-2 border-blue-500'
-                  : 'text-text-secondary hover:text-text-primary'
-                  }`}
-              >
-                일상
-              </button>
-              <button
-                onClick={() => {
-                  setActiveTab('braindump');
-                  setSelectedTag(null);
-                }}
-                className={`flex-1 py-4 text-sm font-medium transition-colors ${activeTab === 'braindump'
-                  ? 'text-purple-500 border-b-2 border-purple-500'
-                  : 'text-text-secondary hover:text-text-primary'
-                  }`}
-              >
-                🧠 덤프
-              </button>
-              <button
-                onClick={() => {
-                  setActiveTab('chore');
-                  setSelectedTag(null);
-                }}
-                className={`flex-1 py-4 text-sm font-medium transition-colors ${activeTab === 'chore'
-                  ? 'text-orange-500 border-b-2 border-orange-500'
-                  : 'text-text-secondary hover:text-text-primary'
-                  }`}
-              >
-                할일/정보
-              </button>
-              <button
-                onClick={() => {
-                  setActiveTab('book');
-                  setSelectedTag(null);
-                  setBookSubFilter(null);
-                }}
-                className={`flex-1 py-4 text-sm font-medium transition-colors ${activeTab === 'book'
-                  ? 'text-amber-700 border-b-2 border-amber-700'
-                  : 'text-text-secondary hover:text-text-primary'
-                  }`}
-              >
-                📚 책
-              </button>
-              <button
-                onClick={() => {
-                  setActiveTab('todo');
-                  setSelectedTag(null);
-                }}
-                className={`flex-1 py-4 text-sm font-medium transition-colors ${activeTab === 'todo'
-                  ? 'text-accent border-b-2 border-accent'
-                  : 'text-text-secondary hover:text-text-primary'
-                  }`}
-              >
-                투두
-              </button>
-              <button
-                onClick={() => {
-                  setActiveTab('expense');
-                  setSelectedTag(null);
-                }}
-                className={`flex-1 py-4 text-sm font-medium transition-colors ${activeTab === 'expense'
-                  ? 'text-accent border-b-2 border-accent'
-                  : 'text-text-secondary hover:text-text-primary'
-                  }`}
-              >
-                💰 가계부
-              </button>
-              <button
-                onClick={() => {
-                  setActiveTab('worry');
-                  setSelectedTag(null);
-                }}
-                className={`flex-1 py-4 text-sm font-medium transition-colors ${activeTab === 'worry'
-                  ? 'text-green-500 border-b-2 border-green-500'
-                  : 'text-text-secondary hover:text-text-primary'
-                  }`}
-              >
-                🌱 고민
-              </button>
+            <div className="max-w-md mx-auto flex px-2">
+              {[
+                { id: 'action', label: '일상', color: 'text-blue-400', border: 'border-blue-400/50' },
+                { id: 'braindump', label: '🧠 덤프', color: 'text-accent', border: 'border-accent/50' },
+                { id: 'chore', label: '할일', color: 'text-orange-400', border: 'border-orange-400/50' },
+                { id: 'book', label: '📚 책', color: 'text-amber-600', border: 'border-amber-600/50' },
+                { id: 'todo', label: '투두', color: 'text-emerald-400', border: 'border-emerald-400/50' },
+                { id: 'expense', label: '💰 돈', color: 'text-rose-400', border: 'border-rose-400/50' },
+                { id: 'worry', label: '🌱 고민', color: 'text-green-400', border: 'border-green-400/50' },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => {
+                    setActiveTab(tab.id as any);
+                    setSelectedTag(null);
+                    if (tab.id === 'book') setBookSubFilter(null);
+                  }}
+                  className={`flex-1 py-5 text-xs font-bold transition-all duration-300 flex flex-col items-center gap-1 ${activeTab === tab.id
+                    ? `${tab.color} scale-110`
+                    : 'text-text-secondary hover:text-text-primary'
+                    }`}
+                >
+                  <span className="truncate w-full text-center">{tab.label}</span>
+                  {activeTab === tab.id && (
+                    <div className={`w-1 h-1 rounded-full bg-current shadow-[0_0_8px_currentColor]`} />
+                  )}
+                </button>
+              ))}
             </div>
           </div>
 

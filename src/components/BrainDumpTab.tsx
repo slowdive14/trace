@@ -385,30 +385,31 @@ const BrainDumpTab: React.FC = () => {
     return (
       <div className="fixed inset-0 z-50 bg-bg-primary flex flex-col">
         {/* Progress bar */}
-        <div className="h-1 bg-bg-tertiary">
+        <div className="h-1.5 bg-bg-tertiary/50 overflow-hidden">
           <div
-            className={`h-full transition-all duration-1000 ${isOvertime
-              ? 'bg-gradient-to-r from-green-500 to-emerald-400'
-              : 'bg-gradient-to-r from-purple-600 to-purple-400'
+            className={`h-full transition-all duration-1000 ease-out shadow-[0_0_10px_rgba(139,92,246,0.5)] ${isOvertime
+              ? 'bg-gradient-to-r from-emerald-500 to-green-400'
+              : 'bg-gradient-to-r from-accent to-accent-light text-shadow-glow'
               }`}
             style={{ width: `${progress}%` }}
           />
         </div>
 
         {/* Top bar */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-bg-tertiary">
-          <div className="flex items-center gap-3">
-            <span className={`font-mono text-lg font-bold ${isOvertime ? 'text-green-400' : timeLeft <= 60 ? 'text-red-400 animate-pulse' : 'text-purple-400'
+        <div className="flex items-center justify-between px-6 py-4 bg-bg-primary/50 backdrop-blur-md border-b border-white/5">
+          <div className="flex items-center gap-4">
+            <span className={`font-mono text-xl font-black tracking-tighter ${isOvertime ? 'text-emerald-400' : timeLeft <= 60 ? 'text-red-400 animate-pulse' : 'text-accent'
               }`}>
               {isOvertime ? `+${formatTime(Math.abs(timeLeft))}` : formatTime(timeLeft)}
             </span>
-            <span className="text-text-secondary text-sm">{charCount}자</span>
+            <div className="h-4 w-[1px] bg-white/10" />
+            <span className="text-text-secondary text-sm font-medium tracking-wide">{charCount} CHARS</span>
           </div>
           <button
             onClick={handleManualStop}
-            className="px-4 py-1.5 bg-purple-600 text-white rounded-full text-sm font-medium hover:bg-purple-500 transition-colors"
+            className="px-6 py-2 bg-accent text-white rounded-full text-sm font-bold shadow-lg shadow-accent/20 hover:bg-accent-hover transition-all duration-200 active:scale-95"
           >
-            완료
+            FINISH
           </button>
         </div>
 
@@ -446,9 +447,9 @@ const BrainDumpTab: React.FC = () => {
               setIsDeleting(false);
             }
           }}
-          className={`flex-1 w-full bg-transparent text-lg leading-relaxed p-6 resize-none focus:outline-none placeholder-text-secondary/50 transition-colors ${isDeleting ? 'text-red-400/70' : 'text-text-primary'
+          className={`flex-1 w-full bg-transparent text-xl leading-[1.8] p-8 md:p-12 resize-none focus:outline-none placeholder-text-secondary/30 transition-all duration-500 font-serif selection:bg-accent/20 ${isDeleting ? 'text-red-400/50 scale-[0.99] blur-[0.5px]' : 'text-text-primary'
             }`}
-          placeholder="지금 머릿속에 있는 것들을 자유롭게 쏟아내세요..."
+          placeholder="Type everything on your mind. Don't stop, let it flow..."
         />
       </div>
     );
@@ -542,9 +543,13 @@ const BrainDumpTab: React.FC = () => {
           <div className="space-y-5">
             {/* Summary */}
             {insight.summary && (
-              <div className="border-l-2 border-purple-500 pl-4">
-                <h3 className="text-xs text-purple-400 font-medium mb-1.5 uppercase tracking-wider">요약</h3>
-                <p className="text-text-primary text-sm leading-relaxed">{insight.summary}</p>
+              <div className="bg-bg-secondary/50 border border-white/5 p-6 rounded-2xl backdrop-blur-sm relative overflow-hidden group hover:border-accent/30 transition-all duration-300">
+                <div className="absolute top-0 left-0 w-1 h-full bg-accent" />
+                <h3 className="text-xs text-accent font-bold mb-3 uppercase tracking-widest flex items-center gap-2">
+                  <Sparkles size={14} />
+                  Summary
+                </h3>
+                <p className="text-text-primary text-lg leading-relaxed font-medium">{insight.summary}</p>
               </div>
             )}
 
@@ -777,7 +782,7 @@ const BrainDumpTab: React.FC = () => {
   const recentDumps = dumps.filter(d => d.status === 'completed').slice(0, 3);
 
   return (
-    <div className="pb-16 px-4">
+    <div className="pb-16 px-4 text-[110%] text-base">
       {/* Resume banner */}
       {resumeBanner && (
         <div className="mt-4 p-4 bg-purple-500/10 border border-purple-500/20 rounded-xl">
@@ -812,7 +817,7 @@ const BrainDumpTab: React.FC = () => {
       </div>
 
       <p className="text-text-secondary text-sm mb-6">
-        머릿속 생각을 자유롭게 쏟아내세요. 타이머가 끝나면 AI가 정리해줍니다.
+        머릿속 생각을 자유롭게 쏟어내세요. 타이머가 끝나면 AI가 정리해줍니다.
       </p>
 
       {/* Duration selector */}
@@ -835,12 +840,14 @@ const BrainDumpTab: React.FC = () => {
       </div>
 
       {/* Start button */}
-      <button
-        onClick={handleStart}
-        className="w-full py-4 bg-gradient-to-r from-purple-600 to-purple-500 text-white rounded-2xl text-lg font-medium hover:from-purple-500 hover:to-purple-400 transition-all shadow-lg shadow-purple-600/20 active:scale-[0.98] mb-8"
-      >
-        시작하기
-      </button>
+      <div className="flex justify-center mb-10">
+        <button
+          onClick={handleStart}
+          className="px-10 py-3.5 bg-gradient-to-r from-accent to-purple-500 text-white rounded-full text-base font-bold shadow-lg shadow-accent/20 hover:shadow-accent/40 hover:scale-105 transition-all duration-300 active:scale-95"
+        >
+          시작하기
+        </button>
+      </div>
 
       {/* Recent sessions */}
       {recentDumps.length > 0 && (

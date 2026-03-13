@@ -4,13 +4,18 @@
 
 @layer base {
   body {
-    @apply bg-bg-primary text-text-primary;
+    @apply bg-bg-primary text-text-primary selection:bg-accent/30 selection:text-white;
   }
 }
 
-/* Custom Scrollbar for Timeline */
+/* Smooth Scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Custom Scrollbar for Premium Feel */
 ::-webkit-scrollbar {
-  width: 6px;
+  width: 5px;
 }
 
 ::-webkit-scrollbar-track {
@@ -18,16 +23,15 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #262626;
-  border-radius: 3px;
+  background: theme('colors.bg.tertiary');
+  border-radius: 10px;
 }
 
-/* Search result navigation highlight */
-@keyframes searchHighlight {
-  0%, 30% { background-color: rgba(99, 102, 241, 0.25); }
-  100% { background-color: transparent; }
+::-webkit-scrollbar-thumb:hover {
+  background: theme('colors.accent.DEFAULT');
 }
-.search-highlight {
-  animation: searchHighlight 2s ease-out;
-  border-radius: 0.5rem;
+
+/* Better focus states */
+:focus-visible {
+  @apply outline-none ring-2 ring-accent/50;
 }

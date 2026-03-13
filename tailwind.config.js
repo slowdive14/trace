@@ -8,22 +8,29 @@ export default {
     extend: {
       colors: {
         bg: {
-          primary: '#0d0d0d',
-          secondary: '#1a1a1a',
-          tertiary: '#262626',
+          primary: '#0a0a0a',
+          secondary: '#141414',
+          tertiary: '#1f1f1f',
         },
         text: {
-          primary: '#ffffff',
-          secondary: '#a0a0a0',
+          primary: '#f5f5f5',
+          secondary: '#94a3b8',
         },
-        accent: '#6366f1',
+        accent: {
+          DEFAULT: '#8b5cf6',
+          hover: '#7c3aed',
+          light: '#a78bfa',
+        },
         tag: {
-          bg: '#374151',
-          text: '#93c5fd',
+          bg: '#1e293b',
+          text: '#cbd5e1',
         },
       },
       fontFamily: {
-        sans: ['Pretendard', 'sans-serif'],
+        sans: ['Pretendard', 'Inter', 'system-ui', 'sans-serif'],
+      },
+      letterSpacing: {
+        tight: '-0.02em',
       },
     },
   },
