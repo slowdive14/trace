@@ -22,7 +22,7 @@ export const generateWorryActions = async (worryContent: string): Promise<string
 
     const genAI = new GoogleGenerativeAI(apiKey);
 
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
 
     const prompt = `
     사용자의 고민: "${worryContent}"
@@ -61,7 +61,7 @@ export const analyzeBrainDump = async (content: string): Promise<BrainDumpInsigh
         throw new Error("Gemini API key is not configured.");
     }
 
-    const model = currentGenAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const model = currentGenAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
 
     const prompt = `
     아래는 사용자가 자유롭게 쏟아낸 생각의 기록입니다. 이 텍스트를 분석해서 구조화된 인사이트를 제공해줘.
