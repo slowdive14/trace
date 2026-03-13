@@ -10,6 +10,7 @@ import ExpenseInput from './components/ExpenseInput';
 import UnifiedCalendarModal from './components/UnifiedCalendarModal';
 import TodoTab from './components/TodoTab';
 import WorryTab from './components/WorryTab';
+import BrainDumpTab from './components/BrainDumpTab';
 import type { Entry, Expense, Todo, Worry, WorryEntry, NavigationTarget } from './types/types';
 import { onSnapshot, collection, query, orderBy } from 'firebase/firestore';
 import { db } from './services/firebase';
@@ -19,7 +20,7 @@ const AppContent: React.FC = () => {
   const [showCalendar, setShowCalendar] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [showUnifiedCalendar, setShowUnifiedCalendar] = useState(false);
-  const [activeTab, setActiveTab] = useState<'action' | 'thought' | 'chore' | 'book' | 'todo' | 'expense' | 'worry'>('action');
+  const [activeTab, setActiveTab] = useState<'action' | 'braindump' | 'chore' | 'book' | 'todo' | 'expense' | 'worry'>('action');
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [selectedExpenseDate, setSelectedExpenseDate] = useState<Date | undefined>(undefined);
   const [bookSubFilter, setBookSubFilter] = useState<string | null>(null);
@@ -166,7 +167,9 @@ const AppContent: React.FC = () => {
     setShowSearch(false);
 
     if (target.type === 'entry' && target.category) {
-      setActiveTab(target.category);
+      // Old 'thought' entries still exist in search - navigate to action as fallback
+      const tab = target.category === 'thought' ? 'action' : target.category;
+      setActiveTab(tab as any);
       setSelectedTag(null);
     } else if (target.type === 'todo') {
       setActiveTab('todo');
@@ -212,6 +215,8 @@ const AppContent: React.FC = () => {
 
           {activeTab === 'worry' ? (
             <WorryTab />
+          ) : activeTab === 'braindump' ? (
+            <BrainDumpTab />
           ) : activeTab === 'expense' ? (
             <>
               <ExpenseTimeline onDateSelect={setSelectedExpenseDate} />
@@ -262,7 +267,7 @@ const AppContent: React.FC = () => {
           )}
 
           {/* Category Tabs */}
-          <div className={`fixed left-0 right-0 bg-bg-primary/95 backdrop-blur border-t border-bg-tertiary z-[45] ${['worry'].includes(activeTab) ? 'bottom-0' : 'bottom-20'
+          <div className={`fixed left-0 right-0 bg-bg-primary/95 backdrop-blur border-t border-bg-tertiary z-[45] ${['worry', 'braindump'].includes(activeTab) ? 'bottom-0' : 'bottom-20'
             }`}>
             <div className="max-w-md mx-auto flex">
               <button
@@ -279,15 +284,15 @@ const AppContent: React.FC = () => {
               </button>
               <button
                 onClick={() => {
-                  setActiveTab('thought');
+                  setActiveTab('braindump');
                   setSelectedTag(null);
                 }}
-                className={`flex-1 py-4 text-sm font-medium transition-colors ${activeTab === 'thought'
+                className={`flex-1 py-4 text-sm font-medium transition-colors ${activeTab === 'braindump'
                   ? 'text-purple-500 border-b-2 border-purple-500'
                   : 'text-text-secondary hover:text-text-primary'
                   }`}
               >
-                생각
+                🧠 덤프
               </button>
               <button
                 onClick={() => {

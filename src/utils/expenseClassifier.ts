@@ -45,8 +45,8 @@ export async function classifyExpenseWithAI(description: string): Promise<Expens
 
     // 키워드 매칭 실패 시 Gemini API 사용
     try {
-        // localStorage에서 API 키 읽기
-        const apiKey = localStorage.getItem('gemini_api_key');
+        // localStorage 또는 환경변수에서 API 키 읽기 (우선순위: 환경변수 > localStorage)
+        const apiKey = import.meta.env.VITE_GEMINI_API_KEY || localStorage.getItem('gemini_api_key');
         if (!apiKey) {
             console.log('Gemini API key not found in settings');
             return '기타';

@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import type { BrainDumpInsight } from "../types/types";
 
 const getApiKey = () => {
     // 1. Try environment variable
@@ -12,25 +13,14 @@ const getApiKey = () => {
     return null;
 };
 
-const initializeGenAI = () => {
-    const apiKey = getApiKey();
-    if (apiKey) {
-        return new GoogleGenerativeAI(apiKey);
-    }
-    return null;
-};
-
-let genAI: GoogleGenerativeAI | null = initializeGenAI();
-
 export const generateWorryActions = async (worryContent: string): Promise<string[]> => {
-    // Re-initialize if null (in case key was added to localStorage later)
-    if (!genAI) {
-        genAI = initializeGenAI();
-    }
+    const apiKey = getApiKey();
 
-    if (!genAI) {
+    if (!apiKey) {
         throw new Error("Gemini API key is not configured. Please add it in settings or .env file.");
     }
+
+    const genAI = new GoogleGenerativeAI(apiKey);
 
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
@@ -58,6 +48,63 @@ export const generateWorryActions = async (worryContent: string): Promise<string
         return text.split('\n').filter(line => line.trim().length > 0);
     } catch (error) {
         console.error("Error generating actions:", error);
+        throw error;
+    }
+};
+
+export const analyzeBrainDump = async (content: string): Promise<BrainDumpInsight> => {
+    // Re-initialize if null
+    const key = getApiKey();
+    let currentGenAI = key ? new GoogleGenerativeAI(key) : null;
+
+    if (!currentGenAI) {
+        throw new Error("Gemini API key is not configured.");
+    }
+
+    const model = currentGenAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+
+    const prompt = `
+    아래는 사용자가 자유롭게 쏟아낸 생각의 기록입니다. 이 텍스트를 분석해서 구조화된 인사이트를 제공해줘.
+
+    """
+    ${content}
+    """
+
+    다음 JSON 형식으로 응답해줘. 반드시 유효한 JSON만 출력하고, JSON 외의 텍스트는 포함하지 마.
+
+    {
+        "summary": "전체 내용을 2-3문장으로 요약",
+        "themes": ["핵심 주제 1", "핵심 주제 2", "핵심 주제 3"],
+        "emotions": ["감지된 감정 1", "감지된 감정 2"],
+        "actionItems": ["구체적인 실천 항목 1", "구체적인 실천 항목 2"],
+        "keyInsights": ["핵심 인사이트 1", "핵심 인사이트 2"]
+    }
+
+    지침:
+    - summary: 사용자의 핵심 생각과 흐름을 요약. 공감적이고 따뜻한 톤으로.
+    - themes: 3~5개의 주요 주제를 추출. 짧은 키워드나 구로.
+    - emotions: 텍스트에서 감지되는 감정들. 한국어로 작성 (예: 불안, 기대, 피곤함, 설렘).
+    - actionItems: 텍스트에서 추출하거나 제안할 수 있는 실천 가능한 항목. 없으면 빈 배열.
+    - keyInsights: 사용자가 미처 인식하지 못했을 수 있는 패턴이나 통찰. 1~3개.
+    `;
+
+    try {
+        const result = await model.generateContent(prompt);
+        const response = await result.response;
+        const text = response.text();
+
+        const jsonStr = text.replace(/\`\`\`json\n?/g, '').replace(/\`\`\`\n?/g, '').trim();
+        const parsed = JSON.parse(jsonStr);
+
+        return {
+            summary: parsed.summary || '',
+            themes: parsed.themes || [],
+            emotions: parsed.emotions || [],
+            actionItems: parsed.actionItems || [],
+            keyInsights: parsed.keyInsights || [],
+        };
+    } catch (error) {
+        console.error("Error analyzing brain dump:", error);
         throw error;
     }
 };

@@ -98,6 +98,30 @@ export const EXPENSE_CATEGORY_EMOJI: Record<ExpenseCategory, string> = {
     '기타': '🏷️'
 };
 
+// Brain Dump types
+export interface BrainDumpInsight {
+    summary: string;
+    themes: string[];
+    emotions: string[];
+    actionItems: string[];
+    keyInsights: string[];
+}
+
+export type BrainDumpStatus = 'writing' | 'analyzing' | 'completed';
+
+export interface BrainDump {
+    id: string;
+    content: string;
+    durationMinutes: number;
+    actualDurationSeconds: number;
+    wordCount: number;
+    status: BrainDumpStatus;
+    insight?: BrainDumpInsight;
+    timestamp: Date;
+    createdAt: Date;
+    updatedAt: Date;
+}
+
 export type WorryStatus = 'active' | 'closed';
 
 export type WorryEntryType = 'worry' | 'action' | 'result';

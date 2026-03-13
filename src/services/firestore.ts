@@ -16,7 +16,7 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { startOfDay } from 'date-fns';
-import type { Expense, ExpenseCategory, Todo, Worry, WorryEntry } from '../types/types';
+import type { Expense, ExpenseCategory, Todo, Worry, WorryEntry, BrainDump, BrainDumpStatus, BrainDumpInsight } from '../types/types';
 
 const EXPENSES_COLLECTION = 'expenses';
 
@@ -509,4 +509,70 @@ export const deleteWorryEntry = async (
 ): Promise<void> => {
     const entryRef = doc(db, 'users', userId, 'worryEntries', entryId);
     await deleteDoc(entryRef);
+};
+
+// ============ BrainDump Functions ============
+
+const BRAIN_DUMPS_COLLECTION = 'brainDumps';
+
+export const saveBrainDump = async (
+    userId: string,
+    content: string,
+    durationMinutes: number,
+    actualDurationSeconds: number,
+    wordCount: number,
+    status: BrainDumpStatus = 'writing'
+): Promise<string> => {
+    const docRef = await addDoc(
+        collection(db, `users/${userId}/${BRAIN_DUMPS_COLLECTION}`),
+        {
+            content,
+            durationMinutes,
+            actualDurationSeconds,
+            wordCount,
+            status,
+            insight: null,
+            timestamp: Timestamp.now(),
+            createdAt: Timestamp.now(),
+            updatedAt: Timestamp.now(),
+        }
+    );
+    return docRef.id;
+};
+
+export const updateBrainDump = async (
+    userId: string,
+    dumpId: string,
+    data: Partial<{
+        content: string;
+        actualDurationSeconds: number;
+        wordCount: number;
+        status: BrainDumpStatus;
+        insight: BrainDumpInsight | null;
+    }>
+): Promise<void> => {
+    const docRef = doc(db, `users/${userId}/${BRAIN_DUMPS_COLLECTION}`, dumpId);
+    await updateDoc(docRef, {
+        ...data,
+        updatedAt: Timestamp.now(),
+    });
+};
+
+export const getBrainDumps = async (userId: string): Promise<BrainDump[]> => {
+    const q = query(
+        collection(db, `users/${userId}/${BRAIN_DUMPS_COLLECTION}`),
+        orderBy("timestamp", "desc")
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(d => ({
+        id: d.id,
+        ...d.data(),
+        timestamp: d.data().timestamp.toDate(),
+        createdAt: d.data().createdAt.toDate(),
+        updatedAt: d.data().updatedAt.toDate(),
+    })) as BrainDump[];
+};
+
+export const deleteBrainDump = async (userId: string, dumpId: string): Promise<void> => {
+    await deleteDoc(doc(db, `users/${userId}/${BRAIN_DUMPS_COLLECTION}`, dumpId));
 };
