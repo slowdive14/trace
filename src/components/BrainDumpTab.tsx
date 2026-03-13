@@ -538,6 +538,19 @@ const BrainDumpTab: React.FC = () => {
           </div>
         )}
 
+        {/* Re-analyze button for dumps WITH insight */}
+        {insight && !error && hasApiKey && (
+          <div className="flex justify-end mb-4">
+            <button
+              onClick={handleRetryAnalysis}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-text-secondary hover:text-accent transition-all text-xs font-medium border border-white/5 hover:border-accent/30 rounded-lg bg-bg-secondary/30"
+            >
+              <Sparkles size={12} />
+              다시 분석하기
+            </button>
+          </div>
+        )}
+
         {/* Insight sections */}
         {insight && (
           <div className="space-y-5">
@@ -760,13 +773,13 @@ const BrainDumpTab: React.FC = () => {
 
                 <div className="flex items-center justify-between mt-2">
                   <span className="text-xs text-text-secondary">{dump.wordCount}자</span>
-                  {!dump.insight && dump.wordCount >= 20 && (
+                  {dump.wordCount >= 20 && (
                     <button
                       onClick={e => { e.stopPropagation(); handleAnalyzeFromHistory(dump); }}
                       className="flex items-center gap-1 text-xs text-purple-400 hover:text-purple-300 transition-colors"
                     >
                       <Sparkles size={12} />
-                      AI 분석하기
+                      {dump.insight ? '다시 분석하기' : 'AI 분석하기'}
                     </button>
                   )}
                 </div>
