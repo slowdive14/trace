@@ -32,7 +32,7 @@ export const generateWorryActions = async (worryContent: string): Promise<string
         throw new Error("Gemini API key is not configured. Please add it in settings or .env file.");
     }
 
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
 
     const prompt = `
     사용자의 고민: "${worryContent}"
