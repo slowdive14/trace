@@ -10,10 +10,12 @@ import {
     type TodoItem,
     parseTodos,
     calculateTotalWeightedRate,
+    calculateWeightedSummary,
     getLevelInfo,
     getEncouragementMessage,
     getProgressColor,
-    getRealLevel
+    getRealLevel,
+    formatDuration
 } from '../utils/todoUtils';
 import {
     DndContext,
@@ -929,13 +931,21 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                 {isToday && todos.length > 0 && (() => {
                                     const completed = todos.filter(t => t.checked).length;
                                     const total = todos.length;
-                                    const percentage = calculateTotalWeightedRate(todos);
+                                    const summary = calculateWeightedSummary(todos);
+                                    const percentage = summary.percentage;
                                     const levelInfo = getLevelInfo(percentage);
                                     const message = getEncouragementMessage(percentage);
                                     const progressColor = getProgressColor(percentage);
 
                                     // Stats - using memoized values
                                     const realLevel = getRealLevel(totalCompleted);
+
+                                    // Time-based stats (tree-based, only when duration tasks exist)
+                                    const hasDurationTasks = todos.some(t => t.duration);
+                                    let timeLabel = `${completed}/${total}`;
+                                    if (hasDurationTasks) {
+                                        timeLabel = `${formatDuration(Math.round(summary.completedWeight))} / ${formatDuration(Math.round(summary.totalWeight))}`;
+                                    }
 
                                     return (
                                         <div className={`mb-6 p-4 bg-bg-secondary rounded-xl border border-bg-tertiary ${percentage >= 100 ? 'animate-pulse' : ''}`}>
@@ -957,7 +967,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                                     오늘의 {levelInfo.title}
                                                 </span>
                                                 <span className="text-sm text-text-secondary">
-                                                    {percentage}% ({completed}/{total})
+                                                    {percentage}% ({timeLabel})
                                                 </span>
                                             </div>
 

@@ -7,7 +7,21 @@ export interface TodoItem {
     lineIndex: number;
     quadrant: 'q1' | 'q2' | 'q3' | 'q4' | 'inbox';
     weight: number;
+    duration?: number;  // 분 단위 (UI 표시용)
 }
+
+const DEFAULT_DURATION = 30;
+
+// Parse duration from text like "(2h)", "(30m)", "(1h30m)"
+export const parseDuration = (text: string): { minutes: number; cleanText: string } | null => {
+    const match = text.match(/\((\d+h)?\s*(\d+m)?\)\s*$/);
+    if (!match || (!match[1] && !match[2])) return null;
+    const hours = match[1] ? parseInt(match[1]) : 0;
+    const minutes = match[2] ? parseInt(match[2]) : 0;
+    const total = hours * 60 + minutes;
+    if (total === 0) return null;
+    return { minutes: total, cleanText: text.replace(match[0], '').trim() };
+};
 
 interface TodoNode {
     item: TodoItem;
@@ -71,9 +85,9 @@ const calculateWeightedCompletion = (node: TodoNode, parentWeight: number): { we
     };
 };
 
-// Calculate total weighted completion rate
-export const calculateTotalWeightedRate = (items: TodoItem[]): number => {
-    if (items.length === 0) return 0;
+// Calculate weighted summary (raw values + percentage)
+export const calculateWeightedSummary = (items: TodoItem[]): { totalWeight: number; completedWeight: number; percentage: number } => {
+    if (items.length === 0) return { totalWeight: 0, completedWeight: 0, percentage: 0 };
 
     const rootNodes = buildTaskTree(items);
     let totalWeight = 0;
@@ -85,7 +99,16 @@ export const calculateTotalWeightedRate = (items: TodoItem[]): number => {
         totalCompletedWeight += result.completedWeight;
     });
 
-    return totalWeight > 0 ? Math.round((totalCompletedWeight / totalWeight) * 100) : 0;
+    return {
+        totalWeight,
+        completedWeight: totalCompletedWeight,
+        percentage: totalWeight > 0 ? Math.round((totalCompletedWeight / totalWeight) * 100) : 0
+    };
+};
+
+// Calculate total weighted completion rate
+export const calculateTotalWeightedRate = (items: TodoItem[]): number => {
+    return calculateWeightedSummary(items).percentage;
 };
 
 // Level system (cute lion theme)
@@ -141,11 +164,22 @@ export const getRealLevel = (totalCompleted: number): RealLevelInfo => {
     return { level: 1, title: '아기 사자 🐱', nextLevelAt: 25 };
 };
 
+// Format minutes as human-readable string (e.g., 90 → "1h30m")
+export const formatDuration = (minutes: number): string => {
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    if (h > 0 && m > 0) return `${h}h${m}m`;
+    if (h > 0) return `${h}h`;
+    return `${m}m`;
+};
+
 // Parse todo content string into TodoItem array
 export const parseTodos = (content: string): TodoItem[] => {
     const lines = content.split('\n');
     const items: TodoItem[] = [];
+    let hasDuration = false;
 
+    // 1st pass: parse all items
     lines.forEach((line, index) => {
         const indentMatch = line.match(/^(\t| )*/);
         let indent = 0;
@@ -171,16 +205,29 @@ export const parseTodos = (content: string): TodoItem[] => {
                 cleanText = rawText.replace(qMatch[0], '').trim();
             }
 
+            const duration = parseDuration(cleanText);
+            if (duration) hasDuration = true;
+
             items.push({
                 checked: isChecked,
                 text: cleanText,
                 indent,
                 lineIndex: index,
                 quadrant,
-                weight: isHighlighted(rawText) ? 2 : 1
+                weight: duration ? duration.minutes : (isHighlighted(rawText) ? 2 : 1),
+                duration: duration?.minutes
             });
         }
     });
+
+    // 2nd pass: if any task has duration, set default weight for tasks without duration
+    if (hasDuration) {
+        items.forEach(item => {
+            if (!item.duration) {
+                item.weight = isHighlighted(item.text) ? DEFAULT_DURATION * 2 : DEFAULT_DURATION;
+            }
+        });
+    }
 
     return items;
 };
