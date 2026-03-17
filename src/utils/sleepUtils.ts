@@ -290,11 +290,13 @@ export function calculateSleepScore(records: SleepRecord[], contextRecords: Slee
     }
 
     // 2. 목표 달성 점수 (36점 만점: 취침 18 + 기상 18)
-    // 기록 수에 비례하여 점수 부여 (100% 달성 시 만점)
+    // 해당 시각이 기록된 레코드만 분모로 사용 (미매칭 레코드 불이익 방지)
     const sleepGoalDays = achievements.filter(a => a.sleepGoalMet).length;
     const wakeGoalDays = achievements.filter(a => a.wakeGoalMet).length;
-    const sleepGoalScore = (sleepGoalDays / records.length) * 18;
-    const wakeGoalScore = (wakeGoalDays / records.length) * 18;
+    const recordsWithSleep = records.filter(r => r.sleepTime !== undefined).length;
+    const recordsWithWake = records.filter(r => r.wakeTime !== undefined).length;
+    const sleepGoalScore = recordsWithSleep > 0 ? (sleepGoalDays / recordsWithSleep) * 18 : 0;
+    const wakeGoalScore = recordsWithWake > 0 ? (wakeGoalDays / recordsWithWake) * 18 : 0;
 
 
     // 3. 일관성 점수 (24점 만점: 취침 12 + 기상 12)

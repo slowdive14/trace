@@ -21,7 +21,6 @@ export const generateWorryActions = async (worryContent: string): Promise<string
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-
     const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
 
     const prompt = `
