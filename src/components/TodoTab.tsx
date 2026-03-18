@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useAuth } from './AuthContext';
 import { saveTodo, getTodo, getTodos, getAllTodos, saveTemplate, getTemplate, addEntry, deleteEntry } from '../services/firestore';
 import { extractTags } from '../utils/tagUtils';
-import { CheckSquare, Square, Bold, Highlighter, ArrowRight, ArrowLeft, Edit3, Check, ChevronLeft, ChevronRight, Clock } from 'lucide-react';
+import { CheckSquare, Square, Bold, Highlighter, ArrowRight, ArrowLeft, Edit3, Check, ChevronLeft, ChevronRight, Clock, Trash2, Plus } from 'lucide-react';
 import { format, subDays, addDays, startOfDay, endOfDay, startOfWeek, endOfWeek, isSameDay } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import type { Todo, NavigationTarget } from '../types/types';
@@ -72,6 +72,8 @@ const TodoTab: React.FC<TodoTabProps> = ({
     const [currentLogicalDay, setCurrentLogicalDay] = useState(format(getLogicalDate(), 'yyyy-MM-dd'));
     const [selectedDate, setSelectedDate] = useState<Date>(getLogicalDate());
     const [timePopup, setTimePopup] = useState<{ lineIndex: number; lineText: string; dateStr?: string; currentTime?: number } | null>(null);
+    const [deletingLineIndex, setDeletingLineIndex] = useState<number | null>(null);
+    const [quickAddText, setQuickAddText] = useState('');
 
     const { user } = useAuth();
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -122,6 +124,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
         }
         setContent('');
         setLastSaved(null);
+        setDeletingLineIndex(null);
     }, []);
 
     // Load content based on view mode
@@ -340,6 +343,40 @@ const TodoTab: React.FC<TodoTabProps> = ({
     const extractEid = (line: string): string | null => {
         const match = line.match(/\{eid:([^}]+)\}/);
         return match ? match[1] : null;
+    };
+
+    // Delete a todo line by index (reading mode)
+    const deleteLineByIndex = async (lineIndex: number) => {
+        const lines = content.split('\n');
+        if (lineIndex < 0 || lineIndex >= lines.length) return;
+        const line = lines[lineIndex];
+
+        // Delete linked action entry if eid exists
+        const eid = extractEid(line);
+        if (eid && user) {
+            try {
+                await deleteEntry(user.uid, eid, 'entries');
+            } catch (error) {
+                console.error('Failed to delete linked action entry:', error);
+            }
+        }
+
+        lines.splice(lineIndex, 1);
+        const newContent = lines.join('\n');
+        setContent(newContent);
+        handleSave(newContent);
+        setDeletingLineIndex(null);
+    };
+
+    // Quick-add a todo item (reading mode)
+    const handleQuickAdd = () => {
+        const text = quickAddText.trim();
+        if (!text) return;
+        const newLine = `- [ ] ${text}`;
+        const newContent = content ? (content.endsWith('\n') ? content + newLine : content + '\n' + newLine) : newLine;
+        setContent(newContent);
+        handleSave(newContent);
+        setQuickAddText('');
     };
 
     const toggleCheckbox = async (lineIndex: number) => {
@@ -1201,13 +1238,13 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                 })()}
 
                                 {todos.length === 0 ? (
-                                    <p className="text-text-secondary text-sm">할 일이 없습니다. 편집 버튼을 눌러 추가하세요.</p>
+                                    <p className="text-text-secondary text-sm">할 일이 없습니다.</p>
                                 ) : (
                                     <div className="space-y-2">
                                         {todos.map((item, idx) => (
                                             <div
                                                 key={idx}
-                                                className="flex items-start gap-2 py-1"
+                                                className="group flex items-start gap-2 py-1"
                                                 style={{ paddingLeft: `${item.indent * 24}px` }}
                                             >
                                                 <input
@@ -1219,10 +1256,48 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                                 <span className={`flex-1 leading-relaxed ${item.checked ? 'line-through text-text-secondary' : 'text-text-primary'}`}>
                                                     {renderText(item.text)}
                                                 </span>
+                                                <div className="flex items-center gap-1 shrink-0 mt-0.5">
+                                                    {deletingLineIndex === item.lineIndex ? (
+                                                        <>
+                                                            <button
+                                                                onClick={() => setDeletingLineIndex(null)}
+                                                                className="text-xs text-text-secondary hover:text-text-primary px-1.5 py-0.5 rounded"
+                                                            >
+                                                                취소
+                                                            </button>
+                                                            <button
+                                                                onClick={() => deleteLineByIndex(item.lineIndex)}
+                                                                className="text-xs text-red-400 hover:text-red-300 px-1.5 py-0.5 rounded"
+                                                            >
+                                                                삭제
+                                                            </button>
+                                                        </>
+                                                    ) : (
+                                                        <button
+                                                            onClick={() => setDeletingLineIndex(item.lineIndex)}
+                                                            className="opacity-0 group-hover:opacity-100 transition-opacity text-text-tertiary hover:text-red-400 p-0.5"
+                                                        >
+                                                            <Trash2 size={14} />
+                                                        </button>
+                                                    )}
+                                                </div>
                                             </div>
                                         ))}
                                     </div>
                                 )}
+
+                                {/* Quick Add Input */}
+                                <div className="flex items-center gap-2 mt-4 pt-3 border-t border-bg-tertiary">
+                                    <Plus size={16} className="text-text-tertiary shrink-0" />
+                                    <input
+                                        type="text"
+                                        value={quickAddText}
+                                        onChange={e => setQuickAddText(e.target.value)}
+                                        onKeyDown={e => e.key === 'Enter' && handleQuickAdd()}
+                                        placeholder="할 일 추가..."
+                                        className="flex-1 bg-transparent text-text-primary text-sm outline-none placeholder:text-text-tertiary"
+                                    />
+                                </div>
                             </div>
                         </>
                     )}
