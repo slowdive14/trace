@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useAuth } from './AuthContext';
 import { saveTodo, getTodo, getTodos, getAllTodos, saveTemplate, getTemplate, addEntry, deleteEntry } from '../services/firestore';
 import { extractTags } from '../utils/tagUtils';
-import { CheckSquare, Square, Bold, Highlighter, ArrowRight, ArrowLeft, Edit3, Check, ChevronLeft, ChevronRight } from 'lucide-react';
+import { CheckSquare, Square, Bold, Highlighter, ArrowRight, ArrowLeft, Edit3, Check, ChevronLeft, ChevronRight, Clock } from 'lucide-react';
 import { format, subDays, addDays, startOfDay, endOfDay, startOfWeek, endOfWeek, isSameDay } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import type { Todo, NavigationTarget } from '../types/types';
@@ -71,9 +71,11 @@ const TodoTab: React.FC<TodoTabProps> = ({
     const [lastSaved, setLastSaved] = useState<Date | null>(null);
     const [currentLogicalDay, setCurrentLogicalDay] = useState(format(getLogicalDate(), 'yyyy-MM-dd'));
     const [selectedDate, setSelectedDate] = useState<Date>(getLogicalDate());
+    const [timePopup, setTimePopup] = useState<{ lineIndex: number; lineText: string; dateStr?: string; currentTime?: number } | null>(null);
 
     const { user } = useAuth();
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const timeInputRef = useRef<HTMLInputElement>(null);
     const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // Auto-refresh when logical day changes (5AM cutoff)
@@ -341,29 +343,29 @@ const TodoTab: React.FC<TodoTabProps> = ({
     };
 
     const toggleCheckbox = async (lineIndex: number) => {
-        if (!user) return;
+        if (timePopup) return; // 팝업 열려있으면 무시
         const lines = content.split('\n');
         const line = lines[lineIndex];
 
         if (line.includes('- [ ]')) {
-            // Check ON: create action entry
+            // 미완료 → 완료: 체크 먼저 반영하고 시간 팝업 표시
             lines[lineIndex] = line.replace('- [ ]', '- [x]');
-            const entryContent = extractEntryContent(line);
-            if (entryContent) {
-                try {
-                    const tags = extractTags(entryContent);
-                    const entryId = await addEntry(user.uid, entryContent, tags, 'action', selectedDate);
-                    if (entryId) {
-                        lines[lineIndex] = lines[lineIndex].replace(/\s*$/, '') + ` {eid:${entryId}}`;
-                    }
-                } catch (error) {
-                    console.error('Failed to create action entry:', error);
-                }
-            }
+            const newContent = lines.join('\n');
+            setContent(newContent);
+            handleSave(newContent);
+
+            // 기존 (Xm) 패턴에서 시간 추출
+            const timeMatch = line.match(/\((\d+)m\)\s*$/);
+            const checkedLine = line.replace('- [ ]', '- [x]');
+            setTimePopup({
+                lineIndex,
+                lineText: checkedLine,
+                currentTime: timeMatch ? parseInt(timeMatch[1], 10) : undefined,
+            });
         } else if (line.includes('- [x]')) {
-            // Check OFF: delete linked action entry
+            // 완료 → 미완료: 즉시 토글 + 연동 엔트리 삭제
             const eid = extractEid(line);
-            if (eid) {
+            if (eid && user) {
                 try {
                     await deleteEntry(user.uid, eid, 'entries');
                 } catch (error) {
@@ -371,39 +373,26 @@ const TodoTab: React.FC<TodoTabProps> = ({
                 }
             }
             lines[lineIndex] = line.replace('- [x]', '- [ ]').replace(/\s*\{eid:[^}]+\}/g, '');
+            const newContent = lines.join('\n');
+            setContent(newContent);
+            handleSave(newContent);
         }
-
-        const newContent = lines.join('\n');
-        setContent(newContent);
-        handleSave(newContent);
     };
 
     const toggleHistoryCheckbox = async (dateStr: string, lineIndex: number) => {
+        if (timePopup) return; // 팝업 열려있으면 무시
         const todo = historyTodos.find(t => format(t.date, 'yyyy-MM-dd') === dateStr);
         if (!todo || !user) return;
 
         const lines = todo.content.split('\n');
         const line = lines[lineIndex];
 
-        if (line.includes('- [ ]')) {
-            // Check ON: create action entry
+        const isChecking = line.includes('- [ ]');
+
+        if (isChecking) {
             lines[lineIndex] = line.replace('- [ ]', '- [x]');
-            const entryContent = extractEntryContent(line);
-            if (entryContent) {
-                try {
-                    const [year, month, day] = dateStr.split('-').map(Number);
-                    const entryDate = new Date(year, month - 1, day);
-                    const tags = extractTags(entryContent);
-                    const entryId = await addEntry(user.uid, entryContent, tags, 'action', entryDate);
-                    if (entryId) {
-                        lines[lineIndex] = lines[lineIndex].replace(/\s*$/, '') + ` {eid:${entryId}}`;
-                    }
-                } catch (error) {
-                    console.error('Failed to create action entry:', error);
-                }
-            }
         } else if (line.includes('- [x]')) {
-            // Check OFF: delete linked action entry
+            // 체크 해제: 연동 엔트리 삭제
             const eid = extractEid(line);
             if (eid) {
                 try {
@@ -439,7 +428,158 @@ const TodoTab: React.FC<TodoTabProps> = ({
         } catch (error) {
             console.error('Failed to save history checkbox toggle:', error);
         }
+
+        // 미완료 → 완료 시 시간 팝업 표시
+        if (isChecking) {
+            const timeMatch = line.match(/\((\d+)m\)\s*$/);
+            const checkedLine = line.replace('- [ ]', '- [x]');
+            setTimePopup({
+                lineIndex,
+                lineText: checkedLine,
+                dateStr,
+                currentTime: timeMatch ? parseInt(timeMatch[1], 10) : undefined,
+            });
+        }
     };
+
+    // lineText로 정확한 라인 위치를 찾는 헬퍼
+    const findLineIndex = (lines: string[], expectedIndex: number, lineText: string): number => {
+        // 예상 위치에 있으면 바로 사용
+        if (lines[expectedIndex] === lineText) return expectedIndex;
+        // 없으면 전체 검색
+        const found = lines.findIndex(l => l === lineText);
+        return found;
+    };
+
+    const handleTimeConfirm = useCallback(async (minutes: number | null) => {
+        if (!timePopup) return;
+
+        if (minutes !== null && !isNaN(minutes) && minutes > 0) {
+            const timeStr = `(${minutes}m)`;
+
+            if (timePopup.dateStr) {
+                // 히스토리 뷰
+                const todo = historyTodos.find(t => format(t.date, 'yyyy-MM-dd') === timePopup.dateStr);
+                if (!todo || !user) { setTimePopup(null); return; }
+
+                const lines = todo.content.split('\n');
+                const idx = findLineIndex(lines, timePopup.lineIndex, timePopup.lineText);
+                if (idx === -1) { setTimePopup(null); return; }
+
+                // 기존 (Xm) 제거 후 새 시간 추가
+                lines[idx] = lines[idx].replace(/\s*\(\d+m\)\s*$/, '') + ` ${timeStr}`;
+                const newContent = lines.join('\n');
+
+                setHistoryTodos(prev => prev.map(t => {
+                    if (format(t.date, 'yyyy-MM-dd') === timePopup.dateStr) {
+                        return { ...t, content: newContent };
+                    }
+                    return t;
+                }));
+
+                const logicalToday = format(getLogicalDate(), 'yyyy-MM-dd');
+                if (timePopup.dateStr === logicalToday) {
+                    setContent(newContent);
+                }
+
+                try {
+                    const [year, month, day] = timePopup.dateStr.split('-').map(Number);
+                    const date = new Date(year, month - 1, day);
+                    await saveTodo(user.uid, date, newContent, collectionName);
+                } catch (error) {
+                    console.error('Failed to save time:', error);
+                }
+            } else {
+                // 오늘 뷰
+                const lines = content.split('\n');
+                const idx = findLineIndex(lines, timePopup.lineIndex, timePopup.lineText);
+                if (idx === -1) { setTimePopup(null); return; }
+
+                lines[idx] = lines[idx].replace(/\s*\(\d+m\)\s*$/, '') + ` ${timeStr}`;
+                const newContent = lines.join('\n');
+                setContent(newContent);
+                handleSave(newContent);
+            }
+        }
+
+        // 시간 입력 여부와 무관하게 일상(action) 엔트리 생성 + eid 마커 삽입
+        if (user) {
+            const entryContent = extractEntryContent(timePopup.lineText);
+            if (entryContent) {
+                try {
+                    let entryDate: Date;
+                    if (timePopup.dateStr) {
+                        const [year, month, day] = timePopup.dateStr.split('-').map(Number);
+                        entryDate = new Date(year, month - 1, day);
+                    } else {
+                        entryDate = selectedDate;
+                    }
+                    const tags = extractTags(entryContent);
+                    const entryId = await addEntry(user.uid, entryContent, tags, 'action', entryDate);
+                    if (entryId) {
+                        const eidMarker = ` {eid:${entryId}}`;
+                        if (timePopup.dateStr) {
+                            // 히스토리 뷰: historyTodos에서 해당 라인에 eid 추가
+                            setHistoryTodos(prev => prev.map(t => {
+                                if (format(t.date, 'yyyy-MM-dd') === timePopup.dateStr) {
+                                    const lines = t.content.split('\n');
+                                    const idx = findLineIndex(lines, timePopup.lineIndex, timePopup.lineText);
+                                    if (idx !== -1) {
+                                        // 시간이 추가된 경우 현재 라인 텍스트에서 찾기
+                                        lines[idx] = lines[idx].replace(/\s*$/, '') + eidMarker;
+                                    }
+                                    return { ...t, content: lines.join('\n') };
+                                }
+                                return t;
+                            }));
+                            const logicalToday = format(getLogicalDate(), 'yyyy-MM-dd');
+                            if (timePopup.dateStr === logicalToday) {
+                                setContent(prev => {
+                                    const lines = prev.split('\n');
+                                    const idx = findLineIndex(lines, timePopup.lineIndex, timePopup.lineText);
+                                    if (idx !== -1) {
+                                        lines[idx] = lines[idx].replace(/\s*$/, '') + eidMarker;
+                                    }
+                                    const updated = lines.join('\n');
+                                    handleSave(updated);
+                                    return updated;
+                                });
+                            } else {
+                                // 히스토리 날짜 Firestore 저장
+                                const [year, month, day] = timePopup.dateStr.split('-').map(Number);
+                                const date = new Date(year, month - 1, day);
+                                const todo = historyTodos.find(t => format(t.date, 'yyyy-MM-dd') === timePopup.dateStr);
+                                if (todo) {
+                                    const lines = todo.content.split('\n');
+                                    const idx = findLineIndex(lines, timePopup.lineIndex, timePopup.lineText);
+                                    if (idx !== -1) {
+                                        lines[idx] = lines[idx].replace(/\s*$/, '') + eidMarker;
+                                    }
+                                    await saveTodo(user.uid, date, lines.join('\n'), collectionName);
+                                }
+                            }
+                        } else {
+                            // 오늘 뷰: content에 eid 추가
+                            setContent(prev => {
+                                const lines = prev.split('\n');
+                                const idx = findLineIndex(lines, timePopup.lineIndex, timePopup.lineText);
+                                if (idx !== -1) {
+                                    lines[idx] = lines[idx].replace(/\s*$/, '') + eidMarker;
+                                }
+                                const updated = lines.join('\n');
+                                handleSave(updated);
+                                return updated;
+                            });
+                        }
+                    }
+                } catch (error) {
+                    console.error('Failed to create action entry:', error);
+                }
+            }
+        }
+
+        setTimePopup(null);
+    }, [timePopup, content, historyTodos, user, collectionName, handleSave, selectedDate]);
 
     const renderText = (text: string): React.ReactNode => {
         // Safe parsing without dangerouslySetInnerHTML
@@ -1086,6 +1226,58 @@ const TodoTab: React.FC<TodoTabProps> = ({
                             </div>
                         </>
                     )}
+                </div>
+            )}
+
+            {/* 실행시간 입력 팝업 */}
+            {timePopup && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => handleTimeConfirm(null)}>
+                    <div
+                        className="bg-bg-secondary rounded-xl p-5 shadow-lg w-64 border border-bg-tertiary"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex items-center gap-2 mb-4">
+                            <Clock className="w-4 h-4 text-accent" />
+                            <span className="text-sm font-medium text-text-primary">실행 시간 (분)</span>
+                        </div>
+                        <form onSubmit={(e) => {
+                            e.preventDefault();
+                            const val = timeInputRef.current?.value;
+                            const parsed = val ? parseInt(val, 10) : null;
+                            handleTimeConfirm(parsed !== null && !isNaN(parsed) ? parsed : null);
+                        }}>
+                            <input
+                                ref={timeInputRef}
+                                type="number"
+                                min="1"
+                                max="1440"
+                                autoFocus
+                                defaultValue={timePopup.currentTime || ''}
+                                placeholder="예: 30"
+                                className="w-full px-3 py-2 rounded-lg bg-bg-primary border border-bg-tertiary text-text-primary text-center text-lg focus:outline-none focus:ring-2 focus:ring-accent mb-4"
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Escape') {
+                                        handleTimeConfirm(null);
+                                    }
+                                }}
+                            />
+                            <div className="flex gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => handleTimeConfirm(null)}
+                                    className="flex-1 px-3 py-2 rounded-lg text-sm text-text-secondary hover:bg-bg-tertiary transition-colors"
+                                >
+                                    건너뛰기
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="flex-1 px-3 py-2 rounded-lg text-sm bg-accent text-white hover:bg-accent/80 transition-colors font-medium"
+                                >
+                                    확인
+                                </button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
             )}
         </div>
