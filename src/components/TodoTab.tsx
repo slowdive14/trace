@@ -74,12 +74,15 @@ const TodoTab: React.FC<TodoTabProps> = ({
     const [timePopup, setTimePopup] = useState<{ lineIndex: number; lineText: string; dateStr?: string; currentTime?: number } | null>(null);
     const [deletingLineIndex, setDeletingLineIndex] = useState<number | null>(null);
     const [quickAddText, setQuickAddText] = useState('');
+    const [subAddingIndex, setSubAddingIndex] = useState<number | null>(null);
+    const [subAddText, setSubAddText] = useState('');
     const [sortByDuration, setSortByDuration] = useState<'none' | 'asc' | 'desc'>('none');
 
     const { user } = useAuth();
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const timeInputRef = useRef<HTMLInputElement>(null);
     const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const subAddInputRef = useRef<HTMLInputElement>(null);
 
     // Auto-refresh when logical day changes (5AM cutoff)
     useEffect(() => {
@@ -378,6 +381,35 @@ const TodoTab: React.FC<TodoTabProps> = ({
         setContent(newContent);
         handleSave(newContent);
         setQuickAddText('');
+    };
+
+    // Sub-add: insert a child item below the target line
+    const handleSubAdd = (parentLineIndex: number, parentIndent: number) => {
+        const text = subAddText.trim();
+        if (!text) {
+            setSubAddingIndex(null);
+            return;
+        }
+        const indent = '  '.repeat(parentIndent + 1);
+        const newLine = `${indent}- [ ] ${text}`;
+        const lines = content.split('\n');
+        // Find insertion point: after parent and all its deeper children
+        let insertAt = parentLineIndex + 1;
+        while (insertAt < lines.length) {
+            const match = lines[insertAt].match(/^(\s*)/);
+            const lineIndent = match ? Math.floor(match[1].length / 2) : 0;
+            if (lineIndent > parentIndent) {
+                insertAt++;
+            } else {
+                break;
+            }
+        }
+        lines.splice(insertAt, 0, newLine);
+        const newContent = lines.join('\n');
+        setContent(newContent);
+        handleSave(newContent);
+        setSubAddText('');
+        setSubAddingIndex(null);
     };
 
     const toggleCheckbox = async (lineIndex: number) => {
@@ -1271,8 +1303,8 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                 ) : (
                                     <div className="space-y-2">
                                         {sortedTodos.map((item, idx) => (
+                                        <React.Fragment key={idx}>
                                             <div
-                                                key={idx}
                                                 className="group flex items-start gap-2 py-1"
                                                 style={{ paddingLeft: `${item.indent * 24}px` }}
                                             >
@@ -1302,16 +1334,54 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                                             </button>
                                                         </>
                                                     ) : (
-                                                        <button
-                                                            onClick={() => setDeletingLineIndex(item.lineIndex)}
-                                                            className="opacity-0 group-hover:opacity-100 transition-opacity text-text-tertiary hover:text-red-400 p-0.5"
-                                                        >
-                                                            <Trash2 size={14} />
-                                                        </button>
+                                                        <>
+                                                            <button
+                                                                onClick={() => {
+                                                                    setSubAddingIndex(item.lineIndex);
+                                                                    setSubAddText('');
+                                                                    setTimeout(() => subAddInputRef.current?.focus(), 50);
+                                                                }}
+                                                                className="opacity-0 group-hover:opacity-100 transition-opacity text-text-tertiary hover:text-accent p-0.5"
+                                                                title="하위 항목 추가"
+                                                            >
+                                                                <Plus size={14} />
+                                                            </button>
+                                                            <button
+                                                                onClick={() => setDeletingLineIndex(item.lineIndex)}
+                                                                className="opacity-0 group-hover:opacity-100 transition-opacity text-text-tertiary hover:text-red-400 p-0.5"
+                                                            >
+                                                                <Trash2 size={14} />
+                                                            </button>
+                                                        </>
                                                     )}
                                                 </div>
                                             </div>
-                                        ))}
+                                            {/* Sub-add inline input */}
+                                            {subAddingIndex === item.lineIndex && (
+                                                <div
+                                                    className="flex items-center gap-2 py-1"
+                                                    style={{ paddingLeft: `${(item.indent + 1) * 24}px` }}
+                                                >
+                                                    <Plus size={14} className="text-accent shrink-0" />
+                                                    <input
+                                                        ref={subAddInputRef}
+                                                        type="text"
+                                                        value={subAddText}
+                                                        onChange={e => setSubAddText(e.target.value)}
+                                                        onKeyDown={e => {
+                                                            if (e.key === 'Enter') handleSubAdd(item.lineIndex, item.indent);
+                                                            if (e.key === 'Escape') setSubAddingIndex(null);
+                                                        }}
+                                                        onBlur={() => {
+                                                            if (!subAddText.trim()) setSubAddingIndex(null);
+                                                        }}
+                                                        placeholder="하위 항목 추가..."
+                                                        className="flex-1 bg-transparent text-text-primary text-sm outline-none placeholder:text-text-tertiary"
+                                                    />
+                                                </div>
+                                            )}
+                                        </React.Fragment>
+                                    ))}
                                     </div>
                                 )}
 
