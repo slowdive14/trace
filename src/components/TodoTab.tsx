@@ -611,7 +611,8 @@ const TodoTab: React.FC<TodoTabProps> = ({
                         const [year, month, day] = timePopup.dateStr.split('-').map(Number);
                         entryDate = new Date(year, month - 1, day);
                     } else {
-                        entryDate = selectedDate;
+                        // 오늘 뷰: 체크 시점의 현재 시간 사용 (selectedDate는 마운트 시점 시간이라 부정확)
+                        entryDate = new Date();
                     }
                     const tags = extractTags(entryContent);
                     const entryId = await addEntry(user.uid, entryContent, tags, 'action', entryDate);
