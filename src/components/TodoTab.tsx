@@ -516,6 +516,8 @@ const TodoTab: React.FC<TodoTabProps> = ({
     const findLineIndex = (lines: string[], expectedIndex: number, lineText: string): number => {
         // 예상 위치에 있으면 바로 사용
         if (lines[expectedIndex] === lineText) return expectedIndex;
+        // 시간(Xm)이나 eid 추가로 라인이 변경된 경우: expectedIndex의 라인이 원래 텍스트로 시작하는지 확인
+        if (lines[expectedIndex]?.startsWith(lineText.trimEnd())) return expectedIndex;
         // 없으면 전체 검색
         const found = lines.findIndex(l => l === lineText);
         return found;
