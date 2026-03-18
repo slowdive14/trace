@@ -343,6 +343,23 @@ const TodoTab: React.FC<TodoTabProps> = ({
             .trim();
     };
 
+    // 서브아이템의 부모 항목 텍스트를 찾는 함수
+    const findParentContent = (lines: string[], lineIndex: number): string | null => {
+        const currentLine = lines[lineIndex];
+        const currentIndent = (currentLine.match(/^(\s*)/)?.[1].length ?? 0) / 2;
+        if (currentIndent === 0) return null;
+
+        for (let i = lineIndex - 1; i >= 0; i--) {
+            const line = lines[i];
+            if (!/- \[[ x]\]/.test(line)) continue;
+            const indent = (line.match(/^(\s*)/)?.[1].length ?? 0) / 2;
+            if (indent < currentIndent) {
+                return extractEntryContent(line);
+            }
+        }
+        return null;
+    };
+
     // Extract eid from line
     const extractEid = (line: string): string | null => {
         const match = line.match(/\{eid:([^}]+)\}/);
@@ -576,7 +593,17 @@ const TodoTab: React.FC<TodoTabProps> = ({
 
         // 시간 입력 여부와 무관하게 일상(action) 엔트리 생성 + eid 마커 삽입
         if (user) {
-            const entryContent = extractEntryContent(timePopup.lineText);
+            let entryContent = extractEntryContent(timePopup.lineText);
+            // 서브아이템이면 부모 이름 포함 (예: "회기 리뷰 2 - 1")
+            const todoLines = (timePopup.dateStr
+                ? historyTodos.find(t => format(t.date, 'yyyy-MM-dd') === timePopup.dateStr)?.content
+                : content)?.split('\n');
+            if (todoLines && entryContent) {
+                const parentContent = findParentContent(todoLines, timePopup.lineIndex);
+                if (parentContent) {
+                    entryContent = `${parentContent} - ${entryContent}`;
+                }
+            }
             if (entryContent) {
                 try {
                     let entryDate: Date;
