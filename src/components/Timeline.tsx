@@ -8,7 +8,7 @@ import { useAuth } from './AuthContext';
 import EntryItem from './EntryItem';
 import { onSnapshot, collection, query, orderBy } from 'firebase/firestore';
 import { db } from '../services/firebase';
-import { Share, Pin, LayoutGrid, List, ChevronDown, ChevronUp, Copy, X } from 'lucide-react';
+import { Share, Pin, LayoutGrid, List, ChevronDown, ChevronUp, Copy, X, Calendar } from 'lucide-react';
 import { generateMarkdown, generateMatrixMarkdown, copyToClipboard } from '../utils/exportUtils';
 import { getLogicalDate } from '../utils/dateUtils';
 import { SleepStats } from './SleepStats';
@@ -614,7 +614,23 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
                             >
                                 전체
                             </button>
+                        </div>
+                        <div className="relative">
+                            <button
+                                onClick={() => {
+                                    const input = document.getElementById('timeline-date-picker') as HTMLInputElement;
+                                    input?.showPicker();
+                                }}
+                                className={`p-1.5 rounded-lg transition-colors ${dateFilter === 'specific'
+                                    ? 'bg-accent text-white'
+                                    : 'bg-bg-secondary text-text-secondary hover:text-text-primary'
+                                }`}
+                                title="특정 날짜로 이동"
+                            >
+                                <Calendar size={14} />
+                            </button>
                             <input
+                                id="timeline-date-picker"
                                 type="date"
                                 value={specificDate}
                                 onChange={(e) => {
@@ -623,11 +639,7 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
                                         setDateFilter('specific');
                                     }
                                 }}
-                                className={`w-7 py-1 text-[10px] rounded-md transition-colors bg-transparent cursor-pointer ${dateFilter === 'specific'
-                                    ? 'text-accent'
-                                    : 'text-text-secondary hover:text-text-primary'
-                                }`}
-                                title="특정 날짜로 이동"
+                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                             />
                         </div>
                         <div className="flex gap-1 bg-bg-secondary rounded-lg p-1">
