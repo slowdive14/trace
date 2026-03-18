@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useAuth } from './AuthContext';
 import { saveTodo, getTodo, getTodos, getAllTodos, saveTemplate, getTemplate, addEntry, deleteEntry } from '../services/firestore';
 import { extractTags } from '../utils/tagUtils';
-import { CheckSquare, Square, Bold, Highlighter, ArrowRight, ArrowLeft, Edit3, Check, ChevronLeft, ChevronRight, Clock, Trash2, Plus } from 'lucide-react';
+import { CheckSquare, Square, Bold, Highlighter, ArrowRight, ArrowLeft, Edit3, Check, ChevronLeft, ChevronRight, Clock, Trash2, Plus, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { format, subDays, addDays, startOfDay, endOfDay, startOfWeek, endOfWeek, isSameDay } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import type { Todo, NavigationTarget } from '../types/types';
@@ -74,6 +74,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
     const [timePopup, setTimePopup] = useState<{ lineIndex: number; lineText: string; dateStr?: string; currentTime?: number } | null>(null);
     const [deletingLineIndex, setDeletingLineIndex] = useState<number | null>(null);
     const [quickAddText, setQuickAddText] = useState('');
+    const [sortByDuration, setSortByDuration] = useState<'none' | 'asc' | 'desc'>('none');
 
     const { user } = useAuth();
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -754,6 +755,19 @@ const TodoTab: React.FC<TodoTabProps> = ({
     const [activeId, setActiveId] = useState<string | null>(null);
     const todos = parseTodos(content);
 
+    const sortedTodos = useMemo(() => {
+        if (sortByDuration === 'none') return todos;
+        return [...todos].sort((a, b) => {
+            const aDur = a.duration ?? (sortByDuration === 'asc' ? Infinity : -Infinity);
+            const bDur = b.duration ?? (sortByDuration === 'asc' ? Infinity : -Infinity);
+            return sortByDuration === 'asc' ? aDur - bDur : bDur - aDur;
+        });
+    }, [todos, sortByDuration]);
+
+    const toggleSort = () => {
+        setSortByDuration(prev => prev === 'none' ? 'desc' : prev === 'desc' ? 'asc' : 'none');
+    };
+
     const sensors = useSensors(
         useSensor(MouseSensor, {
             activationConstraint: {
@@ -1237,11 +1251,26 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                     );
                                 })()}
 
+                                {/* Sort Toggle */}
+                                {todos.length > 0 && todos.some(t => t.duration) && (
+                                    <div className="flex justify-end mb-2">
+                                        <button
+                                            onClick={toggleSort}
+                                            className={`flex items-center gap-1 px-2 py-1 text-xs rounded-md transition-colors ${sortByDuration !== 'none' ? 'bg-accent/15 text-accent' : 'text-text-tertiary hover:text-text-secondary hover:bg-bg-secondary'}`}
+                                            title="소요시간 정렬"
+                                        >
+                                            {sortByDuration === 'desc' ? <ArrowDown size={12} /> : sortByDuration === 'asc' ? <ArrowUp size={12} /> : <ArrowUpDown size={12} />}
+                                            <Clock size={12} />
+                                            {sortByDuration === 'desc' ? '큰 순' : sortByDuration === 'asc' ? '작은 순' : '정렬'}
+                                        </button>
+                                    </div>
+                                )}
+
                                 {todos.length === 0 ? (
                                     <p className="text-text-secondary text-sm">할 일이 없습니다.</p>
                                 ) : (
                                     <div className="space-y-2">
-                                        {todos.map((item, idx) => (
+                                        {sortedTodos.map((item, idx) => (
                                             <div
                                                 key={idx}
                                                 className="group flex items-start gap-2 py-1"
