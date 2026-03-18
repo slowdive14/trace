@@ -199,10 +199,13 @@ export const parseTodos = (content: string): TodoItem[] => {
             let quadrant: 'q1' | 'q2' | 'q3' | 'q4' | 'inbox' = 'inbox';
             let cleanText = rawText;
 
+            // Remove {eid:...} markers from display
+            cleanText = cleanText.replace(/\s*\{eid:[^}]+\}/g, '');
+
             const qMatch = rawText.match(/#(q[1-4])\b/);
             if (qMatch) {
                 quadrant = qMatch[1] as 'q1' | 'q2' | 'q3' | 'q4';
-                cleanText = rawText.replace(qMatch[0], '').trim();
+                cleanText = cleanText.replace(qMatch[0], '').trim();
             }
 
             const duration = parseDuration(cleanText);

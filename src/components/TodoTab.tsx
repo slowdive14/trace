@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useAuth } from './AuthContext';
-import { saveTodo, getTodo, getTodos, getAllTodos, saveTemplate, getTemplate } from '../services/firestore';
+import { saveTodo, getTodo, getTodos, getAllTodos, saveTemplate, getTemplate, addEntry, deleteEntry } from '../services/firestore';
+import { extractTags } from '../utils/tagUtils';
 import { CheckSquare, Square, Bold, Highlighter, ArrowRight, ArrowLeft, Edit3, Check, ChevronLeft, ChevronRight } from 'lucide-react';
 import { format, subDays, addDays, startOfDay, endOfDay, startOfWeek, endOfWeek, isSameDay } from 'date-fns';
 import { ko } from 'date-fns/locale';
@@ -321,14 +322,55 @@ const TodoTab: React.FC<TodoTabProps> = ({
         handleSave(newContent);
     };
 
-    const toggleCheckbox = (lineIndex: number) => {
+    // Extract clean content from todo line for action entry
+    const extractEntryContent = (lineText: string): string => {
+        return lineText
+            .replace(/^[\t ]*- \[[ x]\] /, '')  // Remove checkbox syntax
+            .replace(/\s*\(\d+h?\s*\d*m?\)\s*/, ' ')  // Remove duration like (96m), (2h), (1h30m)
+            .replace(/\s*\{eid:[^}]+\}\s*/g, '')  // Remove existing eid marker
+            .replace(/\s*#q[1-4]\b/g, '')  // Remove quadrant tags
+            .replace(/\*\*/g, '')  // Remove bold markers
+            .replace(/==/g, '')  // Remove highlight markers
+            .trim();
+    };
+
+    // Extract eid from line
+    const extractEid = (line: string): string | null => {
+        const match = line.match(/\{eid:([^}]+)\}/);
+        return match ? match[1] : null;
+    };
+
+    const toggleCheckbox = async (lineIndex: number) => {
+        if (!user) return;
         const lines = content.split('\n');
         const line = lines[lineIndex];
 
         if (line.includes('- [ ]')) {
+            // Check ON: create action entry
             lines[lineIndex] = line.replace('- [ ]', '- [x]');
+            const entryContent = extractEntryContent(line);
+            if (entryContent) {
+                try {
+                    const tags = extractTags(entryContent);
+                    const entryId = await addEntry(user.uid, entryContent, tags, 'action', selectedDate);
+                    if (entryId) {
+                        lines[lineIndex] = lines[lineIndex].replace(/\s*$/, '') + ` {eid:${entryId}}`;
+                    }
+                } catch (error) {
+                    console.error('Failed to create action entry:', error);
+                }
+            }
         } else if (line.includes('- [x]')) {
-            lines[lineIndex] = line.replace('- [x]', '- [ ]');
+            // Check OFF: delete linked action entry
+            const eid = extractEid(line);
+            if (eid) {
+                try {
+                    await deleteEntry(user.uid, eid, 'entries');
+                } catch (error) {
+                    console.error('Failed to delete action entry:', error);
+                }
+            }
+            lines[lineIndex] = line.replace('- [x]', '- [ ]').replace(/\s*\{eid:[^}]+\}/g, '');
         }
 
         const newContent = lines.join('\n');
@@ -344,9 +386,33 @@ const TodoTab: React.FC<TodoTabProps> = ({
         const line = lines[lineIndex];
 
         if (line.includes('- [ ]')) {
+            // Check ON: create action entry
             lines[lineIndex] = line.replace('- [ ]', '- [x]');
+            const entryContent = extractEntryContent(line);
+            if (entryContent) {
+                try {
+                    const [year, month, day] = dateStr.split('-').map(Number);
+                    const entryDate = new Date(year, month - 1, day);
+                    const tags = extractTags(entryContent);
+                    const entryId = await addEntry(user.uid, entryContent, tags, 'action', entryDate);
+                    if (entryId) {
+                        lines[lineIndex] = lines[lineIndex].replace(/\s*$/, '') + ` {eid:${entryId}}`;
+                    }
+                } catch (error) {
+                    console.error('Failed to create action entry:', error);
+                }
+            }
         } else if (line.includes('- [x]')) {
-            lines[lineIndex] = line.replace('- [x]', '- [ ]');
+            // Check OFF: delete linked action entry
+            const eid = extractEid(line);
+            if (eid) {
+                try {
+                    await deleteEntry(user.uid, eid, 'entries');
+                } catch (error) {
+                    console.error('Failed to delete action entry:', error);
+                }
+            }
+            lines[lineIndex] = line.replace('- [x]', '- [ ]').replace(/\s*\{eid:[^}]+\}/g, '');
         }
 
         const newContent = lines.join('\n');
@@ -378,7 +444,8 @@ const TodoTab: React.FC<TodoTabProps> = ({
     const renderText = (text: string): React.ReactNode => {
         // Safe parsing without dangerouslySetInnerHTML
         const parts: React.ReactNode[] = [];
-        let remaining = text;
+        // Hide {eid:...} markers from display
+        let remaining = text.replace(/\s*\{eid:[^}]+\}/g, '');
         let keyIndex = 0;
 
         while (remaining.length > 0) {
