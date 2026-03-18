@@ -42,12 +42,13 @@ interface TimelineProps {
     onNavigationComplete?: () => void;
 }
 
-type DateFilter = 'today' | '7days' | '30days' | 'all';
+type DateFilter = 'today' | '7days' | '30days' | 'all' | 'specific';
 
 const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, onTagClick, collectionName = 'entries', subFilter, onSubFilterChange, navigationTarget, onNavigationComplete }) => {
     const [allEntries, setAllEntries] = useState<Entry[]>([]);
     const [displayLimit, setDisplayLimit] = useState(50);
     const [dateFilter, setDateFilter] = useState<DateFilter>(category === 'chore' ? 'all' : 'today');
+    const [specificDate, setSpecificDate] = useState<string>('');
     const [viewMode, setViewMode] = useState<'list' | 'matrix'>('list');
     const [activeId, setActiveId] = useState<string | null>(null);
     const [matrixSearch, setMatrixSearch] = useState('');
@@ -262,6 +263,15 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
                 const thirtyDaysAgo = subDays(startOfDay(logicalNow), 29);
                 filtered = filtered.filter(entry => getLogicalDate(entry.timestamp) >= thirtyDaysAgo);
                 break;
+            case 'specific':
+                if (specificDate) {
+                    const [y, m, d] = specificDate.split('-').map(Number);
+                    const target = new Date(y, m - 1, d);
+                    filtered = filtered.filter(entry =>
+                        isSameDay(getLogicalDate(entry.timestamp), target)
+                    );
+                }
+                break;
             case 'all':
             default:
                 break;
@@ -272,7 +282,7 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
             .filter(entry => category === 'all' || entry.category === category)
             .filter(entry => !selectedTag || entry.tags.some(tag => tag.startsWith(selectedTag)));
         // Note: pinned status doesn't exclude from matrix
-    }, [allEntries, dateFilter, category, selectedTag, currentLogicalDay]);
+    }, [allEntries, dateFilter, category, selectedTag, currentLogicalDay, specificDate]);
 
     const quadrantConfig = category === 'chore' ? {
         q1: { title: "Q1: Do First", label: "긴급 & 중요", color: "text-red-400" },
@@ -507,6 +517,15 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
                 const thirtyDaysAgo = subDays(startOfDay(logicalNow), 29);
                 filtered = filtered.filter(entry => getLogicalDate(entry.timestamp) >= thirtyDaysAgo);
                 break;
+            case 'specific':
+                if (specificDate) {
+                    const [y, m, d] = specificDate.split('-').map(Number);
+                    const target = new Date(y, m - 1, d);
+                    filtered = filtered.filter(entry =>
+                        isSameDay(getLogicalDate(entry.timestamp), target)
+                    );
+                }
+                break;
             case 'all':
             default:
                 // No date filtering
@@ -524,7 +543,7 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
         }
 
         return filtered;
-    }, [allEntries, dateFilter, category, selectedTag, subFilter, currentLogicalDay]);
+    }, [allEntries, dateFilter, category, selectedTag, subFilter, currentLogicalDay, specificDate]);
 
     const pinnedEntries = getPinnedEntries();
     const filteredEntriesAll = getFilteredEntriesAll();
@@ -560,7 +579,7 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
                     <div className="flex gap-2">
                         <div className="flex-1 flex gap-1 bg-bg-secondary rounded-lg p-1">
                             <button
-                                onClick={() => setDateFilter('today')}
+                                onClick={() => { setDateFilter('today'); setSpecificDate(''); }}
                                 className={`flex-1 py-1 px-2 text-[10px] font-bold rounded-md transition-colors ${dateFilter === 'today'
                                     ? 'bg-accent text-white shadow-sm'
                                     : 'text-text-secondary hover:text-text-primary'
@@ -569,7 +588,7 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
                                 오늘
                             </button>
                             <button
-                                onClick={() => setDateFilter('7days')}
+                                onClick={() => { setDateFilter('7days'); setSpecificDate(''); }}
                                 className={`flex-1 py-1 px-2 text-[10px] font-bold rounded-md transition-colors ${dateFilter === '7days'
                                     ? 'bg-accent text-white shadow-sm'
                                     : 'text-text-secondary hover:text-text-primary'
@@ -578,7 +597,7 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
                                 7일
                             </button>
                             <button
-                                onClick={() => setDateFilter('30days')}
+                                onClick={() => { setDateFilter('30days'); setSpecificDate(''); }}
                                 className={`flex-1 py-1 px-2 text-[10px] font-bold rounded-md transition-colors ${dateFilter === '30days'
                                     ? 'bg-accent text-white shadow-sm'
                                     : 'text-text-secondary hover:text-text-primary'
@@ -587,7 +606,7 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
                                 30일
                             </button>
                             <button
-                                onClick={() => setDateFilter('all')}
+                                onClick={() => { setDateFilter('all'); setSpecificDate(''); }}
                                 className={`flex-1 py-1 px-2 text-[10px] font-bold rounded-md transition-colors ${dateFilter === 'all'
                                     ? 'bg-accent text-white shadow-sm'
                                     : 'text-text-secondary hover:text-text-primary'
@@ -595,6 +614,21 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
                             >
                                 전체
                             </button>
+                            <input
+                                type="date"
+                                value={specificDate}
+                                onChange={(e) => {
+                                    if (e.target.value) {
+                                        setSpecificDate(e.target.value);
+                                        setDateFilter('specific');
+                                    }
+                                }}
+                                className={`w-7 py-1 text-[10px] rounded-md transition-colors bg-transparent cursor-pointer ${dateFilter === 'specific'
+                                    ? 'text-accent'
+                                    : 'text-text-secondary hover:text-text-primary'
+                                }`}
+                                title="특정 날짜로 이동"
+                            />
                         </div>
                         <div className="flex gap-1 bg-bg-secondary rounded-lg p-1">
                             {viewMode === 'matrix' && (
