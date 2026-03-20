@@ -10,7 +10,7 @@ export interface TodoItem {
     duration?: number;  // 분 단위 (UI 표시용)
 }
 
-const DEFAULT_DURATION = 30;
+const DEFAULT_DURATION = 5;
 
 // Parse duration from text like "(2h)", "(30m)", "(1h30m)"
 export const parseDuration = (text: string): { minutes: number; cleanText: string } | null => {
