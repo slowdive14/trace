@@ -819,11 +819,29 @@ const TodoTab: React.FC<TodoTabProps> = ({
 
     const sortedTodos = useMemo(() => {
         if (sortByDuration === 'none') return todos;
-        return [...todos].sort((a, b) => {
-            const aDur = a.duration ?? (sortByDuration === 'asc' ? Infinity : -Infinity);
-            const bDur = b.duration ?? (sortByDuration === 'asc' ? Infinity : -Infinity);
+
+        // 부모-자식 그룹 생성 (indent=0이 그룹의 시작)
+        const groups: typeof todos[] = [];
+        let currentGroup: typeof todos = [];
+
+        todos.forEach(item => {
+            if (item.indent === 0) {
+                if (currentGroup.length > 0) groups.push(currentGroup);
+                currentGroup = [item];
+            } else {
+                currentGroup.push(item);
+            }
+        });
+        if (currentGroup.length > 0) groups.push(currentGroup);
+
+        // 그룹 정렬 (부모 duration 기준)
+        groups.sort((a, b) => {
+            const aDur = a[0].duration ?? (sortByDuration === 'asc' ? Infinity : -Infinity);
+            const bDur = b[0].duration ?? (sortByDuration === 'asc' ? Infinity : -Infinity);
             return sortByDuration === 'asc' ? aDur - bDur : bDur - aDur;
         });
+
+        return groups.flat();
     }, [todos, sortByDuration]);
 
     const toggleSort = () => {
