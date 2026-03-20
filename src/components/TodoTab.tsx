@@ -76,7 +76,10 @@ const TodoTab: React.FC<TodoTabProps> = ({
     const [quickAddText, setQuickAddText] = useState('');
     const [subAddingIndex, setSubAddingIndex] = useState<number | null>(null);
     const [subAddText, setSubAddText] = useState('');
-    const [sortByDuration, setSortByDuration] = useState<'none' | 'asc' | 'desc'>('none');
+    const [sortByDuration, setSortByDuration] = useState<'none' | 'asc' | 'desc'>(() => {
+        const saved = localStorage.getItem('todoSortByDuration');
+        return (saved === 'asc' || saved === 'desc') ? saved : 'none';
+    });
 
     const { user } = useAuth();
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -845,7 +848,11 @@ const TodoTab: React.FC<TodoTabProps> = ({
     }, [todos, sortByDuration]);
 
     const toggleSort = () => {
-        setSortByDuration(prev => prev === 'none' ? 'desc' : prev === 'desc' ? 'asc' : 'none');
+        setSortByDuration(prev => {
+            const next = prev === 'none' ? 'desc' : prev === 'desc' ? 'asc' : 'none';
+            localStorage.setItem('todoSortByDuration', next);
+            return next;
+        });
     };
 
     const sensors = useSensors(
