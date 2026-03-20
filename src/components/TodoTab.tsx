@@ -250,9 +250,10 @@ const TodoTab: React.FC<TodoTabProps> = ({
         const lastWeekStart = startOfWeek(subDays(thisWeekStart, 1), { weekStartsOn: 1 });
         const lastWeekEnd = endOfWeek(subDays(thisWeekStart, 1), { weekStartsOn: 1 });
 
-        const calcStats = (start: Date, end: Date) => {
+        const calcStats = (start: Date, end: Date, excludeToday: boolean = false) => {
             const todosInRange = historyTodos.filter(todo => {
                 const todoDate = new Date(todo.date);
+                if (excludeToday && format(todoDate, 'yyyy-MM-dd') === todayStr) return false;
                 return todoDate >= start && todoDate <= end;
             });
 
@@ -281,7 +282,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
         };
 
         return {
-            thisWeek: calcStats(thisWeekStart, thisWeekEnd),
+            thisWeek: calcStats(thisWeekStart, thisWeekEnd, true),
             lastWeek: calcStats(lastWeekStart, lastWeekEnd)
         };
     }, [historyTodos, content, currentLogicalDay]);
