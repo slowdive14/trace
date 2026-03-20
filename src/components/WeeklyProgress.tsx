@@ -39,7 +39,7 @@ export const WeeklyProgress: React.FC<WeeklyProgressProps> = ({ collectionName =
             const day = addDays(weekStart, i);
             const dateStr = format(day, 'yyyy-MM-dd');
             const todo = todos.find(t => t.id === dateStr);
-            if (!todo || !todo.content.trim()) return { date: day, dateStr, percentage: -1 }; // -1 = no data
+            if (!todo || !todo.content.trim()) return { date: day, dateStr, percentage: -1 };
             const items = parseTodos(todo.content);
             if (items.length === 0) return { date: day, dateStr, percentage: -1 };
             const { percentage } = calculateWeightedSummary(items);
@@ -47,10 +47,17 @@ export const WeeklyProgress: React.FC<WeeklyProgressProps> = ({ collectionName =
         });
     }, [weekStart, todos]);
 
+    // 주간 평균: 오늘(진행 중) 제외
     const weekAvg = useMemo(() => {
-        const valid = dailyRates.filter(d => d.percentage >= 0);
+        const valid = dailyRates.filter(d => d.percentage >= 0 && !isToday(d.date));
         if (valid.length === 0) return 0;
         return Math.round(valid.reduce((s, d) => s + d.percentage, 0) / valid.length);
+    }, [dailyRates]);
+
+    // 상대 스케일링: 주간 최고값 기준으로 바 높이 정규화
+    const maxPct = useMemo(() => {
+        const valid = dailyRates.filter(d => d.percentage > 0).map(d => d.percentage);
+        return valid.length > 0 ? Math.max(...valid) : 100;
     }, [dailyRates]);
 
     const getBarColor = (pct: number) => {
@@ -85,19 +92,20 @@ export const WeeklyProgress: React.FC<WeeklyProgressProps> = ({ collectionName =
                     </button>
                 </div>
             </div>
-            <div className="flex gap-1.5 items-end h-16">
+            <div className="flex gap-1.5 items-end h-24">
                 {dailyRates.map((day, i) => {
                     const isCurrentDay = isToday(day.date);
                     const hasData = day.percentage >= 0;
-                    const barHeight = hasData ? Math.max(day.percentage, 4) : 0;
+                    // 최고값 기준 상대 높이 (최고값 = 100% 높이)
+                    const relativeHeight = hasData ? Math.max((day.percentage / maxPct) * 100, 6) : 0;
 
                     return (
                         <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                            <div className="w-full h-12 flex items-end justify-center">
+                            <div className="w-full h-20 flex items-end justify-center">
                                 {hasData ? (
                                     <div
-                                        className={`w-full rounded-sm ${getBarColor(day.percentage)} transition-all duration-300`}
-                                        style={{ height: `${barHeight}%` }}
+                                        className={`w-full rounded-t ${getBarColor(day.percentage)} transition-all duration-300 ${isCurrentDay ? 'opacity-50 border border-dashed border-white/30' : ''}`}
+                                        style={{ height: `${relativeHeight}%` }}
                                         title={`${format(day.date, 'M/d (EEE)', { locale: ko })} - ${day.percentage}%`}
                                     />
                                 ) : (
@@ -109,7 +117,7 @@ export const WeeklyProgress: React.FC<WeeklyProgressProps> = ({ collectionName =
                                     {DAY_LABELS[i]}
                                 </div>
                                 {hasData && (
-                                    <div className={`text-[8px] leading-tight mt-0.5 ${day.percentage >= 75 ? 'text-green-400' : 'text-text-tertiary'}`}>
+                                    <div className={`text-[8px] leading-tight mt-0.5 ${isCurrentDay ? 'text-text-tertiary/50' : day.percentage >= 75 ? 'text-green-400' : 'text-text-tertiary'}`}>
                                         {day.percentage}%
                                     </div>
                                 )}
