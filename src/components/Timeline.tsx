@@ -12,6 +12,7 @@ import { Share, Pin, LayoutGrid, List, ChevronDown, ChevronUp, Copy, X, Calendar
 import { generateMarkdown, generateMatrixMarkdown, copyToClipboard } from '../utils/exportUtils';
 import { getLogicalDate } from '../utils/dateUtils';
 import { SleepStats } from './SleepStats';
+import { WeeklyProgress } from './WeeklyProgress';
 import Toast from './common/Toast';
 import { useToast } from '../hooks/useToast';
 import {
@@ -747,9 +748,10 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
             <div className={`px-4 ${category === 'chore' ? 'max-w-4xl' : 'max-w-md'} mx-auto ${category === 'book' ? 'pb-60' : 'pb-32'}`}>
                 {viewMode === 'list' ? (
                     <>
-                        {/* Sleep Stats - 일상 탭에서만 표시 */}
+                        {/* Weekly Progress & Sleep Stats - 일상 탭에서만 표시 */}
                         {category === 'action' && (
-                            <div className="mt-4">
+                            <div className="mt-4 space-y-2">
+                                <WeeklyProgress />
                                 <SleepStats entries={allEntries} />
                             </div>
                         )}
