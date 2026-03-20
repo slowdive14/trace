@@ -3,12 +3,12 @@ import { format, subDays, startOfDay, isSameDay } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import type { Entry, NavigationTarget } from '../types/types';
 import { extractTags } from '../utils/tagUtils';
-import { deleteEntry, toggleEntryPin, updateEntry } from '../services/firestore';
+import { deleteEntry, toggleEntryPin, updateEntry, saveReflection, getReflections } from '../services/firestore';
 import { useAuth } from './AuthContext';
 import EntryItem from './EntryItem';
 import { onSnapshot, collection, query, orderBy } from 'firebase/firestore';
 import { db } from '../services/firebase';
-import { Share, Pin, LayoutGrid, List, ChevronDown, ChevronUp, Copy, X, Calendar } from 'lucide-react';
+import { Share, Pin, LayoutGrid, List, ChevronDown, ChevronUp, Copy, X, Calendar, MessageSquare } from 'lucide-react';
 import { generateMarkdown, generateMatrixMarkdown, copyToClipboard } from '../utils/exportUtils';
 import { getLogicalDate } from '../utils/dateUtils';
 import { SleepStats } from './SleepStats';
@@ -59,6 +59,9 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
     const [loadMoreNode, setLoadMoreNode] = useState<HTMLDivElement | null>(null);
     const isFirstLoadRef = useRef<Record<string, boolean>>({});
     const prevEntriesLengthRef = useRef<number>(0);
+    const [reflections, setReflections] = useState<Record<string, string>>({});
+    const [editingReflection, setEditingReflection] = useState<string | null>(null);
+    const [reflectionDraft, setReflectionDraft] = useState('');
 
     // Auto-refresh when logical day changes (5AM cutoff)
     useEffect(() => {
@@ -110,6 +113,16 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
 
         return () => unsubscribe();
     }, [user, collectionName]);
+
+    // Load daily reflections
+    useEffect(() => {
+        if (!user || category !== 'action') return;
+        getReflections(user.uid).then(items => {
+            const map: Record<string, string> = {};
+            items.forEach(r => { map[r.id] = r.content; });
+            setReflections(map);
+        }).catch(console.error);
+    }, [user, category]);
 
     // Infinite scroll observer - uses callback ref pattern for dynamic elements
     useEffect(() => {
@@ -466,9 +479,28 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
         );
     };
 
+    const handleSaveReflection = async (dateStr: string) => {
+        if (!user) return;
+        try {
+            await saveReflection(user.uid, dateStr, reflectionDraft);
+            setReflections(prev => {
+                const next = { ...prev };
+                if (reflectionDraft.trim()) {
+                    next[dateStr] = reflectionDraft.trim();
+                } else {
+                    delete next[dateStr];
+                }
+                return next;
+            });
+            setEditingReflection(null);
+        } catch (error) {
+            console.error('Failed to save reflection:', error);
+        }
+    };
+
     const handleExport = async (dateStr: string) => {
         const date = new Date(dateStr);
-        const markdown = generateMarkdown(allEntries, date);
+        const markdown = generateMarkdown(allEntries, date, reflections[dateStr]);
         const success = await copyToClipboard(markdown);
         if (success) {
             toast.show();
@@ -759,6 +791,43 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
                                         <Share size={16} />
                                     </button>
                                 </div>
+                                {category === 'action' && (
+                                    <div className="mb-3">
+                                        {editingReflection === date ? (
+                                            <div className="flex items-center gap-2">
+                                                <MessageSquare size={14} className="text-text-tertiary flex-shrink-0" />
+                                                <input
+                                                    type="text"
+                                                    value={reflectionDraft}
+                                                    onChange={e => setReflectionDraft(e.target.value)}
+                                                    onKeyDown={e => {
+                                                        if (e.key === 'Enter') handleSaveReflection(date);
+                                                        if (e.key === 'Escape') setEditingReflection(null);
+                                                    }}
+                                                    onBlur={() => handleSaveReflection(date)}
+                                                    className="flex-1 bg-transparent text-sm text-text-primary border-b border-accent/30 focus:border-accent outline-none py-1"
+                                                    placeholder="오늘을 한 줄로 남겨보세요"
+                                                    autoFocus
+                                                />
+                                            </div>
+                                        ) : (
+                                            <div
+                                                onClick={() => {
+                                                    setEditingReflection(date);
+                                                    setReflectionDraft(reflections[date] || '');
+                                                }}
+                                                className="flex items-center gap-2 cursor-pointer group"
+                                            >
+                                                <MessageSquare size={14} className="text-text-tertiary flex-shrink-0" />
+                                                {reflections[date] ? (
+                                                    <span className="text-sm text-text-secondary italic">{reflections[date]}</span>
+                                                ) : (
+                                                    <span className="text-sm text-text-tertiary/50 italic group-hover:text-text-tertiary transition-colors">오늘을 한 줄로 남겨보세요</span>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                                 <div className="space-y-1">
                                     {dayEntries.map(entry => (
                                         <EntryItem

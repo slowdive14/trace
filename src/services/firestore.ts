@@ -16,7 +16,7 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { startOfDay } from 'date-fns';
-import type { Expense, ExpenseCategory, Todo, Worry, WorryEntry, BrainDump, BrainDumpStatus, BrainDumpInsight } from '../types/types';
+import type { Expense, ExpenseCategory, Todo, Worry, WorryEntry, BrainDump, BrainDumpStatus, BrainDumpInsight, DailyReflection } from '../types/types';
 
 const EXPENSES_COLLECTION = 'expenses';
 
@@ -575,4 +575,35 @@ export const getBrainDumps = async (userId: string): Promise<BrainDump[]> => {
 
 export const deleteBrainDump = async (userId: string, dumpId: string): Promise<void> => {
     await deleteDoc(doc(db, `users/${userId}/${BRAIN_DUMPS_COLLECTION}`, dumpId));
+};
+
+// Daily Reflection functions
+const REFLECTIONS_COLLECTION = 'dailyReflections';
+
+export const saveReflection = async (userId: string, dateStr: string, content: string) => {
+    const docRef = doc(db, `users/${userId}/${REFLECTIONS_COLLECTION}`, dateStr);
+    if (!content.trim()) {
+        await deleteDoc(docRef);
+        return;
+    }
+    const [year, month, day] = dateStr.split('-').map(Number);
+    await setDoc(docRef, {
+        content: content.trim(),
+        date: Timestamp.fromDate(new Date(year, month - 1, day)),
+        updatedAt: Timestamp.now()
+    }, { merge: true });
+};
+
+export const getReflections = async (userId: string): Promise<DailyReflection[]> => {
+    const q = query(
+        collection(db, `users/${userId}/${REFLECTIONS_COLLECTION}`),
+        orderBy("date", "desc")
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map(d => ({
+        id: d.id,
+        ...d.data(),
+        date: d.data().date.toDate(),
+        updatedAt: d.data().updatedAt?.toDate() || new Date(),
+    })) as DailyReflection[];
 };

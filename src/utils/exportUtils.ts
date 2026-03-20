@@ -3,7 +3,7 @@ import type { Entry, Expense, Todo, Worry, WorryEntry } from '../types/types';
 import { EXPENSE_CATEGORY_EMOJI } from '../types/types';
 import { getLogicalDate } from './dateUtils';
 
-export const generateMarkdown = (entries: Entry[], date: Date): string => {
+export const generateMarkdown = (entries: Entry[], date: Date, reflection?: string): string => {
     const dateStr = format(date, 'yyyy-MM-dd');
     const dayEntries = entries.filter(entry =>
         format(getLogicalDate(entry.timestamp), 'yyyy-MM-dd') === dateStr
@@ -30,6 +30,10 @@ export const generateMarkdown = (entries: Entry[], date: Date): string => {
         markdown += `\n`;
     }
 
+    if (reflection && reflection.trim()) {
+        markdown += `> 💬 ${reflection.trim()}\n\n`;
+    }
+
     return markdown;
 }
 
@@ -43,7 +47,8 @@ export function exportDailyMarkdown(
     expenses: Expense[],
     todo?: Todo,
     worryEntries?: WorryEntry[],
-    worries?: Worry[]
+    worries?: Worry[],
+    reflection?: string
 ): string {
     const dateStr = format(date, 'yyyy-MM-dd');
 
@@ -215,6 +220,10 @@ export function exportDailyMarkdown(
                 markdown += '\n';
             });
         }
+    }
+
+    if (reflection && reflection.trim()) {
+        markdown += `\n> 💬 ${reflection.trim()}\n`;
     }
 
     return markdown.trim();

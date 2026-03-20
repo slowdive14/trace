@@ -25,6 +25,13 @@ export interface Todo {
     updatedAt: Date;
 }
 
+export interface DailyReflection {
+    id: string;       // YYYY-MM-DD
+    content: string;
+    date: Date;
+    updatedAt: Date;
+}
+
 // Search result types
 export type SearchResultType = 'entry' | 'todo';
 
