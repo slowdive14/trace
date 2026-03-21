@@ -68,8 +68,15 @@ export function exportDailyMarkdown(
     // Todo Section (Top)
     if (todo && todo.content.trim()) {
         // markdown += '## 🎯 오늘의 목표\n'; // Header removed as per request
-        const cleanTodo = todo.content.replace(/\s*\{eid:[^}]+\}/g, '');
-        markdown += cleanTodo.trim() + '\n\n';
+        let cleanTodo = todo.content.replace(/\s*\{eid:[^}]+\}/g, '');
+        // --- 구분선 이후 내용(자기확언 등) 제외
+        const separatorIndex = cleanTodo.indexOf('\n---');
+        if (separatorIndex !== -1) {
+            cleanTodo = cleanTodo.substring(0, separatorIndex);
+        }
+        if (cleanTodo.trim()) {
+            markdown += cleanTodo.trim() + '\n\n';
+        }
     }
 
     markdown += '## 🤔 What happened today?\n';
