@@ -152,7 +152,8 @@ const UnifiedCalendarModal: React.FC<UnifiedCalendarModalProps> = ({ onClose, en
     }, [selectedDate, entries]);
 
     const selectedTodo = selectedDate ? todos.find(t => t.id === format(selectedDate, 'yyyy-MM-dd')) : undefined;
-    const selectedMarkdown = selectedDate ? exportDailyMarkdown(selectedDate, entries, [], expenses, selectedTodo, worryEntries, worries) : '';
+    const selectedDateStr = selectedDate ? format(selectedDate, 'yyyy-MM-dd') : '';
+    const selectedMarkdown = selectedDate ? exportDailyMarkdown(selectedDate, entries, [], expenses, selectedTodo, worryEntries, worries, reflections[selectedDateStr]) : '';
 
     return (
         <div className="fixed inset-0 bg-black/50 z-[200] flex items-center justify-center p-4" onClick={onClose}>
