@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { X, Copy, Check } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay } from 'date-fns';
 import { ko } from 'date-fns/locale';
@@ -6,6 +6,8 @@ import type { Entry, Expense, Todo, Worry, WorryEntry } from '../types/types';
 import { exportDailyMarkdown } from '../utils/exportUtils';
 import { getLogicalDate } from '../utils/dateUtils';
 import { analyzeEmotionsInText, type EmotionTag } from '../utils/emotionTags';
+import { getReflections } from '../services/firestore';
+import { useAuth } from './AuthContext';
 
 interface UnifiedCalendarModalProps {
     onClose: () => void;
@@ -20,10 +22,21 @@ interface UnifiedCalendarModalProps {
 type CalendarTab = 'records' | 'emotions';
 
 const UnifiedCalendarModal: React.FC<UnifiedCalendarModalProps> = ({ onClose, entries, books: _books, expenses, todos, worryEntries, worries }) => {
+    const { user } = useAuth();
     const [currentMonth, setCurrentMonth] = useState(new Date());
     const [selectedDate, setSelectedDate] = useState<Date | null>(null);
     const [copied, setCopied] = useState(false);
     const [activeTab, setActiveTab] = useState<CalendarTab>('records');
+    const [reflections, setReflections] = useState<Record<string, string>>({});
+
+    useEffect(() => {
+        if (!user) return;
+        getReflections(user.uid).then(items => {
+            const map: Record<string, string> = {};
+            items.forEach(r => { map[r.id] = r.content; });
+            setReflections(map);
+        });
+    }, [user]);
 
     const monthStart = startOfMonth(currentMonth);
     const monthEnd = endOfMonth(currentMonth);
@@ -36,7 +49,7 @@ const UnifiedCalendarModal: React.FC<UnifiedCalendarModalProps> = ({ onClose, en
 
         const dateStr = format(selectedDate, 'yyyy-MM-dd');
         const todo = todos.find(t => t.id === dateStr);
-        const markdown = exportDailyMarkdown(selectedDate, entries, [], expenses, todo, worryEntries, worries);
+        const markdown = exportDailyMarkdown(selectedDate, entries, [], expenses, todo, worryEntries, worries, reflections[dateStr]);
         navigator.clipboard.writeText(markdown);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
