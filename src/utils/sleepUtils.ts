@@ -275,7 +275,19 @@ export function calculateSleepScore(records: SleepRecord[], contextRecords: Slee
         };
     }
 
-    const achievements = records.map(r => checkGoalAchievement(r));
+    // 목표 달성 계산용 레코드: 이번 주 데이터가 3개 미만이면 contextRecords로 보충
+    // (월요일에 1일치 데이터만으로 all-or-nothing 되는 문제 방지)
+    let goalRecords = records;
+    if (records.length < 3 && contextRecords.length > 0) {
+        const supplementNeeded = 7 - records.length;
+        const currentDates = new Set(records.map(r => r.date));
+        const supplement = contextRecords
+            .filter(r => !currentDates.has(r.date))
+            .sort((a, b) => b.date.localeCompare(a.date))
+            .slice(0, supplementNeeded);
+        goalRecords = [...records, ...supplement];
+    }
+    const achievements = goalRecords.map(r => checkGoalAchievement(r));
 
     // 1. 수면시간 점수 (40점 만점) - 원시값으로 정밀 계산 (이중 반올림 방지)
     const avgDuration = getAverageDuration(records); // 표시용 (소수점 1자리)
@@ -293,8 +305,8 @@ export function calculateSleepScore(records: SleepRecord[], contextRecords: Slee
     // 해당 시각이 기록된 레코드만 분모로 사용 (미매칭 레코드 불이익 방지)
     const sleepGoalDays = achievements.filter(a => a.sleepGoalMet).length;
     const wakeGoalDays = achievements.filter(a => a.wakeGoalMet).length;
-    const recordsWithSleep = records.filter(r => r.sleepTime !== undefined).length;
-    const recordsWithWake = records.filter(r => r.wakeTime !== undefined).length;
+    const recordsWithSleep = goalRecords.filter(r => r.sleepTime !== undefined).length;
+    const recordsWithWake = goalRecords.filter(r => r.wakeTime !== undefined).length;
     const sleepGoalScore = recordsWithSleep > 0 ? (sleepGoalDays / recordsWithSleep) * 18 : 0;
     const wakeGoalScore = recordsWithWake > 0 ? (wakeGoalDays / recordsWithWake) * 18 : 0;
 
