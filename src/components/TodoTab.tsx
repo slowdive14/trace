@@ -84,6 +84,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
     const { user } = useAuth();
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const timeInputRef = useRef<HTMLInputElement>(null);
+    const recordToActionRef = useRef<boolean>(true);
     const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const subAddInputRef = useRef<HTMLInputElement>(null);
 
@@ -448,6 +449,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
             // 기존 (Xm) 패턴에서 시간 추출
             const timeMatch = line.match(/\((\d+)m\)\s*$/);
             const checkedLine = line.replace('- [ ]', '- [x]');
+            recordToActionRef.current = true;
             setTimePopup({
                 lineIndex,
                 lineText: checkedLine,
@@ -524,6 +526,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
         if (isChecking) {
             const timeMatch = line.match(/\((\d+)m\)\s*$/);
             const checkedLine = line.replace('- [ ]', '- [x]');
+            recordToActionRef.current = true;
             setTimePopup({
                 lineIndex,
                 lineText: checkedLine,
@@ -544,7 +547,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
         return found;
     };
 
-    const handleTimeConfirm = useCallback(async (minutes: number | null) => {
+    const handleTimeConfirm = useCallback(async (minutes: number | null, recordToAction: boolean = true) => {
         if (!timePopup) return;
 
         if (minutes !== null && !isNaN(minutes) && minutes > 0) {
@@ -595,8 +598,8 @@ const TodoTab: React.FC<TodoTabProps> = ({
             }
         }
 
-        // 시간 입력 여부와 무관하게 일상(action) 엔트리 생성 + eid 마커 삽입
-        if (user) {
+        // 일상 탭 기록 옵션이 켜져 있을 때만 엔트리 생성 + eid 마커 삽입
+        if (user && recordToAction) {
             let entryContent = extractEntryContent(timePopup.lineText);
             // 서브아이템이면 부모 이름 포함 (예: "회기 리뷰 2 - 1")
             const todoLines = (timePopup.dateStr
@@ -1461,7 +1464,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
 
             {/* 실행시간 입력 팝업 */}
             {timePopup && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => handleTimeConfirm(null)}>
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => handleTimeConfirm(null, recordToActionRef.current)}>
                     <div
                         className="bg-bg-secondary rounded-xl p-5 shadow-lg w-64 border border-bg-tertiary"
                         onClick={(e) => e.stopPropagation()}
@@ -1474,7 +1477,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
                             e.preventDefault();
                             const val = timeInputRef.current?.value;
                             const parsed = val ? parseInt(val, 10) : null;
-                            handleTimeConfirm(parsed !== null && !isNaN(parsed) ? parsed : null);
+                            handleTimeConfirm(parsed !== null && !isNaN(parsed) ? parsed : null, recordToActionRef.current);
                         }}>
                             <input
                                 ref={timeInputRef}
@@ -1484,17 +1487,26 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                 autoFocus
                                 defaultValue={timePopup.currentTime || ''}
                                 placeholder="예: 30"
-                                className="w-full px-3 py-2 rounded-lg bg-bg-primary border border-bg-tertiary text-text-primary text-center text-lg focus:outline-none focus:ring-2 focus:ring-accent mb-4"
+                                className="w-full px-3 py-2 rounded-lg bg-bg-primary border border-bg-tertiary text-text-primary text-center text-lg focus:outline-none focus:ring-2 focus:ring-accent mb-3"
                                 onKeyDown={(e) => {
                                     if (e.key === 'Escape') {
-                                        handleTimeConfirm(null);
+                                        handleTimeConfirm(null, recordToActionRef.current);
                                     }
                                 }}
                             />
+                            <label className="flex items-center gap-2 mb-4 cursor-pointer select-none">
+                                <input
+                                    type="checkbox"
+                                    defaultChecked={true}
+                                    onChange={(e) => { recordToActionRef.current = e.target.checked; }}
+                                    className="w-4 h-4 rounded border-bg-tertiary text-accent focus:ring-accent accent-[var(--color-accent)]"
+                                />
+                                <span className="text-xs text-text-secondary">일상 탭에 기록</span>
+                            </label>
                             <div className="flex gap-2">
                                 <button
                                     type="button"
-                                    onClick={() => handleTimeConfirm(null)}
+                                    onClick={() => handleTimeConfirm(null, recordToActionRef.current)}
                                     className="flex-1 px-3 py-2 rounded-lg text-sm text-text-secondary hover:bg-bg-tertiary transition-colors"
                                 >
                                     건너뛰기
