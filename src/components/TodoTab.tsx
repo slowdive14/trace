@@ -76,6 +76,8 @@ const TodoTab: React.FC<TodoTabProps> = ({
     const [quickAddText, setQuickAddText] = useState('');
     const [subAddingIndex, setSubAddingIndex] = useState<number | null>(null);
     const [subAddText, setSubAddText] = useState('');
+    const [inlineEditIndex, setInlineEditIndex] = useState<number | null>(null);
+    const [inlineEditText, setInlineEditText] = useState('');
     const [sortByDuration, setSortByDuration] = useState<'none' | 'asc' | 'desc'>(() => {
         const saved = localStorage.getItem('todoSortByDuration');
         return (saved === 'asc' || saved === 'desc') ? saved : 'none';
@@ -87,6 +89,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
     const recordToActionRef = useRef<boolean>(true);
     const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const subAddInputRef = useRef<HTMLInputElement>(null);
+    const inlineEditRef = useRef<HTMLInputElement>(null);
 
     // Auto-refresh when logical day changes (5AM cutoff)
     useEffect(() => {
@@ -392,6 +395,48 @@ const TodoTab: React.FC<TodoTabProps> = ({
         setContent(newContent);
         handleSave(newContent);
         setDeletingLineIndex(null);
+    };
+
+    // Inline edit: start editing a todo item's text
+    const startInlineEdit = (lineIndex: number) => {
+        const lines = content.split('\n');
+        const line = lines[lineIndex];
+        if (!line) return;
+        // Extract just the text part (after checkbox, before metadata like (Xm), {eid:...})
+        const textMatch = line.match(/^(\s*-\s*\[.\]\s*)(.+?)(\s*\(\d+m\))?\s*(\{eid:[^}]+\})?\s*$/);
+        if (textMatch) {
+            setInlineEditText(textMatch[2]);
+        } else {
+            // fallback: extract after checkbox
+            const fallback = line.replace(/^\s*-\s*\[.\]\s*/, '').replace(/\s*\(\d+m\)\s*$/, '').replace(/\s*\{eid:[^}]+\}\s*$/, '');
+            setInlineEditText(fallback);
+        }
+        setInlineEditIndex(lineIndex);
+        setTimeout(() => inlineEditRef.current?.focus(), 50);
+    };
+
+    const commitInlineEdit = () => {
+        if (inlineEditIndex === null) return;
+        const newText = inlineEditText.trim();
+        if (!newText) {
+            setInlineEditIndex(null);
+            return;
+        }
+        const lines = content.split('\n');
+        const line = lines[inlineEditIndex];
+        if (!line) { setInlineEditIndex(null); return; }
+        // Reconstruct line: preserve indent, checkbox, duration, eid
+        const prefixMatch = line.match(/^(\s*-\s*\[.\]\s*)/);
+        const durationMatch = line.match(/(\s*\(\d+m\))/);
+        const eidMatch = line.match(/(\s*\{eid:[^}]+\})/);
+        const prefix = prefixMatch ? prefixMatch[1] : '- [ ] ';
+        const duration = durationMatch ? durationMatch[1] : '';
+        const eid = eidMatch ? eidMatch[1] : '';
+        lines[inlineEditIndex] = `${prefix}${newText}${duration}${eid}`;
+        const newContent = lines.join('\n');
+        setContent(newContent);
+        handleSave(newContent);
+        setInlineEditIndex(null);
     };
 
     // Quick-add a todo item (reading mode)
@@ -1373,9 +1418,27 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                                     onChange={() => toggleCheckbox(item.lineIndex)}
                                                     className="mt-1 w-4 h-4 rounded border-text-secondary focus:ring-accent focus:ring-2"
                                                 />
-                                                <span className={`flex-1 leading-relaxed ${item.checked ? 'line-through text-text-secondary' : 'text-text-primary'}`}>
-                                                    {renderText(item.text)}
-                                                </span>
+                                                {inlineEditIndex === item.lineIndex ? (
+                                                    <input
+                                                        ref={inlineEditRef}
+                                                        type="text"
+                                                        value={inlineEditText}
+                                                        onChange={e => setInlineEditText(e.target.value)}
+                                                        onKeyDown={e => {
+                                                            if (e.key === 'Enter') commitInlineEdit();
+                                                            if (e.key === 'Escape') setInlineEditIndex(null);
+                                                        }}
+                                                        onBlur={() => commitInlineEdit()}
+                                                        className="flex-1 bg-bg-primary text-text-primary text-sm px-2 py-0.5 rounded border border-accent outline-none"
+                                                    />
+                                                ) : (
+                                                    <span
+                                                        className={`flex-1 leading-relaxed cursor-text ${item.checked ? 'line-through text-text-secondary' : 'text-text-primary'}`}
+                                                        onClick={() => startInlineEdit(item.lineIndex)}
+                                                    >
+                                                        {renderText(item.text)}
+                                                    </span>
+                                                )}
                                                 <div className="flex items-center gap-1 shrink-0 mt-0.5">
                                                     {deletingLineIndex === item.lineIndex ? (
                                                         <>
