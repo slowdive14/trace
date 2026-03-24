@@ -397,20 +397,17 @@ const TodoTab: React.FC<TodoTabProps> = ({
         setDeletingLineIndex(null);
     };
 
-    // Inline edit: start editing a todo item's text
+    // Inline edit: start editing a todo item's text (duration 포함)
     const startInlineEdit = (lineIndex: number) => {
         const lines = content.split('\n');
         const line = lines[lineIndex];
         if (!line) return;
-        // Extract just the text part (after checkbox, before metadata like (Xm), {eid:...})
-        const textMatch = line.match(/^(\s*-\s*\[.\]\s*)(.+?)(\s*\(\d+m\))?\s*(\{eid:[^}]+\})?\s*$/);
-        if (textMatch) {
-            setInlineEditText(textMatch[2]);
-        } else {
-            // fallback: extract after checkbox
-            const fallback = line.replace(/^\s*-\s*\[.\]\s*/, '').replace(/\s*\(\d+m\)\s*$/, '').replace(/\s*\{eid:[^}]+\}\s*$/, '');
-            setInlineEditText(fallback);
-        }
+        // checkbox 이후, {eid:...} 이전까지 전체를 편집 대상으로 (시간 포함)
+        const editText = line
+            .replace(/^\s*-\s*\[.\]\s*/, '')
+            .replace(/\s*\{eid:[^}]+\}\s*$/, '')
+            .trim();
+        setInlineEditText(editText);
         setInlineEditIndex(lineIndex);
         setTimeout(() => inlineEditRef.current?.focus(), 50);
     };
@@ -425,14 +422,12 @@ const TodoTab: React.FC<TodoTabProps> = ({
         const lines = content.split('\n');
         const line = lines[inlineEditIndex];
         if (!line) { setInlineEditIndex(null); return; }
-        // Reconstruct line: preserve indent, checkbox, duration, eid
+        // prefix(indent + checkbox)와 eid만 보존, 나머지는 사용자 입력 그대로
         const prefixMatch = line.match(/^(\s*-\s*\[.\]\s*)/);
-        const durationMatch = line.match(/(\s*\(\d+m\))/);
         const eidMatch = line.match(/(\s*\{eid:[^}]+\})/);
         const prefix = prefixMatch ? prefixMatch[1] : '- [ ] ';
-        const duration = durationMatch ? durationMatch[1] : '';
         const eid = eidMatch ? eidMatch[1] : '';
-        lines[inlineEditIndex] = `${prefix}${newText}${duration}${eid}`;
+        lines[inlineEditIndex] = `${prefix}${newText}${eid}`;
         const newContent = lines.join('\n');
         setContent(newContent);
         handleSave(newContent);
