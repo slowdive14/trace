@@ -865,8 +865,6 @@ const TodoTab: React.FC<TodoTabProps> = ({
     const todos = parseTodos(content);
 
     const sortedTodos = useMemo(() => {
-        if (sortByDuration === 'none') return todos;
-
         // 부모-자식 그룹 생성 (indent=0이 그룹의 시작)
         const groups: typeof todos[] = [];
         let currentGroup: typeof todos = [];
@@ -881,11 +879,21 @@ const TodoTab: React.FC<TodoTabProps> = ({
         });
         if (currentGroup.length > 0) groups.push(currentGroup);
 
-        // 그룹 정렬 (부모 duration 기준)
+        // 그룹 완료 여부: 모든 멤버가 체크되어야 완료
+        const isGroupCompleted = (group: typeof todos) => group.every(item => item.checked);
+
+        // 정렬: 완료 그룹은 하단, 그 안에서 duration 정렬 적용
         groups.sort((a, b) => {
-            const aDur = a[0].duration ?? (sortByDuration === 'asc' ? Infinity : -Infinity);
-            const bDur = b[0].duration ?? (sortByDuration === 'asc' ? Infinity : -Infinity);
-            return sortByDuration === 'asc' ? aDur - bDur : bDur - aDur;
+            const aCompleted = isGroupCompleted(a);
+            const bCompleted = isGroupCompleted(b);
+            if (aCompleted !== bCompleted) return aCompleted ? 1 : -1;
+
+            if (sortByDuration !== 'none') {
+                const aDur = a[0].duration ?? (sortByDuration === 'asc' ? Infinity : -Infinity);
+                const bDur = b[0].duration ?? (sortByDuration === 'asc' ? Infinity : -Infinity);
+                return sortByDuration === 'asc' ? aDur - bDur : bDur - aDur;
+            }
+            return 0;
         });
 
         return groups.flat();
