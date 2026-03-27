@@ -8,7 +8,7 @@ import { useAuth } from './AuthContext';
 import EntryItem from './EntryItem';
 import { onSnapshot, collection, query, orderBy } from 'firebase/firestore';
 import { db } from '../services/firebase';
-import { Share, Pin, LayoutGrid, List, ChevronDown, ChevronUp, Copy, X, Calendar, MessageSquare } from 'lucide-react';
+import { Share, Pin, LayoutGrid, List, ChevronDown, ChevronUp, ChevronRight, Copy, X, Calendar, MessageSquare } from 'lucide-react';
 import { generateMarkdown, generateMatrixMarkdown, copyToClipboard } from '../utils/exportUtils';
 import { getLogicalDate } from '../utils/dateUtils';
 import { SleepStats } from './SleepStats';
@@ -54,6 +54,7 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
     const [activeId, setActiveId] = useState<string | null>(null);
     const [matrixSearch, setMatrixSearch] = useState('');
     const [isInboxFolded, setIsInboxFolded] = useState(true);
+    const [pinnedFolded, setPinnedFolded] = useState(true);
     const [currentLogicalDay, setCurrentLogicalDay] = useState(format(getLogicalDate(), 'yyyy-MM-dd'));
     const toast = useToast();
     const { user } = useAuth();
@@ -759,23 +760,30 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
                         {/* Pinned Entries Section */}
                         {pinnedEntries.length > 0 && (
                             <div className="mb-8">
-                                <div className="sticky top-[57px] bg-bg-primary/95 backdrop-blur py-2 z-10 border-b border-bg-tertiary flex justify-between items-center mb-4">
+                                <div
+                                    className="sticky top-[57px] bg-bg-primary/95 backdrop-blur py-2 z-10 border-b border-bg-tertiary flex justify-between items-center mb-4 cursor-pointer select-none"
+                                    onClick={() => setPinnedFolded(prev => !prev)}
+                                >
                                     <h2 className="text-accent text-sm font-bold flex items-center gap-2">
+                                        {pinnedFolded ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
                                         <Pin size={14} className="fill-accent" /> 고정된 {category === 'chore' ? '할일' : category === 'book' ? '책' : category === 'action' ? '일상' : '생각'}
+                                        <span className="text-text-tertiary font-normal">({pinnedEntries.length})</span>
                                     </h2>
                                 </div>
-                                <div className="space-y-1">
-                                    {pinnedEntries.map(entry => (
-                                        <EntryItem
-                                            key={entry.id}
-                                            entry={entry}
-                                            onDelete={handleDelete}
-                                            onEdit={handleEdit}
-                                            onTagClick={onTagClick}
-                                            onPin={handlePin}
-                                        />
-                                    ))}
-                                </div>
+                                {!pinnedFolded && (
+                                    <div className="space-y-1">
+                                        {pinnedEntries.map(entry => (
+                                            <EntryItem
+                                                key={entry.id}
+                                                entry={entry}
+                                                onDelete={handleDelete}
+                                                onEdit={handleEdit}
+                                                onTagClick={onTagClick}
+                                                onPin={handlePin}
+                                            />
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                         )}
 
