@@ -117,8 +117,9 @@ function timeToMinutes(date: Date): number {
 function minutesToTimeString(minutes: number): string {
     // 1440분 이상이면 다음날 새벽이므로 1440을 빼줌
     const normalizedMinutes = minutes >= 1440 ? minutes - 1440 : minutes;
-    const hours = Math.floor(normalizedMinutes / 60);
-    const mins = Math.round(normalizedMinutes % 60);
+    const totalRounded = Math.round(normalizedMinutes);
+    const hours = Math.floor(totalRounded / 60);
+    const mins = totalRounded % 60;
     return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
 }
 
