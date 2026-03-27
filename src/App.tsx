@@ -271,11 +271,11 @@ const AppContent: React.FC = () => {
             }`}>
             <div className="max-w-md mx-auto flex px-2">
               {[
-                { id: 'action', label: '일상', color: 'text-blue-400', border: 'border-blue-400/50' },
-                { id: 'braindump', label: '🧠 덤프', color: 'text-accent', border: 'border-accent/50' },
-                { id: 'chore', label: '할일', color: 'text-orange-400', border: 'border-orange-400/50' },
-                { id: 'book', label: '📚 책', color: 'text-amber-600', border: 'border-amber-600/50' },
                 { id: 'todo', label: '투두', color: 'text-emerald-400', border: 'border-emerald-400/50' },
+                { id: 'action', label: '일상', color: 'text-blue-400', border: 'border-blue-400/50' },
+                { id: 'chore', label: '할일', color: 'text-orange-400', border: 'border-orange-400/50' },
+                { id: 'braindump', label: '🧠 덤프', color: 'text-accent', border: 'border-accent/50' },
+                { id: 'book', label: '📚 책', color: 'text-amber-600', border: 'border-amber-600/50' },
                 { id: 'expense', label: '💰 돈', color: 'text-rose-400', border: 'border-rose-400/50' },
                 { id: 'worry', label: '🌱 고민', color: 'text-green-400', border: 'border-green-400/50' },
               ].map((tab) => (
