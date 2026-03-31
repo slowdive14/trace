@@ -50,7 +50,7 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
     const [displayLimit, setDisplayLimit] = useState(50);
     const [dateFilter, setDateFilter] = useState<DateFilter>(category === 'chore' ? 'all' : 'today');
     const [specificDate, setSpecificDate] = useState<string>('');
-    const [viewMode, setViewMode] = useState<'list' | 'matrix'>('list');
+    const [viewMode, setViewMode] = useState<'list' | 'matrix'>(category === 'chore' ? 'matrix' : 'list');
     const [activeId, setActiveId] = useState<string | null>(null);
     const [matrixSearch, setMatrixSearch] = useState('');
     const [isInboxFolded, setIsInboxFolded] = useState(true);
