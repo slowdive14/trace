@@ -32,8 +32,8 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
 
     // 낮잠 기록 모달
     const [showNapModal, setShowNapModal] = useState(false);
-    const [napMinutes, setNapMinutes] = useState('');
-    const napInputRef = useRef<HTMLInputElement>(null);
+    const [napStartTime, setNapStartTime] = useState('');
+    const [napEndTime, setNapEndTime] = useState('');
 
     // 자동완성 관련 상태
     const [showAutocomplete, setShowAutocomplete] = useState(false);
@@ -151,17 +151,23 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
 
     // 낮잠 기록 핸들러
     const handleNapRecord = async () => {
-        if (!user) return;
-        const minutes = parseInt(napMinutes, 10);
-        if (isNaN(minutes) || minutes <= 0) return;
+        if (!user || !napStartTime || !napEndTime) return;
 
-        const content = `낮잠 ${minutes}분 💤`;
+        const [sh, sm] = napStartTime.split(':').map(Number);
+        const [eh, em] = napEndTime.split(':').map(Number);
+        const startMin = sh * 60 + sm;
+        const endMin = eh * 60 + em;
+        const duration = endMin - startMin;
+        if (duration <= 0) return;
+
+        const content = `낮잠 ${duration}분 (${napStartTime}~${napEndTime}) 💤`;
         const tags = ['#nap'];
 
         try {
             await addEntry(user.uid, content, tags, 'action', undefined, 'entries', false);
             setShowNapModal(false);
-            setNapMinutes('');
+            setNapStartTime('');
+            setNapEndTime('');
         } catch (error) {
             console.error('Failed to add nap record:', error);
         }
@@ -340,8 +346,8 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
                                 type="button"
                                 onClick={() => {
                                     setShowNapModal(true);
-                                    setNapMinutes('');
-                                    setTimeout(() => napInputRef.current?.focus(), 100);
+                                    setNapStartTime('');
+                                    setNapEndTime(format(new Date(), 'HH:mm'));
                                 }}
                                 className="flex items-center gap-1.5 py-1.5 px-3 text-sm font-medium rounded-md bg-slate-600 text-white hover:bg-slate-500 transition-colors select-none"
                             >
@@ -628,20 +634,33 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
                 <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowNapModal(false)}>
                     <div className="bg-bg-secondary rounded-2xl p-6 max-w-xs w-full" onClick={(e) => e.stopPropagation()}>
                         <h3 className="text-lg font-bold mb-4 text-center">💤 낮잠 기록</h3>
-                        <p className="text-xs text-text-secondary text-center mb-4">
-                            낮잠 시간을 분 단위로 입력하세요
-                        </p>
                         <form onSubmit={(e) => { e.preventDefault(); handleNapRecord(); }}>
-                            <input
-                                ref={napInputRef}
-                                type="number"
-                                min="1"
-                                max="480"
-                                value={napMinutes}
-                                onChange={(e) => setNapMinutes(e.target.value)}
-                                placeholder="예: 60"
-                                className="w-full bg-bg-tertiary text-text-primary rounded-lg p-3 text-center text-xl focus:outline-none focus:ring-1 focus:ring-accent mb-4"
-                            />
+                            <div className="mb-3">
+                                <label className="block text-xs text-text-secondary mb-1">시작 시간</label>
+                                <input
+                                    type="time"
+                                    value={napStartTime}
+                                    onChange={(e) => setNapStartTime(e.target.value)}
+                                    className="w-full bg-bg-tertiary text-text-primary rounded-lg p-3 text-center text-xl focus:outline-none focus:ring-1 focus:ring-accent"
+                                />
+                            </div>
+                            <div className="mb-3">
+                                <label className="block text-xs text-text-secondary mb-1">종료 시간</label>
+                                <input
+                                    type="time"
+                                    value={napEndTime}
+                                    onChange={(e) => setNapEndTime(e.target.value)}
+                                    className="w-full bg-bg-tertiary text-text-primary rounded-lg p-3 text-center text-xl focus:outline-none focus:ring-1 focus:ring-accent"
+                                />
+                            </div>
+                            {napStartTime && napEndTime && (() => {
+                                const [sh, sm] = napStartTime.split(':').map(Number);
+                                const [eh, em] = napEndTime.split(':').map(Number);
+                                const d = (eh * 60 + em) - (sh * 60 + sm);
+                                return d > 0 ? (
+                                    <p className="text-center text-sm text-accent mb-3">{Math.floor(d / 60) > 0 ? `${Math.floor(d / 60)}시간 ` : ''}{d % 60 > 0 ? `${d % 60}분` : ''}</p>
+                                ) : null;
+                            })()}
                             <div className="flex gap-2">
                                 <button
                                     type="submit"
