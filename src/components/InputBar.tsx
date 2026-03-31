@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Maximize2, Minimize2, Calendar, Smile, Moon, Sun } from 'lucide-react';
+import { Send, Maximize2, Minimize2, Calendar, Smile, Moon, Sun, CloudMoon } from 'lucide-react';
 import { extractTags } from '../utils/tagUtils';
 import { addEntry } from '../services/firestore';
 import { useAuth } from './AuthContext';
@@ -29,6 +29,11 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
     const [sleepTime, setSleepTime] = useState('');
     const [sleepDate, setSleepDate] = useState<Date>(new Date());
     const longPressTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // 낮잠 기록 모달
+    const [showNapModal, setShowNapModal] = useState(false);
+    const [napMinutes, setNapMinutes] = useState('');
+    const napInputRef = useRef<HTMLInputElement>(null);
 
     // 자동완성 관련 상태
     const [showAutocomplete, setShowAutocomplete] = useState(false);
@@ -142,6 +147,24 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
 
         await handleSleepRecord(sleepModalType, selectedDateTime);
         setShowSleepTimeModal(false);
+    };
+
+    // 낮잠 기록 핸들러
+    const handleNapRecord = async () => {
+        if (!user) return;
+        const minutes = parseInt(napMinutes, 10);
+        if (isNaN(minutes) || minutes <= 0) return;
+
+        const content = `낮잠 ${minutes}분 💤`;
+        const tags = ['#nap'];
+
+        try {
+            await addEntry(user.uid, content, tags, 'action', undefined, 'entries', false);
+            setShowNapModal(false);
+            setNapMinutes('');
+        } catch (error) {
+            console.error('Failed to add nap record:', error);
+        }
     };
 
     const insertBookTag = (tag: string) => {
@@ -312,6 +335,17 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
                                 className="flex items-center gap-1.5 py-1.5 px-3 text-sm font-medium rounded-md bg-amber-500 text-white hover:bg-amber-400 transition-colors select-none"
                             >
                                 <Sun size={16} /> 기상
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setShowNapModal(true);
+                                    setNapMinutes('');
+                                    setTimeout(() => napInputRef.current?.focus(), 100);
+                                }}
+                                className="flex items-center gap-1.5 py-1.5 px-3 text-sm font-medium rounded-md bg-slate-600 text-white hover:bg-slate-500 transition-colors select-none"
+                            >
+                                <CloudMoon size={16} /> 낮잠
                             </button>
                         </div>
                     </div>
@@ -585,6 +619,45 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
                                 취소
                             </button>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 낮잠 시간 입력 모달 */}
+            {showNapModal && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowNapModal(false)}>
+                    <div className="bg-bg-secondary rounded-2xl p-6 max-w-xs w-full" onClick={(e) => e.stopPropagation()}>
+                        <h3 className="text-lg font-bold mb-4 text-center">💤 낮잠 기록</h3>
+                        <p className="text-xs text-text-secondary text-center mb-4">
+                            낮잠 시간을 분 단위로 입력하세요
+                        </p>
+                        <form onSubmit={(e) => { e.preventDefault(); handleNapRecord(); }}>
+                            <input
+                                ref={napInputRef}
+                                type="number"
+                                min="1"
+                                max="480"
+                                value={napMinutes}
+                                onChange={(e) => setNapMinutes(e.target.value)}
+                                placeholder="예: 60"
+                                className="w-full bg-bg-tertiary text-text-primary rounded-lg p-3 text-center text-xl focus:outline-none focus:ring-1 focus:ring-accent mb-4"
+                            />
+                            <div className="flex gap-2">
+                                <button
+                                    type="submit"
+                                    className="flex-1 py-2 px-4 bg-slate-600 text-white rounded-lg hover:bg-slate-500"
+                                >
+                                    확인
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowNapModal(false)}
+                                    className="flex-1 py-2 px-4 bg-bg-tertiary text-text-primary rounded-lg hover:bg-bg-primary"
+                                >
+                                    취소
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             )}

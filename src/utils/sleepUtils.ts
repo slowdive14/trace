@@ -6,6 +6,8 @@ export interface SleepRecord {
     sleepTime?: Date;    // 취침 시각
     wakeTime?: Date;     // 기상 시각
     duration?: number;   // 수면 시간 (분)
+    napDuration?: number; // 낮잠 시간 (분)
+    totalDuration?: number; // 총 수면 시간 (본수면 + 낮잠, 분)
 }
 
 /**
@@ -72,6 +74,37 @@ export function extractSleepRecords(entries: Entry[]): SleepRecord[] {
         });
     }
 
+    // 낮잠(#nap) 기록 추출 및 날짜별 합산
+    const napEntries = entries
+        .filter(e => e.tags.includes('#nap'))
+        .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+
+    const napByDate: Record<string, number> = {};
+    for (const nap of napEntries) {
+        const dateStr = format(nap.timestamp, 'yyyy-MM-dd');
+        const napMatch = nap.content.match(/(\d+)\s*분/);
+        const napMinutes = napMatch ? parseInt(napMatch[1], 10) : 0;
+        if (napMinutes > 0) {
+            napByDate[dateStr] = (napByDate[dateStr] || 0) + napMinutes;
+        }
+    }
+
+    // 낮잠을 해당 날짜의 수면 기록에 병합
+    for (const record of records) {
+        record.napDuration = napByDate[record.date] || 0;
+        record.totalDuration = (record.duration || 0) + record.napDuration;
+        delete napByDate[record.date];
+    }
+
+    // 본수면 기록 없이 낮잠만 있는 날짜도 추가
+    for (const [dateStr, napMin] of Object.entries(napByDate)) {
+        records.push({
+            date: dateStr,
+            napDuration: napMin,
+            totalDuration: napMin,
+        });
+    }
+
     return records.sort((a, b) => b.date.localeCompare(a.date));
 }
 
@@ -87,10 +120,10 @@ export function getRecentRecords(records: SleepRecord[], days: number): SleepRec
  * 평균 수면 시간 계산 (시간 단위, 소수점 1자리)
  */
 export function getAverageDuration(records: SleepRecord[]): number | null {
-    const validRecords = records.filter(r => r.duration !== undefined);
+    const validRecords = records.filter(r => r.totalDuration !== undefined || r.duration !== undefined);
     if (validRecords.length === 0) return null;
 
-    const totalMinutes = validRecords.reduce((sum, r) => sum + (r.duration || 0), 0);
+    const totalMinutes = validRecords.reduce((sum, r) => sum + (r.totalDuration ?? r.duration ?? 0), 0);
     const avgMinutes = totalMinutes / validRecords.length;
     return Math.round(avgMinutes / 6) / 10; // 시간 단위, 소수점 1자리
 }
@@ -292,10 +325,10 @@ export function calculateSleepScore(records: SleepRecord[], contextRecords: Slee
 
     // 1. 수면시간 점수 (40점 만점) - 원시값으로 정밀 계산 (이중 반올림 방지)
     const avgDuration = getAverageDuration(records); // 표시용 (소수점 1자리)
-    const validDurationRecords = records.filter(r => r.duration !== undefined);
+    const validDurationRecords = records.filter(r => r.totalDuration !== undefined || r.duration !== undefined);
     let durationScore = 0;
     if (validDurationRecords.length > 0) {
-        const totalMinutes = validDurationRecords.reduce((sum, r) => sum + (r.duration || 0), 0);
+        const totalMinutes = validDurationRecords.reduce((sum, r) => sum + (r.totalDuration ?? r.duration ?? 0), 0);
         const rawAvgHours = totalMinutes / validDurationRecords.length / 60;
         const idealHours = 7.5;
         const deviation = Math.abs(rawAvgHours - idealHours);
@@ -422,8 +455,8 @@ export function getWeeklyBarData(records: SleepRecord[], weekOffset: number = 0)
         let wakeGoalMet = false;
         let sleepGoalMet = false;
 
-        if (record && record.duration !== undefined) {
-            duration = record.duration / 60; // 분 → 시간
+        if (record && (record.totalDuration !== undefined || record.duration !== undefined)) {
+            duration = (record.totalDuration ?? record.duration ?? 0) / 60; // 분 → 시간
             status = duration >= 7 ? 'sufficient' : 'insufficient';
             const achievement = checkGoalAchievement(record);
             wakeGoalMet = achievement.wakeGoalMet;
