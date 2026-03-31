@@ -78,6 +78,8 @@ const TodoTab: React.FC<TodoTabProps> = ({
     const [subAddText, setSubAddText] = useState('');
     const [inlineEditIndex, setInlineEditIndex] = useState<number | null>(null);
     const [inlineEditText, setInlineEditText] = useState('');
+    const [historyEditKey, setHistoryEditKey] = useState<{ dateStr: string; lineIndex: number } | null>(null);
+    const [historyEditText, setHistoryEditText] = useState('');
     const [sortByDuration, setSortByDuration] = useState<'none' | 'asc' | 'desc'>(() => {
         const saved = localStorage.getItem('todoSortByDuration');
         return (saved === 'asc' || saved === 'desc') ? saved : 'none';
@@ -90,6 +92,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
     const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const subAddInputRef = useRef<HTMLInputElement>(null);
     const inlineEditRef = useRef<HTMLInputElement>(null);
+    const historyEditRef = useRef<HTMLInputElement>(null);
 
     // Auto-refresh when logical day changes (5AM cutoff)
     useEffect(() => {
@@ -432,6 +435,65 @@ const TodoTab: React.FC<TodoTabProps> = ({
         setContent(newContent);
         handleSave(newContent);
         setInlineEditIndex(null);
+    };
+
+    // History inline edit
+    const startHistoryEdit = (dateStr: string, lineIndex: number) => {
+        const todo = historyTodos.find(t => format(t.date, 'yyyy-MM-dd') === dateStr);
+        if (!todo) return;
+        const lines = todo.content.split('\n');
+        const line = lines[lineIndex];
+        if (!line) return;
+        const editText = line
+            .replace(/^\s*-\s*\[.\]\s*/, '')
+            .replace(/\s*\{eid:[^}]+\}\s*$/, '')
+            .trim();
+        setHistoryEditText(editText);
+        setHistoryEditKey({ dateStr, lineIndex });
+        setTimeout(() => historyEditRef.current?.focus(), 50);
+    };
+
+    const commitHistoryEdit = async () => {
+        if (!historyEditKey || !user) { setHistoryEditKey(null); return; }
+        const { dateStr, lineIndex } = historyEditKey;
+        const newText = historyEditText.trim();
+        if (!newText) { setHistoryEditKey(null); return; }
+
+        const todo = historyTodos.find(t => format(t.date, 'yyyy-MM-dd') === dateStr);
+        if (!todo) { setHistoryEditKey(null); return; }
+
+        const lines = todo.content.split('\n');
+        const line = lines[lineIndex];
+        if (!line) { setHistoryEditKey(null); return; }
+
+        const prefixMatch = line.match(/^(\s*-\s*\[.\]\s*)/);
+        const eidMatch = line.match(/(\s*\{eid:[^}]+\})/);
+        const prefix = prefixMatch ? prefixMatch[1] : '- [ ] ';
+        const eid = eidMatch ? eidMatch[1] : '';
+        lines[lineIndex] = `${prefix}${newText}${eid}`;
+        const newContent = lines.join('\n');
+
+        setHistoryTodos(prev => prev.map(t => {
+            if (format(t.date, 'yyyy-MM-dd') === dateStr) {
+                return { ...t, content: newContent };
+            }
+            return t;
+        }));
+
+        const logicalToday = format(getLogicalDate(), 'yyyy-MM-dd');
+        if (dateStr === logicalToday) {
+            setContent(newContent);
+        }
+
+        try {
+            const [year, month, day] = dateStr.split('-').map(Number);
+            const date = new Date(year, month - 1, day);
+            await saveTodo(user.uid, date, newContent, collectionName);
+        } catch (error) {
+            console.error('Failed to save history edit:', error);
+        }
+
+        setHistoryEditKey(null);
     };
 
     // Quick-add a todo item (reading mode)
@@ -1178,9 +1240,27 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                                 onChange={() => toggleHistoryCheckbox(date, item.lineIndex)}
                                                 className="mt-1 w-4 h-4 rounded border-text-secondary focus:ring-accent focus:ring-2 cursor-pointer"
                                             />
-                                            <span className={`flex-1 leading-relaxed ${item.checked ? 'line-through text-text-secondary' : 'text-text-primary'}`}>
-                                                {renderText(item.text)}
-                                            </span>
+                                            {historyEditKey?.dateStr === date && historyEditKey?.lineIndex === item.lineIndex ? (
+                                                <input
+                                                    ref={historyEditRef}
+                                                    type="text"
+                                                    value={historyEditText}
+                                                    onChange={e => setHistoryEditText(e.target.value)}
+                                                    onKeyDown={e => {
+                                                        if (e.key === 'Enter') commitHistoryEdit();
+                                                        if (e.key === 'Escape') setHistoryEditKey(null);
+                                                    }}
+                                                    onBlur={() => commitHistoryEdit()}
+                                                    className="flex-1 bg-bg-primary text-text-primary text-sm px-2 py-0.5 rounded border border-accent outline-none"
+                                                />
+                                            ) : (
+                                                <span
+                                                    className={`flex-1 leading-relaxed cursor-text ${item.checked ? 'line-through text-text-secondary' : 'text-text-primary'}`}
+                                                    onClick={() => startHistoryEdit(date, item.lineIndex)}
+                                                >
+                                                    {renderText(item.text)}
+                                                </span>
+                                            )}
                                         </div>
                                     ))}
                                 </div>
