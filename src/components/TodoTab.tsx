@@ -1217,15 +1217,37 @@ const TodoTab: React.FC<TodoTabProps> = ({
                 /* History Mode */
                 <div className="flex-1 overflow-y-auto px-4 pb-8">
                     <div className="max-w-md mx-auto pt-4">
-                        {Object.entries(groupedTodos).map(([date, todo]) => (
+                        {Object.entries(groupedTodos).map(([date, todo]) => {
+                            const historyItems = parseTodos(todo.content);
+                            const historySummary = calculateWeightedSummary(historyItems);
+                            const historyHasDuration = historyItems.some(t => t.duration);
+                            const historyTimeLabel = historyHasDuration
+                                ? `${formatDuration(Math.round(historySummary.completedWeight))} / ${formatDuration(Math.round(historySummary.totalWeight))}`
+                                : `${historyItems.filter(t => t.checked).length}/${historyItems.length}`;
+                            return (
                             <div key={date} data-todo-date={date} className="mb-8">
                                 <div
                                     className="sticky top-0 bg-bg-primary/95 backdrop-blur py-3 border-b border-bg-tertiary mb-4"
                                     style={{ zIndex: 10 }}
                                 >
-                                    <h2 className="text-text-secondary text-sm font-bold">
-                                        {getDateLabel(date)}
-                                    </h2>
+                                    <div className="flex items-center justify-between">
+                                        <h2 className="text-text-secondary text-sm font-bold">
+                                            {getDateLabel(date)}
+                                        </h2>
+                                        {historyItems.length > 0 && (
+                                            <span className="text-xs text-text-tertiary">
+                                                {historySummary.percentage}% ({historyTimeLabel})
+                                            </span>
+                                        )}
+                                    </div>
+                                    {historyItems.length > 0 && (
+                                        <div className="h-1 bg-bg-tertiary rounded-full overflow-hidden mt-2">
+                                            <div
+                                                className={`h-full ${getProgressColor(historySummary.percentage)} rounded-full`}
+                                                style={{ width: `${historySummary.percentage}%` }}
+                                            />
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="space-y-1">
                                     {parseTodos(todo.content).map((item, idx) => (
@@ -1265,7 +1287,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                     ))}
                                 </div>
                             </div>
-                        ))}
+                        );})}
                         {historyTodos.length === 0 && (
                             <div className="text-center text-text-secondary mt-20">
                                 <p>최근 30일간 작성된 투두가 없습니다.</p>
