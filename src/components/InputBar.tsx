@@ -535,7 +535,8 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
                             type="date"
                             value={format(displayDate, 'yyyy-MM-dd')}
                             onChange={(e) => {
-                                setSelectedDate(new Date(e.target.value + 'T00:00:00'));
+                                // 정오(12:00)로 설정: getLogicalDate가 5AM 이전을 전날로 처리하는 문제 방지
+                                setSelectedDate(new Date(e.target.value + 'T12:00:00'));
                                 setShowDatePicker(false);
                             }}
                             className="w-full bg-bg-tertiary text-text-primary rounded-lg p-3 focus:outline-none focus:ring-1 focus:ring-accent"
