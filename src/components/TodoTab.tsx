@@ -72,6 +72,8 @@ const TodoTab: React.FC<TodoTabProps> = ({
     const [currentLogicalDay, setCurrentLogicalDay] = useState(format(getLogicalDate(), 'yyyy-MM-dd'));
     const [selectedDate, setSelectedDate] = useState<Date>(getLogicalDate());
     const [timePopup, setTimePopup] = useState<{ lineIndex: number; lineText: string; dateStr?: string; currentTime?: number } | null>(null);
+    const [minutesInput, setMinutesInput] = useState<string>('');
+    const [recordToAction, setRecordToAction] = useState<boolean>(true);
     const [deletingLineIndex, setDeletingLineIndex] = useState<number | null>(null);
     const [quickAddText, setQuickAddText] = useState('');
     const [subAddingIndex, setSubAddingIndex] = useState<number | null>(null);
@@ -87,8 +89,6 @@ const TodoTab: React.FC<TodoTabProps> = ({
 
     const { user } = useAuth();
     const textareaRef = useRef<HTMLTextAreaElement>(null);
-    const timeInputRef = useRef<HTMLInputElement>(null);
-    const recordToActionRef = useRef<boolean>(true);
     const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const subAddInputRef = useRef<HTMLInputElement>(null);
     const inlineEditRef = useRef<HTMLInputElement>(null);
@@ -551,11 +551,13 @@ const TodoTab: React.FC<TodoTabProps> = ({
             // 기존 (Xm) 패턴에서 시간 추출
             const timeMatch = line.match(/\((\d+)m\)\s*$/);
             const checkedLine = line.replace('- [ ]', '- [x]');
-            recordToActionRef.current = true;
+            const existingMinutes = timeMatch ? parseInt(timeMatch[1], 10) : undefined;
+            setRecordToAction(true);
+            setMinutesInput(existingMinutes !== undefined ? String(existingMinutes) : '');
             setTimePopup({
                 lineIndex,
                 lineText: checkedLine,
-                currentTime: timeMatch ? parseInt(timeMatch[1], 10) : undefined,
+                currentTime: existingMinutes,
             });
         } else if (line.includes('- [x]')) {
             // 완료 → 미완료: 즉시 토글 + 연동 엔트리 삭제
@@ -628,12 +630,14 @@ const TodoTab: React.FC<TodoTabProps> = ({
         if (isChecking) {
             const timeMatch = line.match(/\((\d+)m\)\s*$/);
             const checkedLine = line.replace('- [ ]', '- [x]');
-            recordToActionRef.current = true;
+            const existingMinutes = timeMatch ? parseInt(timeMatch[1], 10) : undefined;
+            setRecordToAction(true);
+            setMinutesInput(existingMinutes !== undefined ? String(existingMinutes) : '');
             setTimePopup({
                 lineIndex,
                 lineText: checkedLine,
                 dateStr,
-                currentTime: timeMatch ? parseInt(timeMatch[1], 10) : undefined,
+                currentTime: existingMinutes,
             });
         }
     };
@@ -1631,65 +1635,95 @@ const TodoTab: React.FC<TodoTabProps> = ({
             )}
 
             {/* 실행시간 입력 팝업 */}
-            {timePopup && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => handleTimeConfirm(null, recordToActionRef.current)}>
-                    <div
-                        className="bg-bg-secondary rounded-xl p-5 shadow-lg w-64 border border-bg-tertiary"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        <div className="flex items-center gap-2 mb-4">
-                            <Clock className="w-4 h-4 text-accent" />
-                            <span className="text-sm font-medium text-text-primary">실행 시간 (분)</span>
-                        </div>
-                        <form onSubmit={(e) => {
-                            e.preventDefault();
-                            const val = timeInputRef.current?.value;
-                            const parsed = val ? parseInt(val, 10) : null;
-                            handleTimeConfirm(parsed !== null && !isNaN(parsed) ? parsed : null, recordToActionRef.current);
-                        }}>
-                            <input
-                                ref={timeInputRef}
-                                type="number"
-                                min="1"
-                                max="1440"
-                                autoFocus
-                                defaultValue={timePopup.currentTime || ''}
-                                placeholder="예: 30"
-                                className="w-full px-3 py-2 rounded-lg bg-bg-primary border border-bg-tertiary text-text-primary text-center text-lg focus:outline-none focus:ring-2 focus:ring-accent mb-3"
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Escape') {
-                                        handleTimeConfirm(null, recordToActionRef.current);
-                                    }
-                                }}
-                            />
-                            <label className="flex items-center gap-2 mb-4 cursor-pointer select-none">
-                                <input
-                                    type="checkbox"
-                                    defaultChecked={true}
-                                    onChange={(e) => { recordToActionRef.current = e.target.checked; }}
-                                    className="w-4 h-4 rounded border-bg-tertiary text-accent focus:ring-accent accent-[var(--color-accent)]"
-                                />
-                                <span className="text-xs text-text-secondary">일상 탭에 기록</span>
-                            </label>
-                            <div className="flex gap-2">
-                                <button
-                                    type="button"
-                                    onClick={() => handleTimeConfirm(null, recordToActionRef.current)}
-                                    className="flex-1 px-3 py-2 rounded-lg text-sm text-text-secondary hover:bg-bg-tertiary transition-colors"
-                                >
-                                    건너뛰기
-                                </button>
-                                <button
-                                    type="submit"
-                                    className="flex-1 px-3 py-2 rounded-lg text-sm bg-accent text-white hover:bg-accent/80 transition-colors font-medium"
-                                >
-                                    확인
-                                </button>
+            {timePopup && (() => {
+                const parsedMinutes = (() => {
+                    const n = parseInt(minutesInput, 10);
+                    return !isNaN(n) && n > 0 ? n : null;
+                })();
+                const hasTime = parsedMinutes !== null;
+                const hasEntry = recordToAction;
+                const canSave = hasTime || hasEntry;
+                const previewParts: string[] = [];
+                if (hasTime) previewParts.push(`⏱ ${parsedMinutes}분 기록`);
+                if (hasEntry) previewParts.push(`📝 일상 탭에 추가`);
+                const skip = () => handleTimeConfirm(null, false);
+                return (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={skip}>
+                        <div
+                            className="bg-bg-secondary rounded-xl p-5 shadow-lg w-72 border border-bg-tertiary"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <div className="flex items-center gap-2 mb-4">
+                                <Clock className="w-4 h-4 text-accent" />
+                                <span className="text-sm font-medium text-text-primary">실행 시간 기록</span>
                             </div>
-                        </form>
+                            <form onSubmit={(e) => {
+                                e.preventDefault();
+                                if (!canSave) return;
+                                handleTimeConfirm(parsedMinutes, recordToAction);
+                            }}>
+                                <div className="flex items-center gap-2 mb-3">
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        max="1440"
+                                        autoFocus
+                                        value={minutesInput}
+                                        onChange={(e) => setMinutesInput(e.target.value)}
+                                        placeholder="예: 30"
+                                        className="flex-1 px-3 py-2 rounded-lg bg-bg-primary border border-bg-tertiary text-text-primary text-center text-lg focus:outline-none focus:ring-2 focus:ring-accent"
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Escape') skip();
+                                        }}
+                                    />
+                                    <span className="text-sm text-text-secondary">분</span>
+                                </div>
+                                <label className="flex items-start gap-2 mb-3 cursor-pointer select-none">
+                                    <input
+                                        type="checkbox"
+                                        checked={recordToAction}
+                                        onChange={(e) => setRecordToAction(e.target.checked)}
+                                        className="w-4 h-4 mt-0.5 rounded border-bg-tertiary text-accent focus:ring-accent accent-[var(--color-accent)]"
+                                    />
+                                    <div className="flex flex-col">
+                                        <span className="text-xs text-text-secondary">일상 탭에도 기록 남기기</span>
+                                        <span className="text-[10px] text-text-tertiary">타임라인에 독립된 기록 생성</span>
+                                    </div>
+                                </label>
+                                <div className="min-h-[28px] mb-3 pt-2 border-t border-bg-tertiary">
+                                    {canSave ? (
+                                        <div className="text-[11px] text-text-secondary leading-tight">
+                                            <span className="text-text-tertiary">저장 시: </span>
+                                            {previewParts.join(' + ')}
+                                        </div>
+                                    ) : (
+                                        <div className="text-[11px] text-text-tertiary leading-tight italic">
+                                            시간이나 옵션을 입력하거나, 건너뛰기를 누르세요
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="flex gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={skip}
+                                        className="flex-1 px-3 py-2 rounded-lg text-sm text-text-secondary hover:bg-bg-tertiary transition-colors"
+                                        title="시간·기록 없이 완료만 표시"
+                                    >
+                                        건너뛰기
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        disabled={!canSave}
+                                        className="flex-1 px-3 py-2 rounded-lg text-sm bg-accent text-white hover:bg-accent/80 transition-colors font-medium disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-accent"
+                                    >
+                                        저장
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
                     </div>
-                </div>
-            )}
+                );
+            })()}
         </div>
     );
 };
