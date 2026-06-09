@@ -151,9 +151,9 @@ function ScoreSection({ score, streak }: { score: SleepScore; streak: WeeklyStre
                         <InfoTooltip content={
                             <div className="space-y-1 text-left">
                                 <div className="font-bold text-indigo-300">목표: 7.5시간 (40점)</div>
-                                <div className="text-gray-400">7.5시간에서 멀어질수록 감점됩니다.</div>
-                                <div>• 1시간 차이: -8점</div>
-                                <div>• 30분 차이: -4점</div>
+                                <div className="text-gray-400">부족할수록 더 크게 감점됩니다.</div>
+                                <div>• 부족 1시간: -8점</div>
+                                <div>• 과다 1시간: -4점</div>
                             </div>
                         } />
                     </div>

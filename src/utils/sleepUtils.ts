@@ -336,8 +336,10 @@ export function calculateSleepScore(records: SleepRecord[], contextRecords: Slee
         const totalMinutes = validDurationRecords.reduce((sum, r) => sum + (r.totalDuration ?? r.duration ?? 0), 0);
         const rawAvgHours = totalMinutes / validDurationRecords.length / 60;
         const idealHours = 7.5;
-        const deviation = Math.abs(rawAvgHours - idealHours);
-        durationScore = Math.max(0, 40 - (deviation * 8));
+        const diff = rawAvgHours - idealHours;
+        // 비대칭 감점: 부족수면은 가파르게(-8점/시간), 과수면은 완만하게(-4점/시간)
+        const penalty = diff < 0 ? Math.abs(diff) * 8 : diff * 4;
+        durationScore = Math.max(0, 40 - penalty);
     }
 
     // 2. 목표 달성 점수 (36점 만점: 취침 18 + 기상 18)
@@ -351,11 +353,9 @@ export function calculateSleepScore(records: SleepRecord[], contextRecords: Slee
 
 
     // 3. 일관성 점수 (24점 만점: 취침 12 + 기상 12)
-    // 일관성은 '최근 흐름'을 반영해야 하므로 contextRecords를 포함해 최소 3일 이상의 데이터로 계산 권장
-    const consistencySample = [...contextRecords, ...records];
-
-    // 중복 제거 (혹시 context와 current가 겹칠 경우)
-    const uniqueSample = Array.from(new Map(consistencySample.map(item => [item.date, item])).values())
+    // 목표 점수와 동일한 표본(goalRecords)을 사용 → 이번 주 데이터가 충분(3일+)하면 이번 주만 반영하고,
+    // 3일 미만일 때만 직전 기록으로 보충해 안정화. "이번 주" 라벨과 계산 범위를 일치시킴.
+    const uniqueSample = Array.from(new Map(goalRecords.map(item => [item.date, item])).values())
         .filter(r => r.sleepTime || r.wakeTime); // 유효한 기록만
 
     const sleepMinutes = uniqueSample.filter(r => r.sleepTime).map(r => timeToMinutes(r.sleepTime!));
@@ -368,9 +368,10 @@ export function calculateSleepScore(records: SleepRecord[], contextRecords: Slee
     const sleepMAD = calculateMAD(sleepMinutes);
     const wakeMAD = calculateMAD(wakeMinutes);
 
-    // MAD가 0이면 12점, 48분 이상이면 0점 (선형 감점)
-    const sleepConsistencyRaw = Math.max(0, 12 - (sleepMAD / 4));
-    const wakeConsistencyRaw = Math.max(0, 12 - (wakeMAD / 4));
+    // MAD가 0이면 12점, 72분 이상이면 0점 (선형 감점)
+    // 기존 ÷4(48분=0점)는 과도하게 엄격해 데이터가 적으면 0에 몰림 → ÷6으로 완화
+    const sleepConsistencyRaw = Math.max(0, 12 - (sleepMAD / 6));
+    const wakeConsistencyRaw = Math.max(0, 12 - (wakeMAD / 6));
 
     // 개별 점수를 먼저 round한 뒤 합산하여 total = 세부 합과 일치하도록 보장
     const roundedDuration = Math.round(durationScore);
