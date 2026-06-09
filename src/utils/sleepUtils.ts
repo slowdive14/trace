@@ -92,7 +92,11 @@ export function extractSleepRecords(entries: Entry[]): SleepRecord[] {
     // 낮잠을 해당 날짜의 수면 기록에 병합
     for (const record of records) {
         record.napDuration = napByDate[record.date] || 0;
-        record.totalDuration = (record.duration || 0) + record.napDuration;
+        // 본수면(duration)도 낮잠도 없는 레코드(예: 취침만 기록하고 기상 미기록)는
+        // totalDuration을 undefined로 둬야 평균·점수 계산에서 0시간으로 집계되지 않음
+        if (record.duration !== undefined || record.napDuration > 0) {
+            record.totalDuration = (record.duration || 0) + record.napDuration;
+        }
         delete napByDate[record.date];
     }
 
@@ -112,7 +116,8 @@ export function extractSleepRecords(entries: Entry[]): SleepRecord[] {
  * 최근 N일 간의 수면 기록 필터링
  */
 export function getRecentRecords(records: SleepRecord[], days: number): SleepRecord[] {
-    const cutoff = format(subDays(new Date(), days), 'yyyy-MM-dd');
+    // 오늘 포함 정확히 N일 (예: 7일 → 오늘 + 직전 6일). subDays(now, days)면 N+1일이 되는 경계 버그 수정
+    const cutoff = format(subDays(new Date(), days - 1), 'yyyy-MM-dd');
     return records.filter(r => r.date >= cutoff);
 }
 
@@ -218,7 +223,7 @@ export function checkGoalAchievement(record: SleepRecord): GoalAchievement {
     // 취침 목표 체크: 22:00 ~ 00:30 (자정 넘김 처리)
     if (record.sleepTime) {
         const sleepMinutes = getHours(record.sleepTime) * 60 + getMinutes(record.sleepTime);
-        // 23:00~23:59 OR 00:00~00:30
+        // 22:00~23:59 OR 00:00~00:30
         sleepGoalMet = (sleepMinutes >= SLEEP_GOAL_START) || (sleepMinutes <= SLEEP_GOAL_GRACE);
     }
 
