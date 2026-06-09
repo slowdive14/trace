@@ -11,6 +11,13 @@ import UnifiedCalendarModal from './components/UnifiedCalendarModal';
 import TodoTab from './components/TodoTab';
 import WorryTab from './components/WorryTab';
 import BrainDumpTab from './components/BrainDumpTab';
+import EmotionPickerModal from './components/EmotionPickerModal';
+import Toast from './components/common/Toast';
+import { useToast } from './hooks/useToast';
+import { addEntry } from './services/firestore';
+import { findEmotionByTag, getEmotionName } from './utils/emotionTags';
+import { extractTags } from './utils/tagUtils';
+import { Smile } from 'lucide-react';
 import type { Entry, Expense, Todo, Worry, WorryEntry, NavigationTarget } from './types/types';
 import { onSnapshot, collection, query, orderBy } from 'firebase/firestore';
 import { db } from './services/firebase';
@@ -20,6 +27,10 @@ const AppContent: React.FC = () => {
   const [showCalendar, setShowCalendar] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [showUnifiedCalendar, setShowUnifiedCalendar] = useState(false);
+  const [showEmotionFab, setShowEmotionFab] = useState(false);
+  const [pendingEmotion, setPendingEmotion] = useState<string | null>(null);
+  const [emotionNote, setEmotionNote] = useState('');
+  const emotionToast = useToast();
   const [activeTab, setActiveTab] = useState<'action' | 'braindump' | 'chore' | 'book' | 'todo' | 'expense' | 'worry'>('action');
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [selectedExpenseDate, setSelectedExpenseDate] = useState<Date | undefined>(undefined);
@@ -182,6 +193,26 @@ const AppContent: React.FC = () => {
     setNavigationTarget(null);
   };
 
+  // FAB: 감정 선택 → 메모 작성 단계로 전환
+  const handlePickEmotion = (tag: string) => {
+    setPendingEmotion(tag);
+  };
+
+  // 감정 + 메모를 'entries'에 action 카테고리로 저장
+  const handleSaveEmotionEntry = async () => {
+    if (!user || !pendingEmotion) return;
+    const note = emotionNote.trim();
+    const content = note ? `${note} ${pendingEmotion}` : pendingEmotion;
+    try {
+      await addEntry(user.uid, content, extractTags(content), 'action', undefined, 'entries', false);
+      setPendingEmotion(null);
+      setEmotionNote('');
+      emotionToast.show();
+    } catch (e) {
+      console.error('Failed to log emotion:', e);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-bg-primary flex items-center justify-center text-text-secondary">
@@ -299,6 +330,76 @@ const AppContent: React.FC = () => {
               ))}
             </div>
           </div>
+
+          {/* 감정 빠른 기록 FAB (전체화면 탭 제외) */}
+          {!['worry', 'braindump'].includes(activeTab) && (
+            <button
+              onClick={() => setShowEmotionFab(true)}
+              className="fixed right-4 bottom-60 z-[65] w-12 h-12 rounded-full bg-yellow-500 text-white shadow-lg flex items-center justify-center hover:bg-yellow-400 active:scale-95 transition-all"
+              aria-label="감정 빠른 기록"
+              title="지금 기분 기록"
+            >
+              <Smile size={24} />
+            </button>
+          )}
+
+          <EmotionPickerModal
+            isOpen={showEmotionFab}
+            onClose={() => setShowEmotionFab(false)}
+            onSelect={handlePickEmotion}
+            title="지금 기분은? 😊"
+          />
+
+          {/* 감정 선택 후 메모 작성 단계 */}
+          {pendingEmotion && (
+            <div
+              className="fixed inset-0 bg-black/50 z-[205] flex items-center justify-center p-4"
+              onClick={() => { setPendingEmotion(null); setEmotionNote(''); }}
+            >
+              <div className="bg-bg-secondary rounded-2xl max-w-md w-full p-5" onClick={(e) => e.stopPropagation()}>
+                <h2 className="text-lg font-bold mb-3">지금 기분 기록</h2>
+                <button
+                  onClick={() => setShowEmotionFab(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full bg-accent/15 hover:bg-accent/25 text-text-primary mb-3 transition-colors"
+                  title="감정 다시 고르기"
+                >
+                  <span className="text-base leading-none">{findEmotionByTag(pendingEmotion)?.emoji}</span>
+                  <span>{getEmotionName(pendingEmotion)}</span>
+                  <span className="text-xs text-text-secondary ml-1">바꾸기</span>
+                </button>
+                <textarea
+                  value={emotionNote}
+                  onChange={(e) => setEmotionNote(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSaveEmotionEntry();
+                    }
+                  }}
+                  placeholder="무슨 일이 있었나요?"
+                  autoFocus
+                  rows={3}
+                  className="w-full bg-bg-tertiary text-text-primary rounded-lg p-3 resize-none focus:outline-none focus:ring-1 focus:ring-accent"
+                />
+                <div className="flex gap-2 mt-3">
+                  <button
+                    onClick={() => { setPendingEmotion(null); setEmotionNote(''); }}
+                    className="flex-1 py-2 px-4 bg-bg-tertiary text-text-primary rounded-lg hover:bg-bg-primary transition-colors"
+                  >
+                    취소
+                  </button>
+                  <button
+                    onClick={handleSaveEmotionEntry}
+                    className="flex-1 py-2 px-4 bg-yellow-500 text-white rounded-lg hover:bg-yellow-400 transition-colors"
+                  >
+                    기록
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <Toast message="감정이 기록되었어요" isVisible={emotionToast.isVisible} icon={<Smile size={16} />} />
 
           {showCalendar && (
             <CalendarView

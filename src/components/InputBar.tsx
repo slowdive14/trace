@@ -5,6 +5,7 @@ import { addEntry } from '../services/firestore';
 import { useAuth } from './AuthContext';
 import { format, isSameDay } from 'date-fns';
 import { searchEmotions, type EmotionTag } from '../utils/emotionTags';
+import { recordEmotionUse } from '../utils/emotionUsage';
 import EmotionPickerModal from './EmotionPickerModal';
 import { extractSleepRecords, getIdealSleepSchedule } from '../utils/sleepUtils';
 import type { Entry } from '../types/types';
@@ -79,6 +80,7 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
     };
 
     const selectAutocompleteEmotion = (tag: string) => {
+        recordEmotionUse(tag);
         const before = content.substring(0, autocompletePosition.start);
         const after = content.substring(autocompletePosition.end);
         const newContent = before + tag + ' ' + after;
@@ -299,8 +301,8 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
         <>
             {/* 수면 기록 버튼 바 - 일상 탭에서만 표시 */}
             {activeCategory === 'action' && !isExpanded && (
-                <div className="fixed bottom-[136px] left-0 right-0 flex justify-center z-[60]">
-                    <div className="max-w-md w-full px-4">
+                <div className="fixed bottom-[136px] left-0 right-0 flex justify-center z-[60] pointer-events-none">
+                    <div className="max-w-md w-full px-4 pointer-events-auto">
                         {/* 적정 수면 가이드 */}
                         {idealSchedule && (
                             <div className="flex justify-center mb-2">
@@ -390,8 +392,8 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
 
             {/* 책 태그 버튼 바 - Fixed positioning (only when not expanded) */}
             {activeCategory === 'book' && !isExpanded && (
-                <div className="fixed bottom-[136px] left-0 right-0 flex justify-center z-[60]">
-                    <div className="max-w-md w-full px-4">
+                <div className="fixed bottom-[136px] left-0 right-0 flex justify-center z-[60] pointer-events-none">
+                    <div className="max-w-md w-full px-4 pointer-events-auto">
                         <div className="flex gap-2 flex-wrap p-2 bg-bg-secondary rounded-lg border border-bg-tertiary shadow-lg">
                             <button
                                 type="button"
@@ -414,8 +416,8 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
 
             {/* 할일/정보 태그 버튼 바 - Fixed positioning (only when not expanded) */}
             {activeCategory === 'chore' && !isExpanded && (
-                <div className="fixed bottom-[136px] left-0 right-0 flex justify-center z-[60]">
-                    <div className="max-w-md w-full px-4">
+                <div className="fixed bottom-[136px] left-0 right-0 flex justify-center z-[60] pointer-events-none">
+                    <div className="max-w-md w-full px-4 pointer-events-auto">
                         <div className="flex gap-2 flex-wrap p-2 bg-bg-secondary rounded-lg border border-bg-tertiary shadow-lg">
                             {['#q1', '#q2', '#q3', '#q4'].map((tag) => (
                                 <button

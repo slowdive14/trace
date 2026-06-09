@@ -209,6 +209,16 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
         await updateEntry(user.uid, id, content, collectionName, { tags });
     };
 
+    const handleAddEmotion = async (id: string, tag: string) => {
+        if (!user) return;
+        const entry = allEntries.find(e => e.id === id);
+        if (!entry) return;
+        const sep = entry.content.length === 0 || entry.content.endsWith(' ') ? '' : ' ';
+        const newContent = `${entry.content}${sep}${tag}`;
+        const tags = extractTags(newContent);
+        await updateEntry(user.uid, id, newContent, collectionName, { tags });
+    };
+
     const sensors = useSensors(
         useSensor(MouseSensor, {
             activationConstraint: { distance: 5 },
@@ -780,6 +790,7 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
                                                 onEdit={handleEdit}
                                                 onTagClick={onTagClick}
                                                 onPin={handlePin}
+                                                onAddEmotion={handleAddEmotion}
                                             />
                                         ))}
                                     </div>
@@ -847,6 +858,7 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
                                             onEdit={handleEdit}
                                             onTagClick={onTagClick}
                                             onPin={handlePin}
+                                            onAddEmotion={handleAddEmotion}
                                         />
                                     ))}
                                 </div>

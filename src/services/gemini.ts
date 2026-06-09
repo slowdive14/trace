@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import type { BrainDumpInsight } from "../types/types";
+import type { BrainDumpInsight, MonthlyReview } from "../types/types";
 
 const getApiKey = () => {
     // 1. Try environment variable
@@ -104,6 +104,89 @@ export const analyzeBrainDump = async (content: string): Promise<BrainDumpInsigh
         };
     } catch (error) {
         console.error("Error analyzing brain dump:", error);
+        throw error;
+    }
+};
+
+// 한 달치 기록 + 감정 통계를 분석해 월간 회고를 생성
+export const analyzeMonth = async (
+    monthLabel: string,
+    statsText: string,
+    recordsText: string
+): Promise<MonthlyReview> => {
+    const key = getApiKey();
+    if (!key) {
+        throw new Error("Gemini API key is not configured. Please add it in settings or .env file.");
+    }
+
+    const genAI = new GoogleGenerativeAI(key);
+    const model = genAI.getGenerativeModel({
+        model: "gemini-3-flash-preview",
+        generationConfig: {
+            maxOutputTokens: 8192, // 풍부하고 자세한 회고를 위해 출력 토큰 확대
+            temperature: 0.85,
+        },
+    });
+
+    const prompt = `
+아래는 사용자의 ${monthLabel} 한 달치 기록과 감정 통계입니다.
+시간이 지나 기억이 흐려졌을 때 이 회고만 읽어도 그 순간들이 영화처럼 생생하게 다시 떠오르도록, 매우 구체적이고 풍부한 '월간 회고'를 작성해줘.
+
+[감정 통계]
+${statsText}
+
+[기록 (일상·생각·지출·고민, 시간 포함)]
+"""
+${recordsText}
+"""
+
+다음 JSON 형식으로만 응답해줘. 유효한 JSON 외의 텍스트는 절대 포함하지 마.
+
+{
+    "moodSummary": "이번 달 감정의 흐름을 실제 사건과 함께 4~6문장으로 서술. 월초→월말의 변화와 전환점을 구체적인 일을 들어 설명.",
+    "triggers": [
+        {"emotion": "감정 (이모지 포함, 예: 😣 신경질나는)", "trigger": "그 감정이 솟은 순간을 2~4문장으로 생생하게 재현. 날짜·시간대·장소·함께 있던 사람·구체적으로 무슨 일/대화/행동이 있었는지·어떤 디테일이 있었는지를 기록에 근거해 충분히 풀어서 서술."}
+    ],
+    "patterns": ["반복되는 패턴을 구체적 사례(날짜·사건)와 함께 2~3문장으로 서술"],
+    "positives": ["좋았던 순간을 구체적인 장면과 함께 서술"],
+    "challenges": ["힘들었던 부분을 맥락·원인과 함께 구체적으로 서술"],
+    "insights": ["사용자가 미처 보지 못했을 통찰 1~3개, 근거가 되는 사실과 함께"],
+    "suggestion": "다음 달을 위한 구체적이고 따뜻한 제안 한 가지"
+}
+
+지침:
+- 공감적이고 따뜻한 한국어 톤. 평가하거나 훈계하지 마.
+- **가장 중요: 모든 항목을 '생생한 복기'가 가능하도록 구체적으로 써.** 기록에 등장하는 고유명사(사람 이름, 장소, 책·작품명), 숫자, 실제 대화나 행동을 최대한 인용해. "~한 순간", "~할 때"처럼 막연한 요약은 금지.
+- triggers는 가장 중요한 항목이야. 주요 감정마다 그 감정이 솟은 '구체적 장면'을 재현해줘. 긍정·부정 감정 모두 다루고, 반복 트리거를 우선하되 5~7개. 각 trigger는 최소 2문장 이상으로 충분히 길고 자세하게.
+- #감정/xxx 태그는 그 시점에 느낀 감정이고, 같은 날짜·줄의 다른 내용이 그 감정의 단서야. 지출·고민 기록은 그날 무슨 일이 있었는지 배경 맥락으로 적극 활용해.
+- 기록에 없는 내용을 지어내지는 마. 단, 기록에 흩어진 단서들은 적극적으로 연결하고 풀어서 서술해.
+- triggers 외 배열은 2~4개씩. 해당 내용이 없으면 빈 배열.
+`;
+
+    try {
+        const result = await model.generateContent(prompt);
+        const response = await result.response;
+        const text = response.text();
+
+        const jsonStr = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        const parsed = JSON.parse(jsonStr);
+
+        return {
+            moodSummary: parsed.moodSummary || '',
+            triggers: Array.isArray(parsed.triggers)
+                ? parsed.triggers
+                    .filter((t: unknown): t is { emotion?: string; trigger?: string } => !!t && typeof t === 'object')
+                    .map((t: { emotion?: string; trigger?: string }) => ({ emotion: t.emotion || '', trigger: t.trigger || '' }))
+                    .filter((t: { emotion: string; trigger: string }) => t.emotion || t.trigger)
+                : [],
+            patterns: parsed.patterns || [],
+            positives: parsed.positives || [],
+            challenges: parsed.challenges || [],
+            insights: parsed.insights || [],
+            suggestion: parsed.suggestion || '',
+        };
+    } catch (error) {
+        console.error("Error analyzing month:", error);
         throw error;
     }
 };

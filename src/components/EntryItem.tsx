@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { format } from 'date-fns';
 import type { Entry } from '../types/types';
-import { Trash2, Copy, Check, Pin, Pencil } from 'lucide-react';
+import { Trash2, Copy, Check, Pin, Pencil, Smile } from 'lucide-react';
+import EmotionPickerModal from './EmotionPickerModal';
 
 interface EntryItemProps {
     entry: Entry;
@@ -10,13 +11,15 @@ interface EntryItemProps {
     highlightQuery?: string;
     onTagClick?: (tag: string) => void;
     onPin?: (id: string, currentStatus: boolean) => void;
+    onAddEmotion?: (id: string, tag: string) => void;  // 기존 기록에 감정 태그 추가
     showDate?: boolean;  // true일 경우 시간 대신 날짜 표시
 }
 
-const EntryItem: React.FC<EntryItemProps> = ({ entry, onDelete, onEdit, highlightQuery, onTagClick, onPin, showDate = false }) => {
+const EntryItem: React.FC<EntryItemProps> = ({ entry, onDelete, onEdit, highlightQuery, onTagClick, onPin, onAddEmotion, showDate = false }) => {
     const [showCopyToast, setShowCopyToast] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
+    const [showEmotionPicker, setShowEmotionPicker] = useState(false);
     const [editContent, setEditContent] = useState(entry.content);
     const formattedTime = showDate || entry.isPinned
         ? format(entry.timestamp, 'M/d')
@@ -132,6 +135,7 @@ const EntryItem: React.FC<EntryItemProps> = ({ entry, onDelete, onEdit, highligh
     };
 
     return (
+        <>
         <div data-entry-id={entry.id} className={`flex gap-4 py-3 group relative transition-colors rounded-lg px-2 -mx-2 ${entry.isPinned ? 'bg-accent/5' : 'hover:bg-bg-secondary/50'}`}>
             {showCopyToast && (
                 <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-accent text-white px-3 py-1 rounded text-xs flex items-center gap-1 z-10">
@@ -224,6 +228,19 @@ const EntryItem: React.FC<EntryItemProps> = ({ entry, onDelete, onEdit, highligh
                                 <Pencil size={16} />
                             </button>
                         )}
+                        {onAddEmotion && (
+                            <button
+                                type="button"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setShowEmotionPicker(true);
+                                }}
+                                className="text-text-secondary hover:text-yellow-500 transition-colors p-1"
+                                aria-label="Add emotion"
+                            >
+                                <Smile size={16} />
+                            </button>
+                        )}
                         <button
                             type="button"
                             onClick={handleCopy}
@@ -244,6 +261,15 @@ const EntryItem: React.FC<EntryItemProps> = ({ entry, onDelete, onEdit, highligh
                 )}
             </div>
         </div>
+        {onAddEmotion && (
+            <EmotionPickerModal
+                isOpen={showEmotionPicker}
+                onClose={() => setShowEmotionPicker(false)}
+                onSelect={(tag) => onAddEmotion(entry.id, tag)}
+                title="😊 이 기록에 감정 추가"
+            />
+        )}
+        </>
     );
 };
 

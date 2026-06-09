@@ -16,7 +16,7 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { startOfDay } from 'date-fns';
-import type { Expense, ExpenseCategory, Todo, Worry, WorryEntry, BrainDump, BrainDumpStatus, BrainDumpInsight, DailyReflection } from '../types/types';
+import type { Expense, ExpenseCategory, Todo, Worry, WorryEntry, BrainDump, BrainDumpStatus, BrainDumpInsight, DailyReflection, MonthlyReview, MonthlyInsight } from '../types/types';
 
 const EXPENSES_COLLECTION = 'expenses';
 
@@ -606,4 +606,34 @@ export const getReflections = async (userId: string): Promise<DailyReflection[]>
         date: d.data().date.toDate(),
         updatedAt: d.data().updatedAt?.toDate() || new Date(),
     })) as DailyReflection[];
+};
+
+// AI 월간 회고 functions (문서 ID = YYYY-MM)
+const MONTHLY_INSIGHTS_COLLECTION = 'monthlyInsights';
+
+export const saveMonthlyInsight = async (
+    userId: string,
+    monthKey: string,
+    review: MonthlyReview,
+    entryCount: number
+): Promise<void> => {
+    const docRef = doc(db, `users/${userId}/${MONTHLY_INSIGHTS_COLLECTION}`, monthKey);
+    await setDoc(docRef, {
+        review,
+        entryCount,
+        generatedAt: Timestamp.now(),
+    });
+};
+
+export const getMonthlyInsight = async (userId: string, monthKey: string): Promise<MonthlyInsight | null> => {
+    const docRef = doc(db, `users/${userId}/${MONTHLY_INSIGHTS_COLLECTION}`, monthKey);
+    const snap = await getDoc(docRef);
+    if (!snap.exists()) return null;
+    const data = snap.data();
+    return {
+        id: snap.id,
+        review: data.review as MonthlyReview,
+        entryCount: data.entryCount ?? 0,
+        generatedAt: data.generatedAt?.toDate() || new Date(),
+    };
 };

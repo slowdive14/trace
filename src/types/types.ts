@@ -114,6 +114,30 @@ export interface BrainDumpInsight {
     keyInsights: string[];
 }
 
+// 감정별 트리거 (어떤 상황/사건이 그 감정을 유발했는지)
+export interface EmotionTrigger {
+    emotion: string;   // 감정 (예: 😣 스트레스)
+    trigger: string;   // 유발 상황/맥락
+}
+
+// AI 월간 회고
+export interface MonthlyReview {
+    moodSummary: string;          // 이번 달 감정 흐름 서술
+    triggers: EmotionTrigger[];   // 감정별 트리거 분석
+    patterns: string[];           // 감정-사건 연결/반복 패턴
+    positives: string[];          // 좋았던 점
+    challenges: string[];         // 힘들었던 점
+    insights: string[];           // 통찰
+    suggestion: string;           // 다음 달 제안
+}
+
+export interface MonthlyInsight {
+    id: string;            // YYYY-MM
+    review: MonthlyReview;
+    entryCount: number;    // 분석에 사용된 기록 수 (재생성 판단용)
+    generatedAt: Date;
+}
+
 export type BrainDumpStatus = 'writing' | 'analyzing' | 'completed';
 
 export interface BrainDump {
