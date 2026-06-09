@@ -778,6 +778,12 @@ const UnifiedCalendarModal: React.FC<UnifiedCalendarModalProps> = ({ onClose, en
                                             ✏️ 편집
                                         </button>
                                         <button
+                                            onClick={() => setShowFeedback(v => !v)}
+                                            className={`text-xs transition-colors ${showFeedback ? 'text-purple-300 font-semibold' : 'text-text-secondary hover:text-accent'}`}
+                                        >
+                                            🔧 피드백
+                                        </button>
+                                        <button
                                             onClick={() => handleGenerateMonthly()}
                                             className={`text-xs transition-colors ${insightStale ? 'text-accent font-semibold' : 'text-text-secondary hover:text-accent'}`}
                                         >
@@ -855,6 +861,29 @@ const UnifiedCalendarModal: React.FC<UnifiedCalendarModalProps> = ({ onClose, en
                                 </div>
                             ) : monthlyInsight ? (
                                 <div className="space-y-4">
+                                    {showFeedback && (
+                                        <div className="bg-bg-primary/40 border border-purple-500/30 rounded-lg p-3 space-y-2">
+                                            <div className="text-xs font-semibold text-purple-300">🔧 틀린 부분을 알려주고 다시 생성</div>
+                                            <textarea
+                                                value={feedbackNote}
+                                                onChange={e => setFeedbackNote(e.target.value)}
+                                                placeholder="예: 2/10 트리거는 장모님이 아니라 장인어른이었어. 2/18 통찰은 사실과 달라."
+                                                rows={2}
+                                                autoFocus
+                                                className="w-full text-sm bg-bg-primary rounded-lg p-2.5 resize-none focus:outline-none focus:ring-1 focus:ring-accent text-text-primary"
+                                            />
+                                            <div className="flex gap-2 justify-end">
+                                                <button onClick={() => { setShowFeedback(false); setFeedbackNote(''); }} className="px-3 py-1.5 text-sm text-text-secondary hover:text-text-primary transition-colors">취소</button>
+                                                <button
+                                                    onClick={() => handleGenerateMonthly(feedbackNote)}
+                                                    disabled={!feedbackNote.trim()}
+                                                    className="px-4 py-1.5 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                                >
+                                                    피드백 반영해 재생성
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
                                     <p className="text-sm text-text-primary leading-relaxed whitespace-pre-wrap">{monthlyInsight.review.moodSummary}</p>
 
                                     {monthlyInsight.review.triggers && monthlyInsight.review.triggers.length > 0 && (
@@ -891,36 +920,6 @@ const UnifiedCalendarModal: React.FC<UnifiedCalendarModalProps> = ({ onClose, en
 
                                     <div className="text-[10px] text-text-secondary text-right">
                                         {format(monthlyInsight.generatedAt, 'M월 d일 생성', { locale: ko })} · 기록 {monthlyInsight.entryCount}개 기준
-                                    </div>
-
-                                    {/* 틀린 부분 지적 후 재생성 */}
-                                    <div className="pt-2 border-t border-bg-primary/50">
-                                        {!showFeedback ? (
-                                            <button onClick={() => setShowFeedback(true)} className="text-xs text-text-secondary hover:text-accent transition-colors">
-                                                🔧 틀린 부분을 알려주고 다시 생성
-                                            </button>
-                                        ) : (
-                                            <div className="space-y-2">
-                                                <textarea
-                                                    value={feedbackNote}
-                                                    onChange={e => setFeedbackNote(e.target.value)}
-                                                    placeholder="예: 2/10 트리거는 장모님이 아니라 장인어른이었어. 2/18 통찰은 사실과 달라."
-                                                    rows={2}
-                                                    autoFocus
-                                                    className="w-full text-sm bg-bg-primary rounded-lg p-2.5 resize-none focus:outline-none focus:ring-1 focus:ring-accent text-text-primary"
-                                                />
-                                                <div className="flex gap-2 justify-end">
-                                                    <button onClick={() => { setShowFeedback(false); setFeedbackNote(''); }} className="px-3 py-1.5 text-sm text-text-secondary hover:text-text-primary transition-colors">취소</button>
-                                                    <button
-                                                        onClick={() => handleGenerateMonthly(feedbackNote)}
-                                                        disabled={!feedbackNote.trim()}
-                                                        className="px-4 py-1.5 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                                    >
-                                                        피드백 반영해 재생성
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        )}
                                     </div>
                                 </div>
                             ) : (
