@@ -118,6 +118,7 @@ export interface BrainDumpInsight {
 export interface EmotionTrigger {
     emotion: string;   // 감정 (예: 😣 스트레스)
     trigger: string;   // 유발 상황/맥락
+    source?: string;   // 근거가 된 기록의 날짜/인용 (검증용)
 }
 
 // AI 월간 회고

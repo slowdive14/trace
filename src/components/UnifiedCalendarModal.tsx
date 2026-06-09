@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { X, Copy, Check } from 'lucide-react';
+import { X, Copy, Check, ChevronDown } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import type { Entry, Expense, Todo, Worry, WorryEntry, MonthlyInsight } from '../types/types';
@@ -56,6 +56,8 @@ const UnifiedCalendarModal: React.FC<UnifiedCalendarModalProps> = ({ onClose, en
     const { user } = useAuth();
     const [currentMonth, setCurrentMonth] = useState(new Date());
     const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+    const [showMonthPicker, setShowMonthPicker] = useState(false);
+    const [pickerYear, setPickerYear] = useState(new Date().getFullYear());
     const [copied, setCopied] = useState(false);
     const [activeTab, setActiveTab] = useState<CalendarTab>('records');
     const [reflections, setReflections] = useState<Record<string, string>>({});
@@ -266,10 +268,20 @@ const UnifiedCalendarModal: React.FC<UnifiedCalendarModalProps> = ({ onClose, en
             const inMonth = (ts: Date) => { const d = getLogicalDate(ts); return d >= mStart && d <= mEnd; };
             const byTime = (a: { timestamp: Date }, b: { timestamp: Date }) => a.timestamp.getTime() - b.timestamp.getTime();
 
-            // 일상·생각 (시간 포함 — 그날 흐름을 복기할 수 있게)
+            // 일상·생각 기록 + 각 기록에 태깅된 감정 추출 (감정→출처 매핑으로 오귀인 방지)
             const monthEntries = entries.filter(e => inMonth(e.timestamp)).sort(byTime);
-            const entriesText = monthEntries
-                .map(e => `[${format(e.timestamp, 'M/d(EEE) HH:mm', { locale: ko })}] ${e.content}`)
+            const entryEmotions = monthEntries.map(e => ({ e, emotions: analyzeEmotionsInText(e.content).all }));
+
+            // (C) 감정이 직접 태깅된 기록 — 트리거 분석의 유일한 근거
+            const emotionTaggedText = entryEmotions
+                .filter(x => x.emotions.length > 0)
+                .map(x => `[${format(x.e.timestamp, 'M/d(EEE) HH:mm', { locale: ko })}] 감정[${x.emotions.map(em => getEmotionName(em.tag)).join(', ')}] — ${x.e.content}`)
+                .join('\n');
+
+            // 감정 태그 없는 일상·생각 (배경 맥락)
+            const bgEntriesText = entryEmotions
+                .filter(x => x.emotions.length === 0)
+                .map(x => `[${format(x.e.timestamp, 'M/d(EEE) HH:mm', { locale: ko })}] ${x.e.content}`)
                 .join('\n');
 
             // 지출 (그날 무엇을 했는지 배경 단서)
@@ -285,9 +297,10 @@ const UnifiedCalendarModal: React.FC<UnifiedCalendarModalProps> = ({ onClose, en
                 .join('\n');
 
             const recordsText = [
-                `## 일상·생각 기록\n${entriesText || '(없음)'}`,
-                monthExpenses.length ? `## 지출 기록\n${expensesText}` : '',
-                monthWorry.length ? `## 고민 기록\n${worryText}` : '',
+                `## 감정이 직접 기록된 항목 (triggers는 반드시 이 항목들에만 근거할 것)\n${emotionTaggedText || '(없음)'}`,
+                bgEntriesText ? `## 배경 맥락 — 그 외 일상·생각 기록\n${bgEntriesText}` : '',
+                monthExpenses.length ? `## 배경 맥락 — 지출 기록\n${expensesText}` : '',
+                monthWorry.length ? `## 배경 맥락 — 고민 기록\n${worryText}` : '',
             ].filter(Boolean).join('\n\n').slice(0, 40000);
 
             const review = await analyzeMonth(monthLabel, statsText, recordsText);
@@ -380,22 +393,60 @@ const UnifiedCalendarModal: React.FC<UnifiedCalendarModalProps> = ({ onClose, en
 
                     {/* Calendar */}
                     <div className="mb-6">
-                        <div className="flex justify-between items-center mb-4">
+                        <div className="relative flex justify-between items-center mb-4">
                             <button
                                 onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1))}
-                                className="text-text-primary hover:text-accent"
+                                className="text-text-primary hover:text-accent px-2"
+                                aria-label="이전 달"
                             >
                                 ←
                             </button>
-                            <h3 className="text-lg font-bold text-text-primary">
+                            <button
+                                onClick={() => { setPickerYear(currentMonth.getFullYear()); setShowMonthPicker(v => !v); }}
+                                className="text-lg font-bold text-text-primary hover:text-accent flex items-center gap-1"
+                            >
                                 {format(currentMonth, 'yyyy년 M월', { locale: ko })}
-                            </h3>
+                                <ChevronDown size={16} className={`transition-transform ${showMonthPicker ? 'rotate-180' : ''}`} />
+                            </button>
                             <button
                                 onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1))}
-                                className="text-text-primary hover:text-accent"
+                                className="text-text-primary hover:text-accent px-2"
+                                aria-label="다음 달"
                             >
                                 →
                             </button>
+
+                            {/* 월 선택 드롭다운 (빠른 이동) */}
+                            {showMonthPicker && (
+                                <>
+                                    <div className="fixed inset-0 z-20" onClick={() => setShowMonthPicker(false)} />
+                                    <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 z-30 bg-bg-secondary border border-bg-tertiary rounded-xl shadow-2xl p-3 w-64">
+                                        <div className="flex items-center justify-between mb-2.5">
+                                            <button onClick={() => setPickerYear(y => y - 1)} className="px-2.5 py-1 rounded-lg hover:bg-bg-tertiary text-text-primary text-lg" aria-label="이전 해">‹</button>
+                                            <span className="font-bold text-text-primary">{pickerYear}년</span>
+                                            <button onClick={() => setPickerYear(y => y + 1)} className="px-2.5 py-1 rounded-lg hover:bg-bg-tertiary text-text-primary text-lg" aria-label="다음 해">›</button>
+                                        </div>
+                                        <div className="grid grid-cols-3 gap-1.5">
+                                            {Array.from({ length: 12 }, (_, m) => {
+                                                const isCurrent = currentMonth.getFullYear() === pickerYear && currentMonth.getMonth() === m;
+                                                return (
+                                                    <button
+                                                        key={m}
+                                                        onClick={() => {
+                                                            setCurrentMonth(new Date(pickerYear, m, 1));
+                                                            setSelectedDate(null);
+                                                            setShowMonthPicker(false);
+                                                        }}
+                                                        className={`py-2 rounded-lg text-sm transition-colors ${isCurrent ? 'bg-purple-600 text-white font-bold' : 'text-text-primary hover:bg-bg-tertiary'}`}
+                                                    >
+                                                        {m + 1}월
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                </>
+                            )}
                         </div>
 
                         <div className="grid grid-cols-7 gap-2">
@@ -661,10 +712,15 @@ const UnifiedCalendarModal: React.FC<UnifiedCalendarModalProps> = ({ onClose, en
                                             <div className="text-xs font-semibold mb-1.5 text-rose-300">🎯 감정 트리거</div>
                                             <div className="space-y-1.5">
                                                 {monthlyInsight.review.triggers.map((t, i) => (
-                                                    <div key={i} className="text-sm flex items-start gap-2 bg-bg-primary/40 rounded-lg px-2.5 py-2">
-                                                        <span className="font-medium text-text-primary shrink-0">{t.emotion}</span>
-                                                        <span className="text-text-secondary shrink-0 mt-0.5">←</span>
-                                                        <span className="text-text-primary">{t.trigger}</span>
+                                                    <div key={i} className="text-sm bg-bg-primary/40 rounded-lg px-2.5 py-2">
+                                                        <div className="flex items-start gap-2">
+                                                            <span className="font-medium text-text-primary shrink-0">{t.emotion}</span>
+                                                            <span className="text-text-secondary shrink-0 mt-0.5">←</span>
+                                                            <span className="text-text-primary">{t.trigger}</span>
+                                                        </div>
+                                                        {t.source && (
+                                                            <div className="text-[11px] text-text-secondary mt-1.5 pl-1">📎 근거: {t.source}</div>
+                                                        )}
                                                     </div>
                                                 ))}
                                             </div>
