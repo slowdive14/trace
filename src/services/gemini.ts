@@ -112,7 +112,8 @@ export const analyzeBrainDump = async (content: string): Promise<BrainDumpInsigh
 export const analyzeMonth = async (
     monthLabel: string,
     statsText: string,
-    recordsText: string
+    recordsText: string,
+    feedback?: string
 ): Promise<MonthlyReview> => {
     const key = getApiKey();
     if (!key) {
@@ -136,7 +137,12 @@ export const analyzeMonth = async (
 - 디테일은 '상상'이 아니라 '기록 인용'에서만 가져와. 기록에 실제로 적힌 표현·고유명사·숫자를 그대로 인용해.
 - 확실하지 않은 추론은 단정하지 말고 "~로 보인다 / ~인 듯하다 / 아마 ~"처럼 추측임을 표시해.
 - 근거가 빈약하면 항목 수를 줄여. 빈약한 걸 그럴듯하게 부풀리지 마. 모르면 비워.
-
+${feedback && feedback.trim() ? `
+🔧 사용자가 이전 분석에서 틀렸다고 지적한 정정 사항 — 최우선으로 반드시 반영하고, 같은 실수를 반복하지 마:
+"""
+${feedback.trim()}
+"""
+` : ''}
 [감정 통계]
 ${statsText}
 

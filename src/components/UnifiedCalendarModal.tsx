@@ -1,8 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { X, Copy, Check, ChevronDown } from 'lucide-react';
+import { X, Copy, Check, ChevronDown, Trash2 } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isSameDay } from 'date-fns';
 import { ko } from 'date-fns/locale';
-import type { Entry, Expense, Todo, Worry, WorryEntry, MonthlyInsight } from '../types/types';
+import type { Entry, Expense, Todo, Worry, WorryEntry, MonthlyInsight, MonthlyReview } from '../types/types';
 import { exportDailyMarkdown } from '../utils/exportUtils';
 import { getLogicalDate } from '../utils/dateUtils';
 import { analyzeEmotionsInText, moodMeterQuadrants, getMoodQuadrantKey, getEmotionName, type EmotionTag } from '../utils/emotionTags';
@@ -66,6 +66,11 @@ const UnifiedCalendarModal: React.FC<UnifiedCalendarModalProps> = ({ onClose, en
     const [monthlyInsight, setMonthlyInsight] = useState<MonthlyInsight | null>(null);
     const [insightLoading, setInsightLoading] = useState(false);
     const [insightError, setInsightError] = useState<string | null>(null);
+    // 수정·피드백 루프
+    const [isEditingReview, setIsEditingReview] = useState(false);
+    const [editedReview, setEditedReview] = useState<MonthlyReview | null>(null);
+    const [showFeedback, setShowFeedback] = useState(false);
+    const [feedbackNote, setFeedbackNote] = useState('');
 
     useEffect(() => {
         if (!user) return;
@@ -82,6 +87,10 @@ const UnifiedCalendarModal: React.FC<UnifiedCalendarModalProps> = ({ onClose, en
         let cancelled = false;
         setMonthlyInsight(null);
         setInsightError(null);
+        setIsEditingReview(false);
+        setEditedReview(null);
+        setShowFeedback(false);
+        setFeedbackNote('');
         getMonthlyInsight(user.uid, format(currentMonth, 'yyyy-MM'))
             .then(ins => { if (!cancelled) setMonthlyInsight(ins); })
             .catch(() => { });
@@ -249,10 +258,11 @@ const UnifiedCalendarModal: React.FC<UnifiedCalendarModalProps> = ({ onClose, en
         }).length;
     }, [entries, currentMonth]);
 
-    const handleGenerateMonthly = async () => {
+    const handleGenerateMonthly = async (feedback?: string) => {
         if (!user || insightLoading) return;
         setInsightLoading(true);
         setInsightError(null);
+        setIsEditingReview(false);
         try {
             const monthKey = format(currentMonth, 'yyyy-MM');
             const monthLabel = format(currentMonth, 'yyyy년 M월', { locale: ko });
@@ -303,9 +313,11 @@ const UnifiedCalendarModal: React.FC<UnifiedCalendarModalProps> = ({ onClose, en
                 monthWorry.length ? `## 배경 맥락 — 고민 기록\n${worryText}` : '',
             ].filter(Boolean).join('\n\n').slice(0, 40000);
 
-            const review = await analyzeMonth(monthLabel, statsText, recordsText);
+            const review = await analyzeMonth(monthLabel, statsText, recordsText, feedback);
             await saveMonthlyInsight(user.uid, monthKey, review, monthEntries.length);
             setMonthlyInsight({ id: monthKey, review, entryCount: monthEntries.length, generatedAt: new Date() });
+            setShowFeedback(false);
+            setFeedbackNote('');
         } catch (e) {
             const msg = e instanceof Error ? e.message : '';
             setInsightError(msg.includes('API key')
@@ -315,6 +327,52 @@ const UnifiedCalendarModal: React.FC<UnifiedCalendarModalProps> = ({ onClose, en
             setInsightLoading(false);
         }
     };
+
+    // 회고 직접 편집
+    const startEditReview = () => {
+        if (!monthlyInsight) return;
+        setEditedReview(JSON.parse(JSON.stringify(monthlyInsight.review)));
+        setShowFeedback(false);
+        setIsEditingReview(true);
+    };
+
+    const cancelEditReview = () => {
+        setIsEditingReview(false);
+        setEditedReview(null);
+    };
+
+    const saveEditedReview = async () => {
+        if (!user || !editedReview || !monthlyInsight) return;
+        const monthKey = format(currentMonth, 'yyyy-MM');
+        const cleaned: MonthlyReview = {
+            moodSummary: editedReview.moodSummary.trim(),
+            triggers: editedReview.triggers.filter(t => (t.trigger || '').trim()).map(t => ({ ...t, trigger: t.trigger.trim() })),
+            patterns: editedReview.patterns.map(s => s.trim()).filter(Boolean),
+            positives: editedReview.positives.map(s => s.trim()).filter(Boolean),
+            challenges: editedReview.challenges.map(s => s.trim()).filter(Boolean),
+            insights: editedReview.insights.map(s => s.trim()).filter(Boolean),
+            suggestion: editedReview.suggestion.trim(),
+        };
+        try {
+            await saveMonthlyInsight(user.uid, monthKey, cleaned, monthlyInsight.entryCount);
+            setMonthlyInsight({ ...monthlyInsight, review: cleaned, generatedAt: new Date() });
+            setIsEditingReview(false);
+            setEditedReview(null);
+        } catch {
+            setInsightError('저장에 실패했습니다. 잠시 후 다시 시도해주세요.');
+        }
+    };
+
+    // editedReview 부분 수정 헬퍼
+    type ListKey = 'patterns' | 'positives' | 'challenges' | 'insights';
+    const editListItem = (key: ListKey, i: number, value: string) =>
+        setEditedReview(prev => prev ? { ...prev, [key]: prev[key].map((v, idx) => idx === i ? value : v) } : prev);
+    const removeListItem = (key: ListKey, i: number) =>
+        setEditedReview(prev => prev ? { ...prev, [key]: prev[key].filter((_, idx) => idx !== i) } : prev);
+    const editTrigger = (i: number, value: string) =>
+        setEditedReview(prev => prev ? { ...prev, triggers: prev.triggers.map((t, idx) => idx === i ? { ...t, trigger: value } : t) } : prev);
+    const removeTrigger = (i: number) =>
+        setEditedReview(prev => prev ? { ...prev, triggers: prev.triggers.filter((_, idx) => idx !== i) } : prev);
 
     const insightStale = monthlyInsight !== null && monthEntryCount > monthlyInsight.entryCount;
 
@@ -331,6 +389,33 @@ const UnifiedCalendarModal: React.FC<UnifiedCalendarModalProps> = ({ onClose, en
                         </li>
                     ))}
                 </ul>
+            </div>
+        );
+    };
+
+    // 편집 모드용 리스트 (각 항목 수정/삭제)
+    const renderEditList = (title: string, key: ListKey) => {
+        if (!editedReview) return null;
+        const items = editedReview[key];
+        return (
+            <div>
+                <div className="text-xs font-semibold text-text-secondary mb-1.5">{title}</div>
+                <div className="space-y-1.5">
+                    {items.map((item, i) => (
+                        <div key={i} className="flex items-start gap-2">
+                            <textarea
+                                value={item}
+                                onChange={e => editListItem(key, i, e.target.value)}
+                                rows={2}
+                                className="flex-1 text-sm bg-bg-primary rounded-md p-2 resize-none focus:outline-none focus:ring-1 focus:ring-accent text-text-primary"
+                            />
+                            <button onClick={() => removeListItem(key, i)} className="text-text-secondary hover:text-red-400 p-1 shrink-0 mt-1" aria-label="삭제">
+                                <Trash2 size={14} />
+                            </button>
+                        </div>
+                    ))}
+                    {items.length === 0 && <div className="text-xs text-text-secondary/60">(항목 없음)</div>}
+                </div>
             </div>
         );
     };
@@ -684,13 +769,21 @@ const UnifiedCalendarModal: React.FC<UnifiedCalendarModalProps> = ({ onClose, en
                         <div className="bg-bg-tertiary rounded-lg p-4 mt-4">
                             <div className="flex items-center justify-between mb-3">
                                 <h4 className="font-bold text-text-primary">✨ {format(currentMonth, 'M월', { locale: ko })} AI 회고</h4>
-                                {monthlyInsight && !insightLoading && (
-                                    <button
-                                        onClick={handleGenerateMonthly}
-                                        className={`text-xs transition-colors ${insightStale ? 'text-accent font-semibold' : 'text-text-secondary hover:text-accent'}`}
-                                    >
-                                        {insightStale ? '🔄 새 기록 반영' : '다시 생성'}
-                                    </button>
+                                {monthlyInsight && !insightLoading && !isEditingReview && (
+                                    <div className="flex items-center gap-3">
+                                        <button
+                                            onClick={startEditReview}
+                                            className="text-xs text-text-secondary hover:text-accent transition-colors"
+                                        >
+                                            ✏️ 편집
+                                        </button>
+                                        <button
+                                            onClick={() => handleGenerateMonthly()}
+                                            className={`text-xs transition-colors ${insightStale ? 'text-accent font-semibold' : 'text-text-secondary hover:text-accent'}`}
+                                        >
+                                            {insightStale ? '🔄 새 기록 반영' : '다시 생성'}
+                                        </button>
+                                    </div>
                                 )}
                             </div>
 
@@ -701,7 +794,64 @@ const UnifiedCalendarModal: React.FC<UnifiedCalendarModalProps> = ({ onClose, en
                             ) : insightError ? (
                                 <div className="space-y-3">
                                     <p className="text-sm text-red-400">{insightError}</p>
-                                    <button onClick={handleGenerateMonthly} className="text-xs text-accent hover:underline">다시 시도</button>
+                                    <button onClick={() => handleGenerateMonthly()} className="text-xs text-accent hover:underline">다시 시도</button>
+                                </div>
+                            ) : monthlyInsight && isEditingReview && editedReview ? (
+                                <div className="space-y-4">
+                                    <div>
+                                        <div className="text-xs font-semibold text-text-secondary mb-1">감정 흐름</div>
+                                        <textarea
+                                            value={editedReview.moodSummary}
+                                            onChange={e => setEditedReview(prev => prev ? { ...prev, moodSummary: e.target.value } : prev)}
+                                            rows={3}
+                                            className="w-full text-sm bg-bg-primary rounded-lg p-2.5 resize-none focus:outline-none focus:ring-1 focus:ring-accent text-text-primary"
+                                        />
+                                    </div>
+
+                                    {editedReview.triggers.length > 0 && (
+                                        <div>
+                                            <div className="text-xs font-semibold mb-1.5 text-rose-300">🎯 감정 트리거</div>
+                                            <div className="space-y-1.5">
+                                                {editedReview.triggers.map((t, i) => (
+                                                    <div key={i} className="bg-bg-primary/40 rounded-lg p-2">
+                                                        <div className="flex items-start gap-2">
+                                                            <span className="text-sm font-medium text-text-primary shrink-0 mt-1.5">{t.emotion}</span>
+                                                            <textarea
+                                                                value={t.trigger}
+                                                                onChange={e => editTrigger(i, e.target.value)}
+                                                                rows={2}
+                                                                className="flex-1 text-sm bg-bg-primary rounded-md p-2 resize-none focus:outline-none focus:ring-1 focus:ring-accent text-text-primary"
+                                                            />
+                                                            <button onClick={() => removeTrigger(i)} className="text-text-secondary hover:text-red-400 p-1 shrink-0 mt-1" aria-label="삭제">
+                                                                <Trash2 size={14} />
+                                                            </button>
+                                                        </div>
+                                                        {t.source && <div className="text-[11px] text-text-secondary mt-1 pl-1">📎 {t.source}</div>}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {renderEditList('🔁 패턴', 'patterns')}
+                                    {renderEditList('🌤️ 좋았던 점', 'positives')}
+                                    {renderEditList('🌧️ 힘들었던 점', 'challenges')}
+                                    {renderEditList('💡 통찰', 'insights')}
+
+                                    <div>
+                                        <div className="text-xs font-semibold text-accent mb-1">🌱 다음 달 제안</div>
+                                        <textarea
+                                            value={editedReview.suggestion}
+                                            onChange={e => setEditedReview(prev => prev ? { ...prev, suggestion: e.target.value } : prev)}
+                                            rows={2}
+                                            className="w-full text-sm bg-bg-primary rounded-lg p-2.5 resize-none focus:outline-none focus:ring-1 focus:ring-accent text-text-primary"
+                                        />
+                                    </div>
+
+                                    <div className="flex gap-2 justify-end pt-1">
+                                        <button onClick={cancelEditReview} className="px-3 py-1.5 text-sm text-text-secondary hover:text-text-primary transition-colors">취소</button>
+                                        <button onClick={saveEditedReview} className="px-4 py-1.5 text-sm bg-accent text-white rounded-lg hover:bg-accent/80 transition-colors">저장</button>
+                                    </div>
                                 </div>
                             ) : monthlyInsight ? (
                                 <div className="space-y-4">
@@ -742,6 +892,36 @@ const UnifiedCalendarModal: React.FC<UnifiedCalendarModalProps> = ({ onClose, en
                                     <div className="text-[10px] text-text-secondary text-right">
                                         {format(monthlyInsight.generatedAt, 'M월 d일 생성', { locale: ko })} · 기록 {monthlyInsight.entryCount}개 기준
                                     </div>
+
+                                    {/* 틀린 부분 지적 후 재생성 */}
+                                    <div className="pt-2 border-t border-bg-primary/50">
+                                        {!showFeedback ? (
+                                            <button onClick={() => setShowFeedback(true)} className="text-xs text-text-secondary hover:text-accent transition-colors">
+                                                🔧 틀린 부분을 알려주고 다시 생성
+                                            </button>
+                                        ) : (
+                                            <div className="space-y-2">
+                                                <textarea
+                                                    value={feedbackNote}
+                                                    onChange={e => setFeedbackNote(e.target.value)}
+                                                    placeholder="예: 2/10 트리거는 장모님이 아니라 장인어른이었어. 2/18 통찰은 사실과 달라."
+                                                    rows={2}
+                                                    autoFocus
+                                                    className="w-full text-sm bg-bg-primary rounded-lg p-2.5 resize-none focus:outline-none focus:ring-1 focus:ring-accent text-text-primary"
+                                                />
+                                                <div className="flex gap-2 justify-end">
+                                                    <button onClick={() => { setShowFeedback(false); setFeedbackNote(''); }} className="px-3 py-1.5 text-sm text-text-secondary hover:text-text-primary transition-colors">취소</button>
+                                                    <button
+                                                        onClick={() => handleGenerateMonthly(feedbackNote)}
+                                                        disabled={!feedbackNote.trim()}
+                                                        className="px-4 py-1.5 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                                    >
+                                                        피드백 반영해 재생성
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             ) : (
                                 <div className="text-center py-2">
@@ -752,7 +932,7 @@ const UnifiedCalendarModal: React.FC<UnifiedCalendarModalProps> = ({ onClose, en
                                     </p>
                                     {monthEntryCount > 0 && (
                                         <button
-                                            onClick={handleGenerateMonthly}
+                                            onClick={() => handleGenerateMonthly()}
                                             className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-500 transition-colors"
                                         >
                                             ✨ 월간 회고 생성
