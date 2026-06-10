@@ -732,7 +732,7 @@ const UnifiedCalendarModal: React.FC<UnifiedCalendarModalProps> = ({ onClose, en
 
                                     {/* 무드미터 2x2 분포 */}
                                     <div>
-                                        <div className="text-xs text-text-secondary mb-2">무드미터 분포 <span className="opacity-60">(핵심 감정 기준)</span></div>
+                                        <div className="text-xs text-text-secondary mb-2">무드미터 분포 <span className="opacity-60">(복합·중간 제외)</span></div>
                                         <div className="grid grid-cols-2 gap-2">
                                             {moodMeterQuadrants.map(q => (
                                                 <div key={q.key} className={`p-2.5 rounded-lg border ${q.border} ${q.cellBg} flex items-center justify-between`}>

@@ -1,3 +1,6 @@
+// 무드미터 사분면 키 (에너지 × 긍부정) + 복합/중간
+export type QuadrantKey = 'highNegative' | 'highPositive' | 'lowNegative' | 'lowPositive' | 'complex';
+
 // 감정 태그 데이터 구조
 export interface EmotionTag {
     tag: string;
@@ -7,10 +10,12 @@ export interface EmotionTag {
     subcategory?: string;
     relatedEmotions?: string[];
     bodyPart?: string;
+    quadrant: QuadrantKey; // 에너지×긍부정 분류 (모든 감정 단일 기준)
+    group?: string;        // 사분면 내 소그룹 (스캔 편의용 라벨)
 }
 
-// 핵심 감정 매트릭스 (65개) - emoji는 emojiByTag에서 주입
-const coreEmotionsBase: Omit<EmotionTag, 'emoji'>[] = [
+// 핵심 감정 매트릭스 - emoji/quadrant는 아래에서 주입
+const coreEmotionsBase: Omit<EmotionTag, 'emoji' | 'quadrant'>[] = [
     // 높은 에너지 + 긍정 (13개)
     { tag: '#감정/환희', meaning: '극도로 기쁘고 즐거워서 하늘을 날 듯한 행복감', category: '핵심', subcategory: '높은 에너지 + 긍정' },
     { tag: '#감정/황홀', meaning: '꿈꾸는 듯이 기쁘고 도취된 극한의 즐거움', category: '핵심', subcategory: '높은 에너지 + 긍정' },
@@ -88,8 +93,8 @@ const coreEmotionsBase: Omit<EmotionTag, 'emoji'>[] = [
     { tag: '#감정/민망한', meaning: '부끄럽고 어색해서 낯뜨거운 상태', category: '핵심', subcategory: '중간/전환' },
 ];
 
-// 한국어 특유 감정 표현 (35개) - emoji는 emojiByTag에서 주입
-const koreanUniqueEmotionsBase: Omit<EmotionTag, 'emoji'>[] = [
+// 한국어 특유 감정 표현 - emoji/quadrant는 아래에서 주입
+const koreanUniqueEmotionsBase: Omit<EmotionTag, 'emoji' | 'quadrant'>[] = [
     // 관계 중심 감정 (8개)
     { tag: '#감정/서운한', meaning: '기대와 달라 마음이 언짢고 섭섭함 (실망보다 더 미묘하고 관계 중심적)', category: '한국어 특유', subcategory: '관계 중심', relatedEmotions: ['실망', '섭섭'] },
     { tag: '#감정/섭섭한', meaning: '배려받지 못해 허전하고 야속한 마음', category: '한국어 특유', subcategory: '관계 중심', relatedEmotions: ['서운', '아쉬움'] },
@@ -138,6 +143,55 @@ const koreanUniqueEmotionsBase: Omit<EmotionTag, 'emoji'>[] = [
     { tag: '#감정/가슴이미어지는', meaning: '매우 슬프고 아픈 마음', category: '한국어 특유', subcategory: '신체화된 표현', bodyPart: '가슴' },
 ];
 
+// 확장 감정 표현 (어휘 보강) - emoji/quadrant는 아래에서 주입
+const additionalEmotionsBase: Omit<EmotionTag, 'emoji' | 'quadrant'>[] = [
+    // 외로움 계열
+    { tag: '#감정/외로운', meaning: '곁에 아무도 없는 듯 쓸쓸하고 허전한 마음', category: '확장', subcategory: '외로움', relatedEmotions: ['쓸쓸', '고독'] },
+    { tag: '#감정/쓸쓸한', meaning: '허전하고 적막하여 외로운 느낌', category: '확장', subcategory: '외로움', relatedEmotions: ['외로움', '적적'] },
+    { tag: '#감정/고독한', meaning: '홀로 떨어져 있는 고요하고 깊은 외로움', category: '확장', subcategory: '외로움', relatedEmotions: ['외로움', '쓸쓸'] },
+    { tag: '#감정/적적한', meaning: '조용하고 외로워 마음이 적막한 상태', category: '확장', subcategory: '외로움', relatedEmotions: ['쓸쓸', '허전'] },
+    { tag: '#감정/허전한', meaning: '무언가 빠진 듯 텅 비고 서운한 느낌', category: '확장', subcategory: '외로움', relatedEmotions: ['공허', '서운'] },
+    // 설렘/기대 계열
+    { tag: '#감정/설레는', meaning: '기대와 두근거림으로 마음이 들뜬 상태', category: '확장', subcategory: '설렘', relatedEmotions: ['두근거림', '기대'] },
+    { tag: '#감정/두근거리는', meaning: '기대나 끌림으로 가슴이 콩닥거리는 느낌', category: '확장', subcategory: '설렘', relatedEmotions: ['설렘', '긴장'] },
+    { tag: '#감정/들뜬', meaning: '마음이 달뜨고 붕 뜬 듯 흥분된 상태', category: '확장', subcategory: '설렘', relatedEmotions: ['설렘', '신남'] },
+    { tag: '#감정/기대되는', meaning: '좋은 일이 생길 것 같아 기다려지는 마음', category: '확장', subcategory: '설렘', relatedEmotions: ['설렘', '희망'] },
+    // 사랑/애정
+    { tag: '#감정/사랑스러운', meaning: '아끼고 싶을 만큼 사랑이 가는 마음', category: '확장', subcategory: '사랑', relatedEmotions: ['애정', '다정'] },
+    { tag: '#감정/다정한', meaning: '따뜻하고 정겨워 살가운 마음', category: '확장', subcategory: '사랑', relatedEmotions: ['온화', '포근'] },
+    { tag: '#감정/반한', meaning: '강하게 끌리고 매료된 상태', category: '확장', subcategory: '사랑', relatedEmotions: ['설렘', '황홀'] },
+    // 자부심 계열
+    { tag: '#감정/자랑스러운', meaning: '내세우고 싶을 만큼 떳떳하고 뿌듯한 마음', category: '확장', subcategory: '자부심', relatedEmotions: ['뿌듯', '의기양양'] },
+    { tag: '#감정/의기양양한', meaning: '뜻을 이뤄 우쭐하고 당당한 기세', category: '확장', subcategory: '자부심', relatedEmotions: ['뿌듯', '우쭐'] },
+    { tag: '#감정/우쭐한', meaning: '은근히 뽐내고 싶어 들뜬 마음', category: '확장', subcategory: '자부심', relatedEmotions: ['의기양양', '뿌듯'] },
+    // 질투/시기/공포
+    { tag: '#감정/질투나는', meaning: '남이 가진 것이 샘나고 시기심이 이는 상태', category: '확장', subcategory: '질투', relatedEmotions: ['부러움', '시기'] },
+    { tag: '#감정/약오르는', meaning: '분하고 화가 약이 올라 들끓는 느낌', category: '확장', subcategory: '질투', relatedEmotions: ['분함', '짜증'] },
+    { tag: '#감정/오싹한', meaning: '소름이 끼치고 섬뜩한 무서움', category: '확장', subcategory: '공포', relatedEmotions: ['두려움', '섬뜩'] },
+    { tag: '#감정/섬뜩한', meaning: '갑자기 무섭고 소름이 돋는 느낌', category: '확장', subcategory: '공포', relatedEmotions: ['오싹', '두려움'] },
+    // 감격/뭉클
+    { tag: '#감정/뭉클한', meaning: '가슴이 찡하게 감동이 차오르는 느낌', category: '확장', subcategory: '감격', relatedEmotions: ['감동', '찡함'] },
+    { tag: '#감정/감격스러운', meaning: '벅찬 감동으로 가슴이 북받치는 상태', category: '확장', subcategory: '감격', relatedEmotions: ['벅참', '뭉클'] },
+    { tag: '#감정/충만한', meaning: '마음이 가득 차 흡족하고 벅찬 느낌', category: '확장', subcategory: '감격', relatedEmotions: ['만족', '벅참'] },
+    { tag: '#감정/찡한', meaning: '코끝이 시큰하게 감동·연민이 이는 느낌', category: '확장', subcategory: '감격', relatedEmotions: ['뭉클', '울컥'] },
+    // 권태/지루
+    { tag: '#감정/따분한', meaning: '재미없고 심심해 지루한 상태', category: '확장', subcategory: '권태', relatedEmotions: ['지겨움', '심심'] },
+    { tag: '#감정/심심한', meaning: '할 게 없어 무료하고 따분한 느낌', category: '확장', subcategory: '권태', relatedEmotions: ['따분', '무료'] },
+    { tag: '#감정/권태로운', meaning: '모든 게 시들하고 싫증나 나른한 상태', category: '확장', subcategory: '권태', relatedEmotions: ['지겨움', '무기력'] },
+    // 측은/안쓰러움
+    { tag: '#감정/안쓰러운', meaning: '가엾고 딱해 마음이 쓰이는 느낌', category: '확장', subcategory: '연민', relatedEmotions: ['측은', '짠함'] },
+    { tag: '#감정/측은한', meaning: '불쌍하고 가여워 마음이 아픈 상태', category: '확장', subcategory: '연민', relatedEmotions: ['안쓰러움', '연민'] },
+    { tag: '#감정/짠한', meaning: '안쓰럽고 가슴이 찡하게 아린 마음', category: '확장', subcategory: '연민', relatedEmotions: ['안쓰러움', '뭉클'] },
+    // 기타
+    { tag: '#감정/부끄러운', meaning: '수줍고 창피해 낯이 뜨거운 마음', category: '확장', subcategory: '기타', relatedEmotions: ['민망', '쑥스러움'] },
+    { tag: '#감정/후련한', meaning: '막힌 게 뚫려 시원하고 개운한 느낌', category: '확장', subcategory: '기타', relatedEmotions: ['개운', '홀가분'] },
+    { tag: '#감정/나른한', meaning: '노곤하고 졸린 듯 편안한 느낌', category: '확장', subcategory: '기타', relatedEmotions: ['이완', '느긋'] },
+    { tag: '#감정/차분한', meaning: '들뜸 없이 가라앉아 고요한 마음', category: '확장', subcategory: '기타', relatedEmotions: ['평온', '담담'] },
+    { tag: '#감정/멋쩍은', meaning: '어색하고 겸연쩍어 쑥스러운 느낌', category: '확장', subcategory: '기타', relatedEmotions: ['어색', '민망'] },
+    { tag: '#감정/시큰둥한', meaning: '관심 없고 떨떠름한 무덤덤한 태도', category: '확장', subcategory: '기타', relatedEmotions: ['무감각', '못마땅'] },
+    { tag: '#감정/얼떨떨한', meaning: '갑작스러워 어리둥절하고 멍한 상태', category: '확장', subcategory: '기타', relatedEmotions: ['당황', '뒤숭숭'] },
+];
+
 // 감정별 이모지 매핑 (빠른 시각 식별용)
 const emojiByTag: Record<string, string> = {
     // 높은 에너지 + 긍정
@@ -180,22 +234,150 @@ const emojiByTag: Record<string, string> = {
     // 한국어 특유 - 신체화된 표현
     '#감정/가슴이뻐근한': '🫀', '#감정/속이쓰린': '🔥', '#감정/목이메는': '😢',
     '#감정/뒷목이당기는': '🤯', '#감정/가슴이미어지는': '💔',
+    // 확장 - 외로움
+    '#감정/외로운': '🥺', '#감정/쓸쓸한': '🍂', '#감정/고독한': '🌑', '#감정/적적한': '🤍', '#감정/허전한': '🫥',
+    // 확장 - 설렘
+    '#감정/설레는': '💓', '#감정/두근거리는': '💗', '#감정/들뜬': '🎊', '#감정/기대되는': '🌠',
+    // 확장 - 사랑
+    '#감정/사랑스러운': '🥰', '#감정/다정한': '💞', '#감정/반한': '💘',
+    // 확장 - 자부심
+    '#감정/자랑스러운': '🦚', '#감정/의기양양한': '🏆', '#감정/우쭐한': '😼',
+    // 확장 - 질투/공포
+    '#감정/질투나는': '😤', '#감정/약오르는': '😾', '#감정/오싹한': '🥶', '#감정/섬뜩한': '👻',
+    // 확장 - 감격
+    '#감정/뭉클한': '🫶', '#감정/감격스러운': '🙌', '#감정/충만한': '🌟', '#감정/찡한': '🥹',
+    // 확장 - 권태
+    '#감정/따분한': '😑', '#감정/심심한': '🥱', '#감정/권태로운': '😮‍💨',
+    // 확장 - 연민
+    '#감정/안쓰러운': '🫂', '#감정/측은한': '😢', '#감정/짠한': '😞',
+    // 확장 - 기타
+    '#감정/부끄러운': '😳', '#감정/후련한': '🌬️', '#감정/나른한': '😴', '#감정/차분한': '🍵',
+    '#감정/멋쩍은': '😅', '#감정/시큰둥한': '😒', '#감정/얼떨떨한': '😵',
 };
 
-const attachEmoji = (emotions: Omit<EmotionTag, 'emoji'>[]): EmotionTag[] =>
-    emotions.map((e) => ({ ...e, emoji: emojiByTag[e.tag] ?? '🏷️' }));
+// 핵심 감정: subcategory → 사분면
+const subcatToQuadrant: Record<string, QuadrantKey> = {
+    '높은 에너지 + 긍정': 'highPositive',
+    '높은 에너지 + 부정': 'highNegative',
+    '낮은 에너지 + 긍정': 'lowPositive',
+    '낮은 에너지 + 부정': 'lowNegative',
+    '중간/전환': 'complex',
+};
 
-const coreEmotions: EmotionTag[] = attachEmoji(coreEmotionsBase);
-const koreanUniqueEmotions: EmotionTag[] = attachEmoji(koreanUniqueEmotionsBase);
+// 한국어 특유·확장 감정의 사분면 (subcategory로 안 갈리는 것들 — 단어별 직접 지정)
+const quadrantByTag: Record<string, QuadrantKey> = {
+    // 관계 중심
+    '#감정/서운한': 'lowNegative', '#감정/섭섭한': 'lowNegative', '#감정/그리운': 'complex', '#감정/아쉬운': 'lowNegative',
+    '#감정/부러운': 'lowNegative', '#감정/고마운': 'lowPositive', '#감정/애틋한': 'complex', '#감정/야속한': 'lowNegative',
+    // 긍정적 미묘함
+    '#감정/개운한': 'lowPositive', '#감정/든든한': 'lowPositive', '#감정/흐뭇한': 'lowPositive', '#감정/알찬': 'lowPositive',
+    '#감정/상큼한': 'highPositive', '#감정/포근한': 'lowPositive',
+    // 불편함의 변주
+    '#감정/짜증나는': 'highNegative', '#감정/귀찮은': 'lowNegative', '#감정/지겨운': 'lowNegative', '#감정/역겨운': 'highNegative',
+    '#감정/원망스러운': 'lowNegative', '#감정/쪽팔리는': 'highNegative', '#감정/어색한': 'lowNegative', '#감정/쑥스러운': 'lowNegative',
+    // 체념과 무기력
+    '#감정/무기력한': 'lowNegative', '#감정/무감각한': 'complex', '#감정/허탈한': 'lowNegative', '#감정/맥빠지는': 'lowNegative',
+    // 복합 감정
+    '#감정/시원섭섭한': 'complex', '#감정/싱숭생숭한': 'complex', '#감정/울컥한': 'complex', '#감정/찔리는': 'complex',
+    // 신체화된 표현
+    '#감정/가슴이뻐근한': 'lowNegative', '#감정/속이쓰린': 'lowNegative', '#감정/목이메는': 'complex',
+    '#감정/뒷목이당기는': 'highNegative', '#감정/가슴이미어지는': 'lowNegative',
+    // 확장 - 외로움
+    '#감정/외로운': 'lowNegative', '#감정/쓸쓸한': 'lowNegative', '#감정/고독한': 'lowNegative', '#감정/적적한': 'lowNegative', '#감정/허전한': 'lowNegative',
+    // 확장 - 설렘
+    '#감정/설레는': 'highPositive', '#감정/두근거리는': 'highPositive', '#감정/들뜬': 'highPositive', '#감정/기대되는': 'highPositive',
+    // 확장 - 사랑
+    '#감정/사랑스러운': 'lowPositive', '#감정/다정한': 'lowPositive', '#감정/반한': 'highPositive',
+    // 확장 - 자부심
+    '#감정/자랑스러운': 'highPositive', '#감정/의기양양한': 'highPositive', '#감정/우쭐한': 'highPositive',
+    // 확장 - 질투/공포
+    '#감정/질투나는': 'highNegative', '#감정/약오르는': 'highNegative', '#감정/오싹한': 'highNegative', '#감정/섬뜩한': 'highNegative',
+    // 확장 - 감격
+    '#감정/뭉클한': 'lowPositive', '#감정/감격스러운': 'highPositive', '#감정/충만한': 'lowPositive', '#감정/찡한': 'complex',
+    // 확장 - 권태
+    '#감정/따분한': 'lowNegative', '#감정/심심한': 'lowNegative', '#감정/권태로운': 'lowNegative',
+    // 확장 - 연민
+    '#감정/안쓰러운': 'complex', '#감정/측은한': 'lowNegative', '#감정/짠한': 'complex',
+    // 확장 - 기타
+    '#감정/부끄러운': 'lowNegative', '#감정/후련한': 'lowPositive', '#감정/나른한': 'lowPositive', '#감정/차분한': 'lowPositive',
+    '#감정/멋쩍은': 'complex', '#감정/시큰둥한': 'complex', '#감정/얼떨떨한': 'complex',
+};
+
+// 사분면 내 소그룹 (스캔 편의용) — 비슷한 결의 감정끼리 묶음
+const groupByTag: Record<string, string> = {
+    // 활기 · 긍정
+    '#감정/환희': '환희·흥분', '#감정/황홀': '환희·흥분', '#감정/벅찬': '환희·흥분', '#감정/짜릿한': '환희·흥분', '#감정/통쾌한': '환희·흥분', '#감정/신나는': '환희·흥분', '#감정/감격스러운': '환희·흥분',
+    '#감정/활기찬': '활력', '#감정/힘이남': '활력', '#감정/상쾌한': '활력', '#감정/상큼한': '활력', '#감정/용기있는': '활력',
+    '#감정/재미있는': '즐거움·흥미', '#감정/호기심': '즐거움·흥미',
+    '#감정/설레는': '설렘', '#감정/두근거리는': '설렘', '#감정/들뜬': '설렘', '#감정/기대되는': '설렘', '#감정/반한': '설렘',
+    '#감정/뿌듯한': '자부심', '#감정/자랑스러운': '자부심', '#감정/의기양양한': '자부심', '#감정/우쭐한': '자부심',
+    // 활기 · 부정
+    '#감정/화난': '분노', '#감정/격노한': '분노', '#감정/분개': '분노', '#감정/분통': '분노', '#감정/억울한': '분노', '#감정/약오르는': '분노', '#감정/질투나는': '분노',
+    '#감정/불안한': '불안·긴장', '#감정/긴장한': '불안·긴장', '#감정/초조한': '불안·긴장', '#감정/조급한': '불안·긴장', '#감정/조마조마한': '불안·긴장', '#감정/염려되는': '불안·긴장', '#감정/진땀나는': '불안·긴장',
+    '#감정/두려운': '공포·충격', '#감정/경악': '공포·충격', '#감정/당황한': '공포·충격', '#감정/오싹한': '공포·충격', '#감정/섬뜩한': '공포·충격',
+    '#감정/신경질나는': '짜증·역겨움', '#감정/짜증나는': '짜증·역겨움', '#감정/역겨운': '짜증·역겨움',
+    '#감정/수치심': '수치', '#감정/쪽팔리는': '수치',
+    '#감정/뒷목이당기는': '신체',
+    // 차분 · 긍정
+    '#감정/만족스러운': '만족·평온', '#감정/평온한': '만족·평온', '#감정/잔잔한': '만족·평온', '#감정/담담한': '만족·평온', '#감정/차분한': '만족·평온',
+    '#감정/안도감': '안도·홀가분', '#감정/홀가분': '안도·홀가분', '#감정/후련한': '안도·홀가분', '#감정/개운한': '안도·홀가분',
+    '#감정/감사한': '따뜻함·감사', '#감정/온화한': '따뜻함·감사', '#감정/포근한': '따뜻함·감사', '#감정/다정한': '따뜻함·감사', '#감정/사랑스러운': '따뜻함·감사', '#감정/고마운': '따뜻함·감사',
+    '#감정/느긋한': '여유·이완', '#감정/달관한': '여유·이완', '#감정/이완된': '여유·이완', '#감정/나른한': '여유·이완',
+    '#감정/흐뭇한': '충족·뿌듯', '#감정/든든한': '충족·뿌듯', '#감정/알찬': '충족·뿌듯', '#감정/충만한': '충족·뿌듯', '#감정/뭉클한': '충족·뿌듯',
+    // 차분 · 부정
+    '#감정/절망적인': '우울·침체', '#감정/우울한': '우울·침체', '#감정/공허함': '우울·침체', '#감정/침울한': '우울·침체', '#감정/괴로운': '우울·침체', '#감정/슬픈': '우울·침체', '#감정/막막한': '우울·침체', '#감정/측은한': '우울·침체',
+    '#감정/씁쓸한': '실망·아쉬움', '#감정/착잡한': '실망·아쉬움', '#감정/실망스러운': '실망·아쉬움', '#감정/좌절한': '실망·아쉬움', '#감정/서운한': '실망·아쉬움', '#감정/섭섭한': '실망·아쉬움', '#감정/아쉬운': '실망·아쉬움', '#감정/야속한': '실망·아쉬움', '#감정/부러운': '실망·아쉬움',
+    '#감정/외로운': '외로움', '#감정/쓸쓸한': '외로움', '#감정/고독한': '외로움', '#감정/적적한': '외로움', '#감정/허전한': '외로움',
+    '#감정/죄책감': '자책', '#감정/미안한': '자책', '#감정/후회스러운': '자책', '#감정/신경쓰이는': '자책', '#감정/부끄러운': '자책',
+    '#감정/체념한': '무기력·체념', '#감정/무기력한': '무기력·체념', '#감정/허탈한': '무기력·체념', '#감정/맥빠지는': '무기력·체념', '#감정/피곤한': '무기력·체념',
+    '#감정/답답한': '권태·싫증', '#감정/귀찮은': '권태·싫증', '#감정/지겨운': '권태·싫증', '#감정/따분한': '권태·싫증', '#감정/심심한': '권태·싫증', '#감정/권태로운': '권태·싫증',
+    '#감정/미운': '미움·불만', '#감정/못마땅한': '미움·불만', '#감정/원망스러운': '미움·불만',
+    '#감정/어색한': '어색함', '#감정/쑥스러운': '어색함',
+    '#감정/가슴이뻐근한': '신체', '#감정/속이쓰린': '신체', '#감정/가슴이미어지는': '신체',
+};
+
+// 소그룹 표시 순서
+const GROUP_ORDER = [
+    '환희·흥분', '활력', '즐거움·흥미', '설렘', '자부심',
+    '분노', '불안·긴장', '공포·충격', '짜증·역겨움', '수치',
+    '만족·평온', '안도·홀가분', '따뜻함·감사', '여유·이완', '충족·뿌듯',
+    '우울·침체', '실망·아쉬움', '외로움', '자책', '무기력·체념', '권태·싫증', '미움·불만', '어색함', '신체',
+    '기타',
+];
+const GROUP_RANK: Record<string, number> = {};
+GROUP_ORDER.forEach((g, i) => { GROUP_RANK[g] = i; });
+
+const attachMeta = (emotions: Omit<EmotionTag, 'emoji' | 'quadrant'>[]): EmotionTag[] =>
+    emotions.map((e) => ({
+        ...e,
+        emoji: emojiByTag[e.tag] ?? '🏷️',
+        quadrant: quadrantByTag[e.tag] ?? subcatToQuadrant[e.subcategory ?? ''] ?? 'complex',
+        group: groupByTag[e.tag] ?? '기타',
+    }));
+
+const coreEmotions: EmotionTag[] = attachMeta(coreEmotionsBase);
+const koreanUniqueEmotions: EmotionTag[] = attachMeta(koreanUniqueEmotionsBase);
+const additionalEmotions: EmotionTag[] = attachMeta(additionalEmotionsBase);
 
 // 전체 감정 태그 배열
-export const allEmotionTags: EmotionTag[] = [...coreEmotions, ...koreanUniqueEmotions];
+export const allEmotionTags: EmotionTag[] = [...coreEmotions, ...koreanUniqueEmotions, ...additionalEmotions];
 
 // 카테고리별 감정 태그
 export const emotionsByCategory = {
     core: coreEmotions,
     koreanUnique: koreanUniqueEmotions,
+    additional: additionalEmotions,
 };
+
+// 사분면별 감정 태그 (통합 분류 — 무드미터·피커의 단일 기준)
+export const emotionsByQuadrant: Record<QuadrantKey, EmotionTag[]> = {
+    highNegative: [], highPositive: [], lowNegative: [], lowPositive: [], complex: [],
+};
+allEmotionTags.forEach((e) => emotionsByQuadrant[e.quadrant].push(e));
+// 사분면 안에서 소그룹끼리 인접하도록 정렬 (Array.sort 안정 정렬로 그룹 내 순서 유지)
+(Object.keys(emotionsByQuadrant) as QuadrantKey[]).forEach((k) => {
+    emotionsByQuadrant[k].sort((a, b) => (GROUP_RANK[a.group ?? '기타'] ?? 999) - (GROUP_RANK[b.group ?? '기타'] ?? 999));
+});
 
 // 서브카테고리별 감정 태그
 export const emotionsBySubcategory = allEmotionTags.reduce((acc, emotion) => {
@@ -207,12 +389,14 @@ export const emotionsBySubcategory = allEmotionTags.reduce((acc, emotion) => {
     return acc;
 }, {} as Record<string, EmotionTag[]>);
 
-// 검색 함수
+// 검색 함수 (이름·뜻·연관 감정(동의어)까지 매칭)
 export const searchEmotions = (query: string): EmotionTag[] => {
-    const lowerQuery = query.toLowerCase();
+    const lowerQuery = query.toLowerCase().trim();
+    if (!lowerQuery) return [];
     return allEmotionTags.filter(emotion =>
         emotion.tag.toLowerCase().includes(lowerQuery) ||
-        emotion.meaning.toLowerCase().includes(lowerQuery)
+        emotion.meaning.toLowerCase().includes(lowerQuery) ||
+        (emotion.relatedEmotions || []).some(r => r.toLowerCase().includes(lowerQuery))
     );
 };
 
@@ -221,28 +405,12 @@ export const findEmotionByTag = (tag: string): EmotionTag | undefined => {
     return allEmotionTags.find(emotion => emotion.tag === tag);
 };
 
-// 긍정 감정 여부 확인 (적록색약 대응: 파란색 사용)
-const positiveSubcategories = [
-    '높은 에너지 + 긍정',
-    '낮은 에너지 + 긍정',
-    '긍정적 미묘함'
-];
+// 긍/부정 판별 (사분면 기준 — 복합/중간은 중립). 색약 대응: 긍정=파랑, 부정=주황
+export const isPositiveEmotion = (tag: EmotionTag): boolean =>
+    tag.quadrant === 'highPositive' || tag.quadrant === 'lowPositive';
 
-// 부정 감정 여부 확인 (적록색약 대응: 주황색 사용)
-const negativeSubcategories = [
-    '높은 에너지 + 부정',
-    '낮은 에너지 + 부정',
-    '불편함의 변주',
-    '체념과 무기력'
-];
-
-export const isPositiveEmotion = (tag: EmotionTag): boolean => {
-    return positiveSubcategories.includes(tag.subcategory || '');
-};
-
-export const isNegativeEmotion = (tag: EmotionTag): boolean => {
-    return negativeSubcategories.includes(tag.subcategory || '');
-};
+export const isNegativeEmotion = (tag: EmotionTag): boolean =>
+    tag.quadrant === 'highNegative' || tag.quadrant === 'lowNegative';
 
 // 텍스트에서 감정 태그 추출 및 분류
 export const analyzeEmotionsInText = (text: string): {
@@ -303,7 +471,7 @@ export const moodMeterQuadrants: MoodQuadrant[] = [
         label: '활기 · 부정',
         energyIcon: '⚡',
         sampleEmoji: '😠',
-        emotions: emotionsBySubcategory['높은 에너지 + 부정'] || [],
+        emotions: emotionsByQuadrant.highNegative,
         chipBg: 'bg-orange-500/15 hover:bg-orange-500/30',
         chipText: 'text-orange-200',
         cellBg: 'bg-orange-500/10',
@@ -315,7 +483,7 @@ export const moodMeterQuadrants: MoodQuadrant[] = [
         label: '활기 · 긍정',
         energyIcon: '⚡',
         sampleEmoji: '🤩',
-        emotions: emotionsBySubcategory['높은 에너지 + 긍정'] || [],
+        emotions: emotionsByQuadrant.highPositive,
         chipBg: 'bg-blue-500/15 hover:bg-blue-500/30',
         chipText: 'text-blue-200',
         cellBg: 'bg-blue-500/10',
@@ -327,7 +495,7 @@ export const moodMeterQuadrants: MoodQuadrant[] = [
         label: '차분 · 부정',
         energyIcon: '🌙',
         sampleEmoji: '😔',
-        emotions: emotionsBySubcategory['낮은 에너지 + 부정'] || [],
+        emotions: emotionsByQuadrant.lowNegative,
         chipBg: 'bg-amber-600/15 hover:bg-amber-600/30',
         chipText: 'text-amber-200',
         cellBg: 'bg-amber-600/10',
@@ -339,7 +507,7 @@ export const moodMeterQuadrants: MoodQuadrant[] = [
         label: '차분 · 긍정',
         energyIcon: '🌙',
         sampleEmoji: '😌',
-        emotions: emotionsBySubcategory['낮은 에너지 + 긍정'] || [],
+        emotions: emotionsByQuadrant.lowPositive,
         chipBg: 'bg-teal-500/15 hover:bg-teal-500/30',
         chipText: 'text-teal-200',
         cellBg: 'bg-teal-500/10',
@@ -348,15 +516,13 @@ export const moodMeterQuadrants: MoodQuadrant[] = [
     },
 ];
 
-// 중간/전환 감정 (무드미터 사분면에 속하지 않음)
-export const neutralEmotions: EmotionTag[] = emotionsBySubcategory['중간/전환'] || [];
+// 복합·중간 감정 (4사분면에 딱 안 들어가는 것 — 피커의 5번째 그룹)
+export const complexEmotions: EmotionTag[] = emotionsByQuadrant.complex;
+// 하위 호환 별칭
+export const neutralEmotions: EmotionTag[] = complexEmotions;
 
-// 태그 → 무드미터 사분면 키 (핵심 감정만 매핑; 한국어 특유/중간 감정은 null)
-const tagToQuadrant: Record<string, MoodQuadrant['key']> = {};
-moodMeterQuadrants.forEach((q) => {
-    q.emotions.forEach((e) => {
-        tagToQuadrant[e.tag] = q.key;
-    });
-});
-
-export const getMoodQuadrantKey = (tag: string): MoodQuadrant['key'] | null => tagToQuadrant[tag] ?? null;
+// 태그 → 무드미터 사분면 키 (복합/중간은 null 반환 → 4사분면 집계에서 제외)
+export const getMoodQuadrantKey = (tag: string): MoodQuadrant['key'] | null => {
+    const q = findEmotionByTag(tag)?.quadrant;
+    return q && q !== 'complex' ? q : null;
+};
