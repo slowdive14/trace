@@ -7,6 +7,7 @@
     "dev": "npx @react-grab/claude-code@latest && vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "test": "vitest run",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -37,7 +38,8 @@
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.46.4",
     "vite": "^7.2.4",
-    "vite-plugin-pwa": "^1.1.0"
+    "vite-plugin-pwa": "^1.1.0",
+    "vitest": "^4.1.9"
   },
   "optionalDependencies": {
     "@rollup/rollup-linux-x64-gnu": "^4.53.3"

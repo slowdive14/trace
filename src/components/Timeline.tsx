@@ -4,6 +4,7 @@ import { ko } from 'date-fns/locale';
 import type { Entry, NavigationTarget } from '../types/types';
 import { extractTags } from '../utils/tagUtils';
 import { deleteEntry, toggleEntryPin, updateEntry, saveReflection, getReflections } from '../services/firestore';
+import { deletePhoto } from '../utils/imageUpload';
 import { useAuth } from './AuthContext';
 import EntryItem from './EntryItem';
 import { onSnapshot, collection, query, orderBy } from 'firebase/firestore';
@@ -195,6 +196,11 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
 
     const handleDelete = async (id: string) => {
         if (!user) return;
+        // 엔트리에 첨부된 사진을 스토리지에서 먼저 정리 (best-effort)
+        const entry = allEntries.find(e => e.id === id);
+        if (entry?.photos?.length) {
+            await Promise.all(entry.photos.map(p => deletePhoto(p.path)));
+        }
         await deleteEntry(user.uid, id, collectionName);
     };
 

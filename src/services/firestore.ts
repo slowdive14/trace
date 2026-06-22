@@ -16,7 +16,7 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { startOfDay } from 'date-fns';
-import type { Expense, ExpenseCategory, Todo, Worry, WorryEntry, BrainDump, BrainDumpStatus, BrainDumpInsight, DailyReflection, MonthlyReview, MonthlyInsight } from '../types/types';
+import type { Expense, ExpenseCategory, Todo, Worry, WorryEntry, BrainDump, BrainDumpStatus, BrainDumpInsight, DailyReflection, MonthlyReview, MonthlyInsight, EntryPhoto } from '../types/types';
 
 const EXPENSES_COLLECTION = 'expenses';
 
@@ -136,7 +136,8 @@ export const addEntry = async (
     category: string,
     date?: Date,
     collectionName: string = 'entries',
-    isPinned: boolean = false
+    isPinned: boolean = false,
+    photos: EntryPhoto[] = []
 ) => {
     try {
         const timestamp = date ? Timestamp.fromDate(date) : Timestamp.now();
@@ -147,6 +148,7 @@ export const addEntry = async (
             timestamp,
             isPinned,
             createdAt: Timestamp.now(),
+            ...(photos.length ? { photos } : {}),
         });
         return docRef.id;
     } catch (e) {

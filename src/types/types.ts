@@ -1,3 +1,11 @@
+// 엔트리에 첨부된 사진 (Firebase Storage)
+export interface EntryPhoto {
+    url: string;    // 다운로드 URL (표시용)
+    path: string;   // Storage 경로 (삭제용)
+    w?: number;     // 압축 후 가로
+    h?: number;     // 압축 후 세로
+}
+
 export interface Entry {
     id: string;
     content: string;
@@ -7,6 +15,7 @@ export interface Entry {
     createdAt: Date;
     updatedAt: Date;
     isPinned?: boolean;
+    photos?: EntryPhoto[];
 }
 
 export interface Expense {

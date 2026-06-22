@@ -1,14 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Maximize2, Minimize2, Calendar, Smile, Moon, Sun, CloudMoon } from 'lucide-react';
+import { Send, Maximize2, Minimize2, Calendar, Smile, Moon, Sun, CloudMoon, ImagePlus, Loader2, X } from 'lucide-react';
 import { extractTags } from '../utils/tagUtils';
 import { addEntry } from '../services/firestore';
+import { uploadEntryPhoto } from '../utils/imageUpload';
 import { useAuth } from './AuthContext';
 import { format, isSameDay } from 'date-fns';
 import { searchEmotions, type EmotionTag } from '../utils/emotionTags';
 import { recordEmotionUse } from '../utils/emotionUsage';
 import EmotionPickerModal from './EmotionPickerModal';
 import { extractSleepRecords, getIdealSleepSchedule } from '../utils/sleepUtils';
-import type { Entry } from '../types/types';
+import type { Entry, EntryPhoto } from '../types/types';
 
 interface InputBarProps {
     activeCategory?: 'action' | 'thought' | 'chore' | 'book';
@@ -42,8 +43,18 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
     const [selectedAutocompleteIndex, setSelectedAutocompleteIndex] = useState(0);
     const [autocompletePosition, setAutocompletePosition] = useState({ start: 0, end: 0 });
 
+    // 사진 첨부
+    const [pendingPhotos, setPendingPhotos] = useState<{ file: File; preview: string }[]>([]);
+    const [uploading, setUploading] = useState(false);
+    const [uploadError, setUploadError] = useState<string | null>(null);
+
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const autocompleteRef = useRef<HTMLDivElement>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const pendingPhotosRef = useRef(pendingPhotos);
+    pendingPhotosRef.current = pendingPhotos;
+    // 언마운트 시 미해제 미리보기 URL 정리
+    useEffect(() => () => { pendingPhotosRef.current.forEach((p) => URL.revokeObjectURL(p.preview)); }, []);
     const { user } = useAuth();
 
     // 자동완성 감지 및 업데이트
@@ -197,8 +208,38 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
         }, 0);
     };
 
+    // 사진 첨부 핸들러
+    const addFiles = (files: FileList | File[] | null) => {
+        if (!files) return;
+        const imgs = Array.from(files).filter((f) => f.type.startsWith('image/'));
+        if (imgs.length === 0) return;
+        setUploadError(null);
+        setPendingPhotos((prev) => [...prev, ...imgs.map((file) => ({ file, preview: URL.createObjectURL(file) }))]);
+    };
+
+    const removePendingPhoto = (index: number) => {
+        setPendingPhotos((prev) => {
+            const t = prev[index];
+            if (t) URL.revokeObjectURL(t.preview);
+            return prev.filter((_, i) => i !== index);
+        });
+    };
+
+    const handlePaste = (e: React.ClipboardEvent) => {
+        const imgs = Array.from(e.clipboardData.items)
+            .filter((it) => it.type.startsWith('image/'))
+            .map((it) => it.getAsFile())
+            .filter((f): f is File => !!f);
+        if (imgs.length) { e.preventDefault(); addFiles(imgs); }
+    };
+
+    const handleDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+        addFiles(e.dataTransfer.files);
+    };
+
     const handleSubmit = async () => {
-        if (!content.trim() || !user) return;
+        if ((!content.trim() && pendingPhotos.length === 0) || !user || uploading) return;
 
         const tags = extractTags(content);
         const category = activeCategory;
@@ -213,13 +254,29 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
             // Chores are pinned by default
             const isPinned = category === 'chore';
 
-            await addEntry(user.uid, content, tags, category, dateToUse, collectionName, isPinned);
+            // 사진 압축 + 업로드 (순차)
+            const photos: EntryPhoto[] = [];
+            if (pendingPhotos.length > 0) {
+                setUploading(true);
+                setUploadError(null);
+                for (const p of pendingPhotos) {
+                    photos.push(await uploadEntryPhoto(user.uid, p.file));
+                }
+            }
+
+            await addEntry(user.uid, content, tags, category, dateToUse, collectionName, isPinned, photos);
+
+            pendingPhotos.forEach((p) => URL.revokeObjectURL(p.preview));
+            setPendingPhotos([]);
             setContent('');
             setIsExpanded(false);
             setSelectedDate(null); // Reset to "Now"
             setShowAutocomplete(false);
         } catch (error) {
             console.error("Failed to add entry:", error);
+            setUploadError('사진 업로드 또는 저장에 실패했어요. 다시 시도해 주세요.');
+        } finally {
+            setUploading(false);
         }
     };
 
@@ -478,13 +535,38 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
                         </div>
                     )}
 
-                    <div className={`flex gap-2 flex-1 ${isExpanded ? 'items-stretch' : 'items-end'}`}>
+                    {/* 첨부 사진 미리보기 */}
+                    {pendingPhotos.length > 0 && (
+                        <div className="flex gap-2 flex-wrap">
+                            {pendingPhotos.map((p, i) => (
+                                <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden border border-bg-tertiary shrink-0">
+                                    <img src={p.preview} alt="" className="w-full h-full object-cover" />
+                                    <button
+                                        type="button"
+                                        onClick={() => removePendingPhoto(i)}
+                                        className="absolute top-0.5 right-0.5 bg-black/60 text-white rounded-full p-0.5 hover:bg-black/80"
+                                        aria-label="사진 제거"
+                                    >
+                                        <X size={12} />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                    {uploadError && <div className="text-xs text-red-400">{uploadError}</div>}
+
+                    <div
+                        className={`flex gap-2 flex-1 ${isExpanded ? 'items-stretch' : 'items-end'}`}
+                        onDrop={handleDrop}
+                        onDragOver={(e) => e.preventDefault()}
+                    >
                         <div className={`flex-1 relative ${isExpanded ? 'flex flex-col' : ''}`}>
                             <textarea
                                 ref={textareaRef}
                                 value={content}
                                 onChange={(e) => handleContentChange(e.target.value)}
                                 onKeyDown={handleKeyDown}
+                                onPaste={handlePaste}
                                 onSelect={() => {
                                     const cursorPos = textareaRef.current?.selectionStart || 0;
                                     updateAutocomplete(content, cursorPos);
@@ -502,6 +584,22 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
                             <Smile size={20} />
                         </button>
                         <button
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            className="p-2 text-text-secondary hover:text-accent transition-colors"
+                            title="사진 첨부"
+                        >
+                            <ImagePlus size={20} />
+                        </button>
+                        <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept="image/*"
+                            multiple
+                            className="hidden"
+                            onChange={(e) => { addFiles(e.target.files); e.target.value = ''; }}
+                        />
+                        <button
                             onClick={() => setShowDatePicker(true)}
                             className={`p-2 transition-colors ${isDisplayDateToday ? 'text-text-secondary hover:text-text-primary' : 'text-accent'}`}
                             title="날짜 선택"
@@ -516,14 +614,14 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
                         </button>
                         <button
                             onClick={handleSubmit}
-                            disabled={!content.trim()}
+                            disabled={(!content.trim() && pendingPhotos.length === 0) || uploading}
                             className={`p-2 text-white rounded-full hover:bg-opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all ${activeCategory === 'thought' ? 'bg-purple-500' :
                                 activeCategory === 'chore' ? 'bg-orange-500' :
                                     activeCategory === 'book' ? 'bg-amber-700' :
                                         'bg-blue-500'
                                 }`}
                         >
-                            <Send size={20} />
+                            {uploading ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
                         </button>
                     </div>
                 </div>

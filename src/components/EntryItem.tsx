@@ -3,6 +3,7 @@ import { format } from 'date-fns';
 import type { Entry } from '../types/types';
 import { Trash2, Copy, Check, Pin, Pencil, Smile } from 'lucide-react';
 import EmotionPickerModal from './EmotionPickerModal';
+import Lightbox from './Lightbox';
 
 interface EntryItemProps {
     entry: Entry;
@@ -20,6 +21,7 @@ const EntryItem: React.FC<EntryItemProps> = ({ entry, onDelete, onEdit, highligh
     const [isDeleting, setIsDeleting] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
     const [showEmotionPicker, setShowEmotionPicker] = useState(false);
+    const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
     const [editContent, setEditContent] = useState(entry.content);
     const formattedTime = showDate || entry.isPinned
         ? format(entry.timestamp, 'M/d')
@@ -185,6 +187,20 @@ const EntryItem: React.FC<EntryItemProps> = ({ entry, onDelete, onEdit, highligh
                         {renderContent()}
                     </div>
                 )}
+                {entry.photos && entry.photos.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                        {entry.photos.map((p, i) => (
+                            <button
+                                key={i}
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); setLightboxIndex(i); }}
+                                className="w-20 h-20 rounded-lg overflow-hidden bg-bg-tertiary hover:opacity-90 transition-opacity"
+                            >
+                                <img src={p.url} alt="" className="w-full h-full object-cover" />
+                            </button>
+                        ))}
+                    </div>
+                )}
             </div>
             <div className={`flex gap-1 transition-all shrink-0 items-start ${isDeleting ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
                 {isDeleting ? (
@@ -268,6 +284,9 @@ const EntryItem: React.FC<EntryItemProps> = ({ entry, onDelete, onEdit, highligh
                 onSelect={(tag) => onAddEmotion(entry.id, tag)}
                 title="😊 이 기록에 감정 추가"
             />
+        )}
+        {lightboxIndex !== null && entry.photos && (
+            <Lightbox photos={entry.photos} startIndex={lightboxIndex} onClose={() => setLightboxIndex(null)} />
         )}
         </>
     );
