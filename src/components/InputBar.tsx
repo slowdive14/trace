@@ -274,7 +274,8 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
             setShowAutocomplete(false);
         } catch (error) {
             console.error("Failed to add entry:", error);
-            setUploadError('사진 업로드 또는 저장에 실패했어요. 다시 시도해 주세요.');
+            const detail = error instanceof Error ? error.message : String(error);
+            setUploadError(`업로드/저장 실패: ${detail}`);
         } finally {
             setUploading(false);
         }
@@ -553,7 +554,7 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
                             ))}
                         </div>
                     )}
-                    {uploadError && <div className="text-xs text-red-400">{uploadError}</div>}
+                    {uploadError && <div className="text-xs text-red-300 bg-red-500/10 border border-red-500/20 rounded-lg px-2.5 py-1.5 break-words">{uploadError}</div>}
 
                     <div
                         className={`flex gap-2 flex-1 ${isExpanded ? 'items-stretch' : 'items-end'}`}

@@ -39,7 +39,8 @@
       "mcp__Claude_in_Chrome__navigate",
       "mcp__Claude_in_Chrome__javascript_tool",
       "mcp__Claude_in_Chrome__computer",
-      "mcp__Claude_in_Chrome__read_console_messages"
+      "mcp__Claude_in_Chrome__read_console_messages",
+      "PowerShell(gh run list --repo slowdive14/trace --limit 4 2>&1)"
     ],
     "deny": [],
     "ask": []
