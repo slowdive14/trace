@@ -357,8 +357,8 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
 
     return (
         <>
-            {/* 수면 기록 버튼 바 - 일상 탭에서만 표시 */}
-            {activeCategory === 'action' && !isExpanded && (
+            {/* 수면 기록 버튼 바 - 일상 탭에서만 표시 (사진 첨부 중엔 숨겨 충돌 방지) */}
+            {activeCategory === 'action' && !isExpanded && pendingPhotos.length === 0 && (
                 <div className="fixed bottom-[136px] left-0 right-0 flex justify-center z-[60] pointer-events-none">
                     <div className="max-w-md w-full px-4 pointer-events-auto">
                         {/* 적정 수면 가이드 */}
@@ -449,7 +449,7 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
             )}
 
             {/* 책 태그 버튼 바 - Fixed positioning (only when not expanded) */}
-            {activeCategory === 'book' && !isExpanded && (
+            {activeCategory === 'book' && !isExpanded && pendingPhotos.length === 0 && (
                 <div className="fixed bottom-[136px] left-0 right-0 flex justify-center z-[60] pointer-events-none">
                     <div className="max-w-md w-full px-4 pointer-events-auto">
                         <div className="flex gap-2 flex-wrap p-2 bg-bg-secondary rounded-lg border border-bg-tertiary shadow-lg">
@@ -473,7 +473,7 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
             )}
 
             {/* 할일/정보 태그 버튼 바 - Fixed positioning (only when not expanded) */}
-            {activeCategory === 'chore' && !isExpanded && (
+            {activeCategory === 'chore' && !isExpanded && pendingPhotos.length === 0 && (
                 <div className="fixed bottom-[136px] left-0 right-0 flex justify-center z-[60] pointer-events-none">
                     <div className="max-w-md w-full px-4 pointer-events-auto">
                         <div className="flex gap-2 flex-wrap p-2 bg-bg-secondary rounded-lg border border-bg-tertiary shadow-lg">
@@ -492,7 +492,8 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
                 </div>
             )}
 
-            <div className={`fixed bottom-0 left-0 right-0 bg-bg-secondary border-t border-bg-tertiary p-3 transition-all duration-300 ${isExpanded ? 'h-1/2 z-50' : 'h-auto z-40'}`}>
+            {/* 사진 미리보기/에러가 탭바·플로팅바에 가려지지 않도록 입력창을 그 위로 올린다 */}
+            <div className={`fixed bottom-0 left-0 right-0 bg-bg-secondary border-t border-bg-tertiary p-3 transition-all duration-300 ${isExpanded ? 'h-1/2 z-50' : 'h-auto z-[70]'}`}>
                 <div className="max-w-md mx-auto flex flex-col h-full gap-2 relative">
                     {/* 확장 모드에서 책 태그 버튼 바를 InputBar 상단에 표시 */}
                     {activeCategory === 'book' && isExpanded && (
