@@ -12,6 +12,7 @@ import { db } from '../services/firebase';
 import { Share, Pin, LayoutGrid, List, ChevronDown, ChevronUp, ChevronRight, Copy, X, Calendar, MessageSquare } from 'lucide-react';
 import { generateMarkdown, generateMatrixMarkdown, copyToClipboard } from '../utils/exportUtils';
 import { getLogicalDate } from '../utils/dateUtils';
+import { getRepresentativePhotoByDate } from '../utils/photoUtils';
 import { SleepStats } from './SleepStats';
 import { WeeklyProgress } from './WeeklyProgress';
 import Toast from './common/Toast';
@@ -608,6 +609,9 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
         return groups;
     }, {} as Record<string, Entry[]>);
 
+    // 날짜별 "오늘의 한 장" 대표 사진 (그날 첫 사진)
+    const representativePhotos = getRepresentativePhotoByDate(filteredEntriesAll);
+
     const getDateLabel = (dateStr: string) => {
         const [year, month, day] = dateStr.split('-').map(Number);
         const date = new Date(year, month - 1, day);
@@ -807,9 +811,18 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
                         {Object.entries(groupedEntries).map(([date, dayEntries]) => (
                             <div key={date} className="mb-8">
                                 <div className="sticky top-[57px] bg-bg-primary/95 backdrop-blur py-2 z-10 border-b border-bg-tertiary flex justify-between items-center mb-4">
-                                    <h2 className="text-text-secondary text-sm font-bold">
-                                        {getDateLabel(date)}
-                                    </h2>
+                                    <div className="flex items-center gap-2 min-w-0">
+                                        <h2 className="text-text-secondary text-sm font-bold">
+                                            {getDateLabel(date)}
+                                        </h2>
+                                        {representativePhotos[date] && (
+                                            <img
+                                                src={representativePhotos[date].url}
+                                                alt=""
+                                                className="w-6 h-6 rounded object-cover border border-bg-tertiary shrink-0"
+                                            />
+                                        )}
+                                    </div>
                                     <button
                                         onClick={() => handleExport(date)}
                                         className="text-text-secondary hover:text-accent transition-colors p-1"

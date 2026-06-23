@@ -200,21 +200,21 @@ npm run lint          # eslint
 ### Phase 4: 오늘의 한 장 — 캘린더/타임라인 썸네일
 **Goal**: 날짜별 대표 사진(그날 첫 사진)을 타임라인 날짜 헤더 + 통합 캘린더 날짜칸에 작은 썸네일로.
 **Estimated Time**: 2~3h
-**Status**: ⏳ Pending
+**Status**: ✅ 완료 (헬퍼·단위테스트·타임라인 헤더 썸네일·캘린더 셀 배경 썸네일·빌드·린트)
 **Dependencies**: Phase 3
 
 #### Tasks
 **🔴 RED**
-- [ ] **Task 4.1**: `getRepresentativePhotoByDate(entries)` 순수 헬퍼 단위테스트(날짜별 첫 사진 선택, 없으면 undefined)
+- [x] **Task 4.1**: `getRepresentativePhotoByDate(entries)` 순수 헬퍼 단위테스트(`photoUtils.test.ts`, 5케이스: 그날 첫 사진·여러 날짜·사진없음 무시·빈입력·5AM컷오프)
 **🟢 GREEN**
-- [ ] **Task 4.2**: 헬퍼 구현 + `Timeline` 날짜 헤더에 썸네일
-- [ ] **Task 4.3**: `UnifiedCalendarModal` 기록 탭 날짜칸에 썸네일(없는 날은 기존 표시 유지)
+- [x] **Task 4.2**: 헬퍼 구현(`photoUtils.ts`) + `Timeline` 날짜 헤더에 24px 썸네일
+- [x] **Task 4.3**: `UnifiedCalendarModal` 기록 탭 날짜칸에 대표 사진 배경 썸네일(없는 날은 기존 표시 유지, 선택일 제외)
 **🔵 REFACTOR**
-- [ ] **Task 4.4**: 캘린더 셀 과밀 방지(작은 썸네일/투명도), 성능(메모)
+- [x] **Task 4.4**: 캘린더 셀 과밀 방지(셀 배경 `opacity-40`), 성능(`useMemo`로 대표사진 맵 메모)
 
 #### Quality Gate ✋
-- [ ] `npx vitest run` / `tsc` / `build` / `lint` 통과
-- [ ] (수동) 사진 있는 날에 썸네일, 없는 날 영향 없음
+- [x] `npx vitest run`(11/11) / `tsc`·`build` 통과 / 변경 파일 `lint` clean (기존 프로젝트 에러는 범위 밖·불변)
+- [ ] (수동) 사진 있는 날에 썸네일, 없는 날 영향 없음 — 사용자 기기 시각 확인 예정
 
 **Manual Test Checklist**
 - [ ] 타임라인 날짜 헤더 썸네일
@@ -276,10 +276,10 @@ npm run lint          # eslint
 - **Phase 1**: ✅ 100%
 - **Phase 2**: ✅ 100% (첨부·미리보기·압축·업로드·저장 브라우저 검증)
 - **Phase 3**: ✅ 100% — **MVP 완료** (썸네일·라이트박스·삭제 시 스토리지 정리까지 검증)
-- **Phase 4**: ⏳ 0%
+- **Phase 4**: ✅ 100% (대표사진 헬퍼·타임라인 헤더·캘린더 셀 썸네일)
 - **Phase 5**: ⏳ 0%
 
-**Overall**: 60%
+**Overall**: 80%
 
 ### 검증 메모 (Phase 2/3)
 - 첨부→압축(2000→1600px)→Storage 업로드→엔트리 저장→썸네일→라이트박스 전부 브라우저 실측 OK.

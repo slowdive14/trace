@@ -5,6 +5,7 @@ import { ko } from 'date-fns/locale';
 import type { Entry, Expense, Todo, Worry, WorryEntry, MonthlyInsight, MonthlyReview } from '../types/types';
 import { exportDailyMarkdown } from '../utils/exportUtils';
 import { getLogicalDate } from '../utils/dateUtils';
+import { getRepresentativePhotoByDate } from '../utils/photoUtils';
 import { analyzeEmotionsInText, moodMeterQuadrants, getMoodQuadrantKey, getEmotionName, type EmotionTag } from '../utils/emotionTags';
 import { getReflections, getMonthlyInsight, saveMonthlyInsight } from '../services/firestore';
 import { analyzeMonth } from '../services/gemini';
@@ -247,6 +248,9 @@ const UnifiedCalendarModal: React.FC<UnifiedCalendarModalProps> = ({ onClose, en
 
         return { perDay, totalPos, totalNeg, totalNeu, total, quadrantCounts, topEmotions, maxNet };
     }, [entries, currentMonth]);
+
+    // 날짜별 "오늘의 한 장" 대표 사진 (기록 탭 셀 썸네일용)
+    const representativePhotos = useMemo(() => getRepresentativePhotoByDate(entries), [entries]);
 
     // 이번 달 전체 기록 수 (회고 재생성 판단용)
     const monthEntryCount = useMemo(() => {
@@ -545,6 +549,7 @@ const UnifiedCalendarModal: React.FC<UnifiedCalendarModalProps> = ({ onClose, en
                                 const emotionData = getEmotionData(day);
                                 const isSelected = selectedDate && isSameDay(day, selectedDate);
                                 const isLogicalToday = isSameDay(day, getLogicalDate());
+                                const repPhoto = representativePhotos[format(day, 'yyyy-MM-dd')];
 
                                 return (
                                     <button
@@ -557,6 +562,14 @@ const UnifiedCalendarModal: React.FC<UnifiedCalendarModalProps> = ({ onClose, en
                                             ${!isSameMonth(day, currentMonth) ? 'text-text-secondary/30' : 'text-text-primary'}
                                         `}
                                     >
+                                        {/* 기록 탭: "오늘의 한 장" 대표 사진을 셀 배경으로 (날짜·개수는 위에 표시) */}
+                                        {activeTab === 'records' && repPhoto && !isSelected && (
+                                            <img
+                                                src={repPhoto.url}
+                                                alt=""
+                                                className="absolute inset-0 w-full h-full object-cover rounded-lg pointer-events-none opacity-40"
+                                            />
+                                        )}
                                         {activeTab === 'emotions' && emotionData.hasEmotions && !isSelected && (
                                             <div
                                                 className="absolute inset-0 rounded-lg pointer-events-none"
