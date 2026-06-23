@@ -17,60 +17,34 @@ export function computeTargetSize(
     return { w: Math.round(width * scale), h: Math.round(height * scale) };
 }
 
-// JPEG 바이트에서 SOF 마커를 읽어 픽셀 치수를 싸게 구한다(전체 디코딩 없이).
-// 메모리 절약형 축소 디코딩(createImageBitmap resize)을 위한 목표 크기 계산에 사용.
-export function readJpegDimensions(buf: ArrayBuffer): { w: number; h: number } | null {
-    const d = new DataView(buf);
-    if (d.byteLength < 4 || d.getUint16(0) !== 0xffd8) return null; // SOI
-    let off = 2;
-    while (off + 4 <= d.byteLength) {
-        if (d.getUint8(off) !== 0xff) { off++; continue; }
-        let marker = d.getUint8(off + 1);
-        // 0xFF 패딩 스킵
-        while (marker === 0xff && off + 2 < d.byteLength) { off++; marker = d.getUint8(off + 1); }
-        off += 2;
-        // 길이 없는 standalone 마커: TEM(0x01), RSTn(D0–D7), SOI(D8), EOI(D9)
-        if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd9)) continue;
-        if (off + 2 > d.byteLength) break;
-        const len = d.getUint16(off);
-        // SOF 마커: C0–CF 중 C4(DHT)·C8(JPG)·CC(DAC) 제외
-        if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
-            if (off + 7 <= d.byteLength) {
-                const h = d.getUint16(off + 3);
-                const w = d.getUint16(off + 5);
-                if (w > 0 && h > 0) return { w, h };
-            }
-            return null;
-        }
-        off += len; // 이 세그먼트 스킵
-    }
-    return null;
+// 비동기 작업이 무한정 멈추지 않도록 타임아웃을 건다(모바일에서 일부 디코딩/업로드가 hang하는 경우 방지).
+export function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error(`${label} 시간 초과`)), ms);
+        promise.then(
+            (v) => { clearTimeout(timer); resolve(v); },
+            (e) => { clearTimeout(timer); reject(e); },
+        );
+    });
 }
 
-// 파일 → 디코딩된 이미지 (메모리 절약형 축소 디코딩 우선, 실패 시 전체 디코딩, 그래도 안 되면 <img> 폴백)
-async function decodeImage(file: File, maxEdge: number): Promise<ImageBitmap | HTMLImageElement> {
+// 파일 → 디코딩된 이미지 (ImageBitmap 우선, 실패/지연 시 <img> 폴백). 각 단계에 타임아웃.
+async function decodeImage(file: File): Promise<ImageBitmap | HTMLImageElement> {
     if (typeof createImageBitmap === 'function') {
-        // 대용량/HDR JPEG은 전체 해상도 디코딩이 실패할 수 있어, 헤더 치수로 축소 디코딩 시도
         try {
-            const dims = readJpegDimensions(await file.arrayBuffer());
-            if (dims) {
-                const t = computeTargetSize(dims.w, dims.h, maxEdge);
-                return await createImageBitmap(file, { resizeWidth: t.w, resizeHeight: t.h, resizeQuality: 'high' });
-            }
+            // 주의: resize 옵션은 일부 모바일 브라우저에서 특정 HDR JPEG에 대해 hang하므로 쓰지 않는다.
+            return await withTimeout(createImageBitmap(file), 12000, '이미지 디코딩');
         } catch {
-            // 폴백으로 진행
-        }
-        try {
-            return await createImageBitmap(file);
-        } catch {
-            // HEIC 등 일부 포맷은 createImageBitmap이 실패할 수 있어 <img>로 폴백
+            // HEIC/HDR 등 일부 포맷·환경에서 실패하거나 지연 → <img>로 폴백
         }
     }
     return await new Promise((resolve, reject) => {
         const img = new Image();
         const url = URL.createObjectURL(file);
-        img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
-        img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('이미지를 디코딩할 수 없습니다 (지원되지 않는 형식일 수 있어요)')); };
+        const cleanup = () => URL.revokeObjectURL(url);
+        const timer = setTimeout(() => { cleanup(); reject(new Error('이미지 디코딩 시간 초과')); }, 12000);
+        img.onload = () => { clearTimeout(timer); cleanup(); resolve(img); };
+        img.onerror = () => { clearTimeout(timer); cleanup(); reject(new Error('이미지를 디코딩할 수 없습니다 (지원되지 않는 형식일 수 있어요)')); };
         img.src = url;
     });
 }
@@ -81,10 +55,9 @@ export async function compressImage(
     maxEdge = 1600,
     quality = 0.82,
 ): Promise<{ blob: Blob; w: number; h: number }> {
-    const source = await decodeImage(file, maxEdge);
+    const source = await decodeImage(file);
     const sw = (source as HTMLImageElement).naturalWidth || source.width;
     const sh = (source as HTMLImageElement).naturalHeight || source.height;
-    // source가 축소 디코딩된 ImageBitmap이면 이미 작아 computeTargetSize가 그대로 반환
     const { w, h } = computeTargetSize(sw, sh, maxEdge);
 
     const canvas = document.createElement('canvas');

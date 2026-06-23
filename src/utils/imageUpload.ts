@@ -1,7 +1,7 @@
 // Firebase Storage 업로드/삭제 (사진 메타데이터 반환)
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { storage } from '../services/firebase';
-import { compressImage } from './imageResize';
+import { compressImage, withTimeout } from './imageResize';
 import type { EntryPhoto } from '../types/types';
 
 // 파일을 압축해 users/{uid}/photos 에 업로드하고 메타데이터 반환.
@@ -23,8 +23,9 @@ export async function uploadEntryPhoto(uid: string, file: File): Promise<EntryPh
     }
     const path = `users/${uid}/photos/${crypto.randomUUID()}.jpg`;
     const objectRef = ref(storage, path);
-    await uploadBytes(objectRef, blob, { contentType });
-    const url = await getDownloadURL(objectRef);
+    // 모바일 네트워크가 멈춰도 무한 대기(스피너 영구 회전)하지 않도록 타임아웃
+    await withTimeout(uploadBytes(objectRef, blob, { contentType }), 60000, '업로드');
+    const url = await withTimeout(getDownloadURL(objectRef), 20000, 'URL 가져오기');
     // w·h가 없으면 필드를 생략(Firestore는 undefined 값을 거부)
     return { url, path, ...(w ? { w } : {}), ...(h ? { h } : {}) };
 }
