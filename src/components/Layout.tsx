@@ -1,15 +1,16 @@
 import React, { useState } from 'react';
 import { useAuth } from './AuthContext';
-import { LogOut, Calendar, Search, Settings } from 'lucide-react';
+import { LogOut, Calendar, Search, Settings, Images } from 'lucide-react';
 import SettingsModal from './SettingsModal';
 
 interface LayoutProps {
     children: React.ReactNode;
     onSearch?: () => void;
     onCalendar?: () => void;
+    onGallery?: () => void;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, onSearch, onCalendar }) => {
+const Layout: React.FC<LayoutProps> = ({ children, onSearch, onCalendar, onGallery }) => {
     const { user, signOut, signInWithGoogle } = useAuth();
     const [showSettings, setShowSettings] = useState(false);
 
@@ -31,6 +32,13 @@ const Layout: React.FC<LayoutProps> = ({ children, onSearch, onCalendar }) => {
                                 className="text-text-secondary hover:text-accent transition-all duration-200 hover:scale-110 active:scale-95"
                             >
                                 <Calendar size={22} strokeWidth={2.2} />
+                            </button>
+                            <button
+                                onClick={onGallery}
+                                className="text-text-secondary hover:text-accent transition-all duration-200 hover:scale-110 active:scale-95"
+                                aria-label="사진 갤러리"
+                            >
+                                <Images size={22} strokeWidth={2.2} />
                             </button>
                             <button
                                 onClick={() => setShowSettings(true)}

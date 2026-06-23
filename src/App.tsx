@@ -8,6 +8,7 @@ import SearchBar from './components/SearchBar';
 import ExpenseTimeline from './components/ExpenseTimeline';
 import ExpenseInput from './components/ExpenseInput';
 import UnifiedCalendarModal from './components/UnifiedCalendarModal';
+import PhotoGallery from './components/PhotoGallery';
 import TodoTab from './components/TodoTab';
 import WorryTab from './components/WorryTab';
 import BrainDumpTab from './components/BrainDumpTab';
@@ -27,6 +28,7 @@ const AppContent: React.FC = () => {
   const [showCalendar, setShowCalendar] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [showUnifiedCalendar, setShowUnifiedCalendar] = useState(false);
+  const [showGallery, setShowGallery] = useState(false);
   const [showEmotionFab, setShowEmotionFab] = useState(false);
   const [pendingEmotion, setPendingEmotion] = useState<string | null>(null);
   const [emotionNote, setEmotionNote] = useState('');
@@ -193,6 +195,17 @@ const AppContent: React.FC = () => {
     setNavigationTarget(null);
   };
 
+  // 갤러리에서 사진 → 해당 기록(엔트리)으로 점프
+  const handleGalleryJump = (entryId: string) => {
+    const entry = entries.find(e => e.id === entryId);
+    setShowGallery(false);
+    setSelectedTag(null);
+    // 'thought'는 별도 탭이 없어 일상(action) 탭으로 폴백
+    const tab = entry && entry.category !== 'thought' ? entry.category : 'action';
+    setActiveTab(tab);
+    setNavigationTarget({ id: entryId, type: 'entry', category: entry?.category ?? 'action', timestamp: entry?.timestamp ?? new Date() });
+  };
+
   // FAB: 감정 선택 → 메모 작성 단계로 전환
   const handlePickEmotion = (tag: string) => {
     setPendingEmotion(tag);
@@ -225,6 +238,7 @@ const AppContent: React.FC = () => {
     <Layout
       onSearch={() => setShowSearch(true)}
       onCalendar={() => setShowUnifiedCalendar(true)}
+      onGallery={() => setShowGallery(true)}
     >
       {user ? (
         <>
@@ -424,6 +438,14 @@ const AppContent: React.FC = () => {
               todos={todos}
               worryEntries={worryEntries}
               worries={activeWorries}
+            />
+          )}
+
+          {showGallery && (
+            <PhotoGallery
+              entries={entries}
+              onClose={() => setShowGallery(false)}
+              onJumpToEntry={handleGalleryJump}
             />
           )}
         </>

@@ -225,20 +225,22 @@ npm run lint          # eslint
 ### Phase 5: 갤러리 뷰
 **Goal**: 날짜별 사진 그리드(앱 안의 미니 구글포토) + 라이트박스 + 해당 엔트리로 점프.
 **Estimated Time**: 2~3h
-**Status**: ⏳ Pending
+**Status**: ✅ 완료 (셀렉터·단위테스트·갤러리·라이트박스 점프·헤더 진입점·빌드·린트)
 **Dependencies**: Phase 3
 
 #### Tasks
+**🔴 RED**
+- [x] **Task 5.0**: `collectPhotosByDate(entries)` 순수 셀렉터 단위테스트(`photoUtils.test.ts`, 5케이스: 날짜 내림차순·다중 사진·동일날 최신우선·빈입력·5AM컷오프)
 **🟢 GREEN**
-- [ ] **Task 5.1**: `entries`에서 모든 사진을 날짜 역순으로 수집하는 셀렉터
-- [ ] **Task 5.2**: `PhotoGallery.tsx`(신규) — 날짜 섹션 + 정사각 썸네일 그리드, 라이트박스 재사용
-- [ ] **Task 5.3**: 진입점(헤더 아이콘 또는 통합 캘린더 탭), 사진 탭 → 엔트리로 점프
+- [x] **Task 5.1**: `collectPhotosByDate` — 사진을 날짜(logical) 역순 섹션으로 수집, 각 사진에 출처 엔트리(entryId·timestamp) 포함
+- [x] **Task 5.2**: `PhotoGallery.tsx`(신규) — 날짜 섹션 + `aspect-square` 그리드(3/4열), `Lightbox` 재사용. Lightbox에 `entryIds`+`onJumpToEntry` 옵션 prop 추가(EntryItem 사용처 호환)
+- [x] **Task 5.3**: 진입점 = 헤더 `Images` 아이콘(`Layout.onGallery`). 라이트박스 "이 기록 보기" → `handleGalleryJump`로 탭 전환 + `navigationTarget` 세팅(기존 검색 점프와 동일 경로)
 **🔵 REFACTOR**
-- [ ] **Task 5.4**: 가상화/지연로딩(사진 많을 때), 빈 상태 UI
+- [x] **Task 5.4**: 빈 상태 UI(아이콘+안내). 지연로딩은 Phase 3에서 확인된 `loading="lazy"` 동적 렌더 버그 때문에 의도적으로 미적용. 가상화는 사진 대량 시 추후(압축 ~200–400KB라 수십 장은 무난) — 필요해지면 도입
 
 #### Quality Gate ✋
-- [ ] `tsc` / `build` / `lint` 통과
-- [ ] (수동) 갤러리 그리드·라이트박스·엔트리 점프 동작, 사진 많아도 스크롤 부드러움
+- [x] `tsc`·`build` 통과 / 변경 파일 `lint` clean / `vitest` 16/16
+- [ ] (수동) 갤러리 그리드·라이트박스·엔트리 점프 동작 — 사용자 기기 시각 확인 예정
 
 **Manual Test Checklist**
 - [ ] 날짜별 섹션·그리드 정상
@@ -277,9 +279,9 @@ npm run lint          # eslint
 - **Phase 2**: ✅ 100% (첨부·미리보기·압축·업로드·저장 브라우저 검증)
 - **Phase 3**: ✅ 100% — **MVP 완료** (썸네일·라이트박스·삭제 시 스토리지 정리까지 검증)
 - **Phase 4**: ✅ 100% (대표사진 헬퍼·타임라인 헤더·캘린더 셀 썸네일)
-- **Phase 5**: ⏳ 0%
+- **Phase 5**: ✅ 100% (사진 수집 셀렉터·갤러리·라이트박스 점프·헤더 진입점)
 
-**Overall**: 80%
+**Overall**: 100% (기기 시각 확인만 잔여)
 
 ### 검증 메모 (Phase 2/3)
 - 첨부→압축(2000→1600px)→Storage 업로드→엔트리 저장→썸네일→라이트박스 전부 브라우저 실측 OK.
@@ -324,6 +326,6 @@ npm run lint          # eslint
 
 ---
 
-**Plan Status**: 🔄 진행 중 (Phase 1 완료)
-**Next Action**: Phase 2(InputBar 사진 첨부) — 코드는 바로 진행 가능, 업로드 실테스트는 Storage 활성화 후
-**Blocked By**: 업로드 실연동 테스트는 Firebase Storage 활성화(사용자 1회 작업) 필요 — 코드 작성은 무관
+**Plan Status**: ✅ 전 Phase(1~5) 구현 완료 — 코드·단위테스트·빌드·린트 통과
+**Next Action**: 사용자 기기에서 갤러리/대표 썸네일 시각 확인 (배포 후)
+**Blocked By**: 없음

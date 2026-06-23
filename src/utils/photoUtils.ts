@@ -20,3 +20,39 @@ export function getRepresentativePhotoByDate(entries: Entry[]): Record<string, E
     }
     return map;
 }
+
+// 갤러리용: 사진 1장 + 출처 엔트리 정보(점프용)
+export interface GalleryPhoto {
+    photo: EntryPhoto;
+    entryId: string;
+    timestamp: Date;
+}
+
+// 날짜(logical date)별 사진 섹션
+export interface GalleryDateSection {
+    dateKey: string;          // 'yyyy-MM-dd'
+    photos: GalleryPhoto[];
+}
+
+/**
+ * 모든 엔트리의 사진을 날짜(logical date)별 섹션으로 모은다.
+ * 섹션은 날짜 내림차순, 같은 날 안에서는 "최신 엔트리"의 사진이 먼저 온다.
+ * 각 사진에 출처 엔트리(entryId·timestamp)를 담아 "해당 기록으로 점프"를 지원한다.
+ */
+export function collectPhotosByDate(entries: Entry[]): GalleryDateSection[] {
+    const byDate = new Map<string, GalleryPhoto[]>();
+    // 최신이 먼저 보이도록 timestamp 내림차순
+    const sorted = [...entries].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+    for (const entry of sorted) {
+        if (!entry.photos || entry.photos.length === 0) continue;
+        const key = format(getLogicalDate(entry.timestamp), 'yyyy-MM-dd');
+        let arr = byDate.get(key);
+        if (!arr) { arr = []; byDate.set(key, arr); }
+        for (const photo of entry.photos) {
+            arr.push({ photo, entryId: entry.id, timestamp: entry.timestamp });
+        }
+    }
+    return [...byDate.keys()]
+        .sort((a, b) => (a < b ? 1 : a > b ? -1 : 0)) // 날짜 내림차순
+        .map(dateKey => ({ dateKey, photos: byDate.get(dateKey)! }));
+}

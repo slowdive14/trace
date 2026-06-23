@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getRepresentativePhotoByDate } from '../photoUtils';
+import { getRepresentativePhotoByDate, collectPhotosByDate } from '../photoUtils';
 import type { Entry, EntryPhoto } from '../../types/types';
 
 const photo = (url: string): EntryPhoto => ({ url, path: `p/${url}` });
@@ -55,5 +55,44 @@ describe('getRepresentativePhotoByDate', () => {
         ]);
         expect(result['2026-06-01'].url).toBe('dawn.jpg');
         expect(result['2026-06-02']).toBeUndefined();
+    });
+});
+
+describe('collectPhotosByDate', () => {
+    it('날짜별 섹션으로 모으고 날짜 내림차순으로 정렬한다', () => {
+        const r = collectPhotosByDate([
+            entry('a', at(2026, 6, 1, 10), [photo('jun1.jpg')]),
+            entry('b', at(2026, 6, 3, 10), [photo('jun3.jpg')]),
+        ]);
+        expect(r.map(s => s.dateKey)).toEqual(['2026-06-03', '2026-06-01']);
+    });
+
+    it('한 엔트리의 여러 사진을 배열 순서대로 모두 포함하고 출처를 단다', () => {
+        const r = collectPhotosByDate([
+            entry('a', at(2026, 6, 1, 10), [photo('1.jpg'), photo('2.jpg')]),
+        ]);
+        expect(r[0].photos.map(p => p.photo.url)).toEqual(['1.jpg', '2.jpg']);
+        expect(r[0].photos.every(p => p.entryId === 'a')).toBe(true);
+    });
+
+    it('같은 날 여러 엔트리는 최신 엔트리 사진이 먼저 온다', () => {
+        const r = collectPhotosByDate([
+            entry('early', at(2026, 6, 1, 9), [photo('early.jpg')]),
+            entry('late', at(2026, 6, 1, 20), [photo('late.jpg')]),
+        ]);
+        expect(r).toHaveLength(1);
+        expect(r[0].photos.map(p => p.photo.url)).toEqual(['late.jpg', 'early.jpg']);
+    });
+
+    it('사진 없는 엔트리는 무시하고 빈 입력은 빈 배열', () => {
+        expect(collectPhotosByDate([])).toEqual([]);
+        expect(collectPhotosByDate([entry('a', at(2026, 6, 1, 10))])).toEqual([]);
+    });
+
+    it('5AM 컷오프로 날짜를 묶는다', () => {
+        const r = collectPhotosByDate([
+            entry('a', at(2026, 6, 2, 3), [photo('dawn.jpg')]),
+        ]);
+        expect(r[0].dateKey).toBe('2026-06-01');
     });
 });
