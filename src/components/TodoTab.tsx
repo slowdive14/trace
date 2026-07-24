@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useAuth } from './AuthContext';
 import { saveTodo, getTodo, getTodos, getAllTodos, saveTemplate, getTemplate, addEntry, deleteEntry } from '../services/firestore';
 import { extractTags } from '../utils/tagUtils';
-import { CheckSquare, Square, Bold, Highlighter, ArrowRight, ArrowLeft, Edit3, Check, ChevronLeft, ChevronRight, Clock, Trash2, Plus, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { CheckSquare, Square, Bold, Highlighter, ArrowRight, ArrowLeft, Edit3, Check, ChevronLeft, ChevronRight, Clock, Trash2, Plus, ArrowUpDown, ArrowUp, ArrowDown, GripVertical } from 'lucide-react';
 import { format, subDays, addDays, startOfDay, endOfDay, startOfWeek, endOfWeek, isSameDay } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import type { Todo, NavigationTarget } from '../types/types';
@@ -27,11 +27,13 @@ import {
     TouchSensor,
     useSensor,
     useSensors,
+    type DragEndEvent,
 } from '@dnd-kit/core';
 import {
     SortableContext,
     verticalListSortingStrategy,
     useSortable,
+    arrayMove,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
@@ -930,10 +932,10 @@ const TodoTab: React.FC<TodoTabProps> = ({
     const [activeId, setActiveId] = useState<string | null>(null);
     const todos = parseTodos(content);
 
-    const sortedTodos = useMemo(() => {
-        // 부모-자식 그룹 생성 (indent=0이 그룹의 시작)
-        const groups: typeof todos[] = [];
-        let currentGroup: typeof todos = [];
+    // 최상위(indent=0) 기준으로 부모+하위항목을 그룹으로 묶고 정렬 (완료 그룹은 하단, duration 정렬 옵션)
+    const sortedGroups = useMemo(() => {
+        const groups: TodoItem[][] = [];
+        let currentGroup: TodoItem[] = [];
 
         todos.forEach(item => {
             if (item.indent === 0) {
@@ -945,10 +947,8 @@ const TodoTab: React.FC<TodoTabProps> = ({
         });
         if (currentGroup.length > 0) groups.push(currentGroup);
 
-        // 그룹 완료 여부: 모든 멤버가 체크되어야 완료
-        const isGroupCompleted = (group: typeof todos) => group.every(item => item.checked);
+        const isGroupCompleted = (group: TodoItem[]) => group.every(item => item.checked);
 
-        // 정렬: 완료 그룹은 하단, 그 안에서 duration 정렬 적용
         groups.sort((a, b) => {
             const aCompleted = isGroupCompleted(a);
             const bCompleted = isGroupCompleted(b);
@@ -962,7 +962,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
             return 0;
         });
 
-        return groups.flat();
+        return groups;
     }, [todos, sortByDuration]);
 
     const toggleSort = () => {
@@ -1029,6 +1029,45 @@ const TodoTab: React.FC<TodoTabProps> = ({
         const newContent = lines.join('\n');
         setContent(newContent);
         handleSave(newContent);
+    };
+
+    // 편집 모드 리스트: 최상위 그룹 드래그로 순서 변경 → content 줄 재배치
+    const onReadingDragEnd = (event: DragEndEvent) => {
+        const { active, over } = event;
+        if (!over || active.id === over.id) return;
+
+        const orderedIds = sortedGroups.map(g => g[0].lineIndex.toString());
+        const fromIdx = orderedIds.indexOf(active.id.toString());
+        const toIdx = orderedIds.indexOf(over.id.toString());
+        if (fromIdx === -1 || toIdx === -1 || fromIdx === toIdx) return;
+        const newOrderIds = arrayMove(orderedIds, fromIdx, toIdx);
+
+        // 각 최상위 그룹이 차지하는 content 줄 블록(부모~다음 최상위 직전)을 재배치
+        const lines = content.split('\n');
+        const topLineIndices = todos.filter(t => t.indent === 0).map(t => t.lineIndex).sort((a, b) => a - b);
+        const firstTop = topLineIndices.length ? topLineIndices[0] : 0;
+        const preamble = lines.slice(0, firstTop);
+        const blockByStart = new Map<string, string[]>();
+        topLineIndices.forEach((start, i) => {
+            const end = i + 1 < topLineIndices.length ? topLineIndices[i + 1] : lines.length;
+            blockByStart.set(start.toString(), lines.slice(start, end));
+        });
+
+        const newLines = [...preamble];
+        newOrderIds.forEach(id => {
+            const block = blockByStart.get(id);
+            if (block) newLines.push(...block);
+        });
+
+        const newContent = newLines.join('\n');
+        setContent(newContent);
+        handleSave(newContent);
+
+        // 수동 정렬을 우선하도록 소요시간 자동정렬은 해제
+        if (sortByDuration !== 'none') {
+            setSortByDuration('none');
+            localStorage.setItem('todoSortByDuration', 'none');
+        }
     };
 
     const DroppableInbox = ({ items }: { items: TodoItem[] }) => {
@@ -1136,6 +1175,132 @@ const TodoTab: React.FC<TodoTabProps> = ({
                         </div>
                     )}
                 </div>
+            </div>
+        );
+    };
+
+    // 편집 모드: 드래그로 순서를 바꿀 수 있는 최상위 그룹(부모 + 하위항목)
+    const SortableTodoGroup = ({ group }: { group: TodoItem[] }) => {
+        const parentId = group[0].lineIndex.toString();
+        const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: parentId });
+        const style: React.CSSProperties = {
+            transform: CSS.Translate.toString(transform),
+            transition,
+            opacity: isDragging ? 0.4 : 1,
+        };
+
+        return (
+            <div ref={setNodeRef} style={style} className={isDragging ? 'relative z-10' : ''}>
+                {group.map((item, i) => (
+                    <React.Fragment key={item.lineIndex}>
+                        <div className="group flex items-start gap-1 py-1">
+                            {/* 드래그 핸들 (부모 항목에만) */}
+                            <div className="w-4 shrink-0 flex justify-center pt-1.5">
+                                {i === 0 && (
+                                    <button
+                                        {...attributes}
+                                        {...listeners}
+                                        className="touch-none cursor-grab active:cursor-grabbing text-text-tertiary hover:text-text-secondary opacity-40 group-hover:opacity-100 transition-opacity"
+                                        title="드래그하여 순서 변경"
+                                        aria-label="순서 변경"
+                                    >
+                                        <GripVertical size={14} />
+                                    </button>
+                                )}
+                            </div>
+                            <div className="flex-1 flex items-start gap-2" style={{ paddingLeft: `${item.indent * 24}px` }}>
+                                <input
+                                    type="checkbox"
+                                    checked={item.checked}
+                                    onChange={() => toggleCheckbox(item.lineIndex)}
+                                    className="mt-1 w-4 h-4 rounded border-text-secondary focus:ring-accent focus:ring-2"
+                                />
+                                {inlineEditIndex === item.lineIndex ? (
+                                    <input
+                                        ref={inlineEditRef}
+                                        type="text"
+                                        value={inlineEditText}
+                                        onChange={e => setInlineEditText(e.target.value)}
+                                        onKeyDown={e => {
+                                            if (e.key === 'Enter') commitInlineEdit();
+                                            if (e.key === 'Escape') setInlineEditIndex(null);
+                                        }}
+                                        onBlur={() => commitInlineEdit()}
+                                        className="flex-1 bg-bg-primary text-text-primary text-sm px-2 py-0.5 rounded border border-accent outline-none"
+                                    />
+                                ) : (
+                                    <span
+                                        className={`flex-1 leading-relaxed cursor-text ${item.checked ? 'line-through text-text-secondary' : 'text-text-primary'}`}
+                                        onClick={() => startInlineEdit(item.lineIndex)}
+                                    >
+                                        {renderText(item.text)}
+                                    </span>
+                                )}
+                                <div className="flex items-center gap-1 shrink-0 mt-0.5">
+                                    {deletingLineIndex === item.lineIndex ? (
+                                        <>
+                                            <button
+                                                onClick={() => setDeletingLineIndex(null)}
+                                                className="text-xs text-text-secondary hover:text-text-primary px-1.5 py-0.5 rounded"
+                                            >
+                                                취소
+                                            </button>
+                                            <button
+                                                onClick={() => deleteLineByIndex(item.lineIndex)}
+                                                className="text-xs text-red-400 hover:text-red-300 px-1.5 py-0.5 rounded"
+                                            >
+                                                삭제
+                                            </button>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <button
+                                                onClick={() => {
+                                                    setSubAddingIndex(item.lineIndex);
+                                                    setSubAddText('');
+                                                    setTimeout(() => subAddInputRef.current?.focus(), 50);
+                                                }}
+                                                className="opacity-0 group-hover:opacity-100 transition-opacity text-text-tertiary hover:text-accent p-0.5"
+                                                title="하위 항목 추가"
+                                            >
+                                                <Plus size={14} />
+                                            </button>
+                                            <button
+                                                onClick={() => setDeletingLineIndex(item.lineIndex)}
+                                                className="opacity-0 group-hover:opacity-100 transition-opacity text-text-tertiary hover:text-red-400 p-0.5"
+                                            >
+                                                <Trash2 size={14} />
+                                            </button>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                        {subAddingIndex === item.lineIndex && (
+                            <div
+                                className="flex items-center gap-2 py-1"
+                                style={{ paddingLeft: `${(item.indent + 1) * 24 + 20}px` }}
+                            >
+                                <Plus size={14} className="text-accent shrink-0" />
+                                <input
+                                    ref={subAddInputRef}
+                                    type="text"
+                                    value={subAddText}
+                                    onChange={e => setSubAddText(e.target.value)}
+                                    onKeyDown={e => {
+                                        if (e.key === 'Enter') handleSubAdd(item.lineIndex, item.indent);
+                                        if (e.key === 'Escape') setSubAddingIndex(null);
+                                    }}
+                                    onBlur={() => {
+                                        if (!subAddText.trim()) setSubAddingIndex(null);
+                                    }}
+                                    placeholder="하위 항목 추가..."
+                                    className="flex-1 bg-transparent text-text-primary text-sm outline-none placeholder:text-text-tertiary"
+                                />
+                            </div>
+                        )}
+                    </React.Fragment>
+                ))}
             </div>
         );
     };
@@ -1514,106 +1679,22 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                 {todos.length === 0 ? (
                                     <p className="text-text-secondary text-sm">할 일이 없습니다.</p>
                                 ) : (
-                                    <div className="space-y-2">
-                                        {sortedTodos.map((item, idx) => (
-                                        <React.Fragment key={idx}>
-                                            <div
-                                                className="group flex items-start gap-2 py-1"
-                                                style={{ paddingLeft: `${item.indent * 24}px` }}
-                                            >
-                                                <input
-                                                    type="checkbox"
-                                                    checked={item.checked}
-                                                    onChange={() => toggleCheckbox(item.lineIndex)}
-                                                    className="mt-1 w-4 h-4 rounded border-text-secondary focus:ring-accent focus:ring-2"
-                                                />
-                                                {inlineEditIndex === item.lineIndex ? (
-                                                    <input
-                                                        ref={inlineEditRef}
-                                                        type="text"
-                                                        value={inlineEditText}
-                                                        onChange={e => setInlineEditText(e.target.value)}
-                                                        onKeyDown={e => {
-                                                            if (e.key === 'Enter') commitInlineEdit();
-                                                            if (e.key === 'Escape') setInlineEditIndex(null);
-                                                        }}
-                                                        onBlur={() => commitInlineEdit()}
-                                                        className="flex-1 bg-bg-primary text-text-primary text-sm px-2 py-0.5 rounded border border-accent outline-none"
-                                                    />
-                                                ) : (
-                                                    <span
-                                                        className={`flex-1 leading-relaxed cursor-text ${item.checked ? 'line-through text-text-secondary' : 'text-text-primary'}`}
-                                                        onClick={() => startInlineEdit(item.lineIndex)}
-                                                    >
-                                                        {renderText(item.text)}
-                                                    </span>
-                                                )}
-                                                <div className="flex items-center gap-1 shrink-0 mt-0.5">
-                                                    {deletingLineIndex === item.lineIndex ? (
-                                                        <>
-                                                            <button
-                                                                onClick={() => setDeletingLineIndex(null)}
-                                                                className="text-xs text-text-secondary hover:text-text-primary px-1.5 py-0.5 rounded"
-                                                            >
-                                                                취소
-                                                            </button>
-                                                            <button
-                                                                onClick={() => deleteLineByIndex(item.lineIndex)}
-                                                                className="text-xs text-red-400 hover:text-red-300 px-1.5 py-0.5 rounded"
-                                                            >
-                                                                삭제
-                                                            </button>
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            <button
-                                                                onClick={() => {
-                                                                    setSubAddingIndex(item.lineIndex);
-                                                                    setSubAddText('');
-                                                                    setTimeout(() => subAddInputRef.current?.focus(), 50);
-                                                                }}
-                                                                className="opacity-0 group-hover:opacity-100 transition-opacity text-text-tertiary hover:text-accent p-0.5"
-                                                                title="하위 항목 추가"
-                                                            >
-                                                                <Plus size={14} />
-                                                            </button>
-                                                            <button
-                                                                onClick={() => setDeletingLineIndex(item.lineIndex)}
-                                                                className="opacity-0 group-hover:opacity-100 transition-opacity text-text-tertiary hover:text-red-400 p-0.5"
-                                                            >
-                                                                <Trash2 size={14} />
-                                                            </button>
-                                                        </>
-                                                    )}
-                                                </div>
+                                    <DndContext
+                                        sensors={sensors}
+                                        collisionDetection={closestCenter}
+                                        onDragEnd={onReadingDragEnd}
+                                    >
+                                        <SortableContext
+                                            items={sortedGroups.map(g => g[0].lineIndex.toString())}
+                                            strategy={verticalListSortingStrategy}
+                                        >
+                                            <div className="space-y-1">
+                                                {sortedGroups.map(group => (
+                                                    <SortableTodoGroup key={group[0].lineIndex} group={group} />
+                                                ))}
                                             </div>
-                                            {/* Sub-add inline input */}
-                                            {subAddingIndex === item.lineIndex && (
-                                                <div
-                                                    className="flex items-center gap-2 py-1"
-                                                    style={{ paddingLeft: `${(item.indent + 1) * 24}px` }}
-                                                >
-                                                    <Plus size={14} className="text-accent shrink-0" />
-                                                    <input
-                                                        ref={subAddInputRef}
-                                                        type="text"
-                                                        value={subAddText}
-                                                        onChange={e => setSubAddText(e.target.value)}
-                                                        onKeyDown={e => {
-                                                            if (e.key === 'Enter') handleSubAdd(item.lineIndex, item.indent);
-                                                            if (e.key === 'Escape') setSubAddingIndex(null);
-                                                        }}
-                                                        onBlur={() => {
-                                                            if (!subAddText.trim()) setSubAddingIndex(null);
-                                                        }}
-                                                        placeholder="하위 항목 추가..."
-                                                        className="flex-1 bg-transparent text-text-primary text-sm outline-none placeholder:text-text-tertiary"
-                                                    />
-                                                </div>
-                                            )}
-                                        </React.Fragment>
-                                    ))}
-                                    </div>
+                                        </SortableContext>
+                                    </DndContext>
                                 )}
 
                                 {/* Quick Add Input */}
