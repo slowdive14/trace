@@ -92,7 +92,7 @@ interface SortableTodoGroupProps {
     group: TodoItem[];
     toggleCheckbox: (lineIndex: number) => void;
     inlineEditIndex: number | null;
-    inlineEditRef: React.RefObject<HTMLInputElement>;
+    inlineEditRef: React.RefObject<HTMLInputElement | null>;
     inlineEditText: string;
     setInlineEditText: (v: string) => void;
     commitInlineEdit: () => void;
@@ -105,7 +105,7 @@ interface SortableTodoGroupProps {
     setSubAddingIndex: (v: number | null) => void;
     subAddText: string;
     setSubAddText: (v: string) => void;
-    subAddInputRef: React.RefObject<HTMLInputElement>;
+    subAddInputRef: React.RefObject<HTMLInputElement | null>;
     handleSubAdd: (parentLineIndex: number, parentIndent: number) => void;
 }
 
