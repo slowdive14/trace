@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useAuth } from './AuthContext';
 import { saveTodo, getTodo, getTodos, getAllTodos, saveTemplate, getTemplate, addEntry, deleteEntry } from '../services/firestore';
 import { extractTags } from '../utils/tagUtils';
-import { CheckSquare, Square, Bold, Highlighter, ArrowRight, ArrowLeft, Edit3, Check, X, ChevronLeft, ChevronRight, Clock, Trash2, Plus, ArrowUpDown, ArrowUp, ArrowDown, GripVertical } from 'lucide-react';
+import { CheckSquare, Square, Bold, Highlighter, ArrowRight, ArrowLeft, Edit3, Check, X, ChevronLeft, ChevronRight, ChevronDown, Clock, Trash2, Plus, ArrowUpDown, ArrowUp, ArrowDown, GripVertical } from 'lucide-react';
 import { format, subDays, addDays, startOfDay, endOfDay, startOfWeek, endOfWeek, isSameDay } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import type { Todo, NavigationTarget } from '../types/types';
@@ -10,6 +10,8 @@ import { getLogicalDate } from '../utils/dateUtils';
 import {
     type TodoItem,
     parseTodos,
+    getCollapseKey,
+    getVisibleRows,
     calculateTotalWeightedRate,
     calculateWeightedSummary,
     getProgressColor,
@@ -108,6 +110,8 @@ interface SortableTodoGroupProps {
     setSubAddText: (v: string) => void;
     subAddInputRef: React.RefObject<HTMLInputElement | null>;
     handleSubAdd: (parentLineIndex: number, parentIndent: number) => void;
+    collapsedKeys: Set<string>;
+    onToggleCollapse: (key: string) => void;
 }
 
 const SortableTodoGroup: React.FC<SortableTodoGroupProps> = ({
@@ -129,6 +133,8 @@ const SortableTodoGroup: React.FC<SortableTodoGroupProps> = ({
     setSubAddText,
     subAddInputRef,
     handleSubAdd,
+    collapsedKeys,
+    onToggleCollapse,
 }) => {
     const parentId = group[0].lineIndex.toString();
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: parentId });
@@ -138,14 +144,16 @@ const SortableTodoGroup: React.FC<SortableTodoGroupProps> = ({
         opacity: isDragging ? 0.4 : 1,
     };
 
+    const rows = useMemo(() => getVisibleRows(group, collapsedKeys), [group, collapsedKeys]);
+
     return (
         <div ref={setNodeRef} style={style} className={isDragging ? 'relative z-10' : ''}>
-            {group.map((item, i) => (
+            {rows.map(({ item, hasChildren, collapsed, hiddenCount }) => (
                 <React.Fragment key={item.lineIndex}>
                     <div className="group flex items-start gap-1 py-1">
-                        {/* 드래그 핸들 (부모 항목에만) */}
+                        {/* 드래그 핸들 (최상위 항목에만) */}
                         <div className="w-4 shrink-0 flex justify-center pt-1.5">
-                            {i === 0 && (
+                            {item.lineIndex === group[0].lineIndex && (
                                 <button
                                     {...attributes}
                                     {...listeners}
@@ -158,6 +166,20 @@ const SortableTodoGroup: React.FC<SortableTodoGroupProps> = ({
                             )}
                         </div>
                         <div className="flex-1 flex items-start gap-2" style={{ paddingLeft: `${item.indent * 24}px` }}>
+                            {/* 접기/펼치기 (하위 항목이 있을 때만) */}
+                            <div className="w-4 shrink-0 flex justify-center pt-1">
+                                {hasChildren && (
+                                    <button
+                                        onClick={() => onToggleCollapse(getCollapseKey(item))}
+                                        className="p-1 -m-1 text-text-tertiary hover:text-text-secondary transition-colors"
+                                        title={collapsed ? '하위 항목 펼치기' : '하위 항목 접기'}
+                                        aria-label={collapsed ? '하위 항목 펼치기' : '하위 항목 접기'}
+                                        aria-expanded={!collapsed}
+                                    >
+                                        {collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+                                    </button>
+                                )}
+                            </div>
                             <input
                                 type="checkbox"
                                 checked={item.checked}
@@ -184,6 +206,11 @@ const SortableTodoGroup: React.FC<SortableTodoGroupProps> = ({
                                     onClick={() => startInlineEdit(item.lineIndex)}
                                 >
                                     {renderText(item.text)}
+                                    {collapsed && (
+                                        <span className="ml-1.5 text-[10px] text-text-tertiary tabular-nums align-middle">
+                                            +{hiddenCount}
+                                        </span>
+                                    )}
                                 </span>
                             )}
                             <div className="flex items-center gap-0.5 shrink-0 mt-0.5">
@@ -206,6 +233,8 @@ const SortableTodoGroup: React.FC<SortableTodoGroupProps> = ({
                                     <>
                                         <button
                                             onClick={() => {
+                                                // 접혀 있으면 펼쳐서 방금 추가한 항목이 보이게 한다
+                                                if (collapsed) onToggleCollapse(getCollapseKey(item));
                                                 setSubAddingIndex(item.lineIndex);
                                                 setSubAddText('');
                                                 setTimeout(() => subAddInputRef.current?.focus(), 50);
@@ -232,7 +261,8 @@ const SortableTodoGroup: React.FC<SortableTodoGroupProps> = ({
                     {subAddingIndex === item.lineIndex && (
                         <div
                             className="flex items-center gap-1 py-1"
-                            style={{ paddingLeft: `${(item.indent + 1) * 24 + 20}px` }}
+                            /* 44px = 드래그 핸들 열(20) + 접기 화살표 열(24) → 체크박스와 정렬 */
+                            style={{ paddingLeft: `${(item.indent + 1) * 24 + 44}px` }}
                         >
                             <Plus size={14} className="text-accent shrink-0" />
                             <input
@@ -309,6 +339,15 @@ const TodoTab: React.FC<TodoTabProps> = ({
     const [inlineEditText, setInlineEditText] = useState('');
     const [historyEditKey, setHistoryEditKey] = useState<{ dateStr: string; lineIndex: number } | null>(null);
     const [historyEditText, setHistoryEditText] = useState('');
+    // 접힌 하위 항목. 루틴이 매일 반복되므로 날짜별이 아니라 컬렉션 단위로 기억한다.
+    const [collapsedKeys, setCollapsedKeys] = useState<Set<string>>(() => {
+        try {
+            const raw = localStorage.getItem(`todoCollapsed:${collectionName}`);
+            return new Set<string>(raw ? JSON.parse(raw) : []);
+        } catch {
+            return new Set<string>();
+        }
+    });
     const [sortByDuration, setSortByDuration] = useState<'none' | 'asc' | 'desc'>(() => {
         const saved = localStorage.getItem('todoSortByDuration');
         return (saved === 'asc' || saved === 'desc') ? saved : 'none';
@@ -1194,6 +1233,20 @@ const TodoTab: React.FC<TodoTabProps> = ({
         return groups;
     }, [todos, sortByDuration]);
 
+    const toggleCollapse = useCallback((key: string) => {
+        setCollapsedKeys(prev => {
+            const next = new Set(prev);
+            if (next.has(key)) next.delete(key);
+            else next.add(key);
+            try {
+                localStorage.setItem(`todoCollapsed:${collectionName}`, JSON.stringify([...next]));
+            } catch {
+                // 저장 실패해도 이번 세션 동안의 접힘은 동작한다
+            }
+            return next;
+        });
+    }, [collectionName]);
+
     const toggleSort = () => {
         setSortByDuration(prev => {
             const next = prev === 'none' ? 'desc' : prev === 'desc' ? 'asc' : 'none';
@@ -1842,6 +1895,8 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                                         setSubAddText={setSubAddText}
                                                         subAddInputRef={subAddInputRef}
                                                         handleSubAdd={handleSubAdd}
+                                                        collapsedKeys={collapsedKeys}
+                                                        onToggleCollapse={toggleCollapse}
                                                     />
                                                 ))}
                                             </div>

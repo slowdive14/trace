@@ -272,6 +272,53 @@ export const formatDuration = (minutes: number): string => {
     return `${m}m`;
 };
 
+/**
+ * 하위 항목 접힘 상태를 식별하는 키.
+ * lineIndex는 순서 변경·추가·삭제로 쉽게 바뀌어 엉뚱한 항목이 접히므로 텍스트를 쓴다.
+ * 소요시간 표기는 자주 바뀌므로 키에서 제외한다.
+ */
+export const getCollapseKey = (item: TodoItem): string =>
+    item.text.replace(/\s*\(\d+h?\s*\d*m?\)\s*$/, '').trim();
+
+export interface TodoRow {
+    item: TodoItem;
+    hasChildren: boolean;
+    collapsed: boolean;
+    /** 접혀서 감춰진 하위 항목 수 */
+    hiddenCount: number;
+}
+
+/**
+ * 접힌 부모의 하위 항목을 제외한 렌더 대상 목록.
+ * 들여쓰기가 더 깊은 연속 구간을 그 항목의 하위 항목으로 본다.
+ */
+export const getVisibleRows = (group: TodoItem[], collapsedKeys: Set<string>): TodoRow[] => {
+    const out: TodoRow[] = [];
+    let hideDeeperThan: number | null = null;
+
+    for (let i = 0; i < group.length; i++) {
+        const item = group[i];
+
+        if (hideDeeperThan !== null) {
+            if (item.indent > hideDeeperThan) continue;  // 접힌 구간 안쪽
+            hideDeeperThan = null;                        // 구간을 벗어남
+        }
+
+        const next = group[i + 1];
+        const hasChildren = !!next && next.indent > item.indent;
+        const collapsed = hasChildren && collapsedKeys.has(getCollapseKey(item));
+
+        let hiddenCount = 0;
+        if (collapsed) {
+            for (let j = i + 1; j < group.length && group[j].indent > item.indent; j++) hiddenCount++;
+            hideDeeperThan = item.indent;
+        }
+
+        out.push({ item, hasChildren, collapsed, hiddenCount });
+    }
+    return out;
+};
+
 // Parse todo content string into TodoItem array
 export const parseTodos = (content: string): TodoItem[] => {
     const lines = content.split('\n');
