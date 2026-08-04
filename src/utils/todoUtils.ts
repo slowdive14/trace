@@ -144,24 +144,123 @@ export const getProgressColor = (percentage: number): string => {
     return 'bg-gradient-to-r from-orange-500 to-orange-400';
 };
 
-// Real level based on total completed tasks (max Lv.10 = 1700)
+// Real level based on total completed tasks
+// Lv.10(1700) 이후로는 ENDLESS_STEP개마다 계속 레벨이 오른다.
+// (예전에는 Lv.10이 종점이라 nextLevelAt이 9999라는 자리표시자로 굳어졌고,
+//  그 값이 그대로 화면에 "1884/9999"처럼 노출돼 목표처럼 보였다.)
 export interface RealLevelInfo {
     level: number;
     title: string;
     nextLevelAt: number;
+    /** 이번 레벨 구간의 시작점 (진행률 계산용) */
+    levelStartAt: number;
+    isEndless: boolean;
 }
 
+const LEVEL_TIERS: { at: number; title: string }[] = [
+    { at: 0, title: '아기 사자 🐱' },
+    { at: 25, title: '꼬마 사자 🦁' },
+    { at: 70, title: '씩씩한 사자 💪' },
+    { at: 130, title: '용감한 사자 ⚡' },
+    { at: 210, title: '사자왕 👑' },
+    { at: 330, title: '늠름한 사자 🌟' },
+    { at: 500, title: '강인한 사자 🔥' },
+    { at: 750, title: '현명한 사자 📚' },
+    { at: 1100, title: '위대한 사자 ✨' },
+    { at: 1700, title: '전설의 사자왕 🏆' },
+];
+
+const ENDLESS_START = 1700;
+const ENDLESS_STEP = 300;
+
 export const getRealLevel = (totalCompleted: number): RealLevelInfo => {
-    if (totalCompleted >= 1700) return { level: 10, title: '전설의 사자왕 🏆', nextLevelAt: 9999 };
-    if (totalCompleted >= 1100) return { level: 9, title: '위대한 사자 ✨', nextLevelAt: 1700 };
-    if (totalCompleted >= 750) return { level: 8, title: '현명한 사자 📚', nextLevelAt: 1100 };
-    if (totalCompleted >= 500) return { level: 7, title: '강인한 사자 🔥', nextLevelAt: 750 };
-    if (totalCompleted >= 330) return { level: 6, title: '늠름한 사자 🌟', nextLevelAt: 500 };
-    if (totalCompleted >= 210) return { level: 5, title: '사자왕 👑', nextLevelAt: 330 };
-    if (totalCompleted >= 130) return { level: 4, title: '용감한 사자 ⚡', nextLevelAt: 210 };
-    if (totalCompleted >= 70) return { level: 3, title: '씩씩한 사자 💪', nextLevelAt: 130 };
-    if (totalCompleted >= 25) return { level: 2, title: '꼬마 사자 🦁', nextLevelAt: 70 };
-    return { level: 1, title: '아기 사자 🐱', nextLevelAt: 25 };
+    if (totalCompleted >= ENDLESS_START) {
+        const steps = Math.floor((totalCompleted - ENDLESS_START) / ENDLESS_STEP);
+        return {
+            level: LEVEL_TIERS.length + steps,
+            title: '전설의 사자왕 🏆',
+            levelStartAt: ENDLESS_START + steps * ENDLESS_STEP,
+            nextLevelAt: ENDLESS_START + (steps + 1) * ENDLESS_STEP,
+            isEndless: true,
+        };
+    }
+
+    for (let i = LEVEL_TIERS.length - 1; i >= 0; i--) {
+        if (totalCompleted >= LEVEL_TIERS[i].at) {
+            return {
+                level: i + 1,
+                title: LEVEL_TIERS[i].title,
+                levelStartAt: LEVEL_TIERS[i].at,
+                nextLevelAt: LEVEL_TIERS[i + 1].at,
+                isEndless: false,
+            };
+        }
+    }
+    return { level: 1, title: LEVEL_TIERS[0].title, levelStartAt: 0, nextLevelAt: LEVEL_TIERS[1].at, isEndless: false };
+};
+
+// ===== 연속 달성(스트릭) =====
+// 누적 개수는 절대 줄지 않고 오늘 한 행동이 눈에 띄지 않아 동기가 되기 어렵다.
+// 스트릭은 끊길 수 있고 오늘 행동이 곧바로 결정하므로 동기 지표로 쓴다.
+
+/** 하루를 '달성'으로 인정하는 가중 완료율 기준(%) */
+export const STREAK_THRESHOLD = 70;
+
+export interface StreakInfo {
+    /** 현재 연속 일수 (오늘이 아직 미달이면 어제까지의 연속을 유지해서 보여준다) */
+    current: number;
+    longest: number;
+    todayMet: boolean;
+}
+
+const shiftDay = (dateStr: string, delta: number): string => {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const dt = new Date(y, m - 1, d + delta);
+    const mm = String(dt.getMonth() + 1).padStart(2, '0');
+    const dd = String(dt.getDate()).padStart(2, '0');
+    return `${dt.getFullYear()}-${mm}-${dd}`;
+};
+
+/**
+ * @param ratesByDate 'YYYY-MM-DD' → 그날의 가중 완료율(%)
+ * @param todayStr    논리적 오늘 (5시 기준)
+ */
+export const calculateStreak = (
+    ratesByDate: Record<string, number>,
+    todayStr: string,
+    threshold: number = STREAK_THRESHOLD
+): StreakInfo => {
+    const met = (key: string) => (ratesByDate[key] ?? -1) >= threshold;
+    const todayMet = met(todayStr);
+
+    // 오늘은 아직 진행 중일 수 있으므로 어제부터 거슬러 세고, 오늘 달성 시에만 +1.
+    // (이렇게 해야 매일 아침 스트릭이 0으로 보이지 않는다)
+    let current = 0;
+    let cursor = shiftDay(todayStr, -1);
+    while (met(cursor)) {
+        current++;
+        cursor = shiftDay(cursor, -1);
+    }
+    if (todayMet) current++;
+
+    // 최장 연속: 달성한 날짜들을 정렬해 연속 구간의 최댓값을 구한다
+    const achieved = Object.keys(ratesByDate).filter(met).sort();
+    let longest = 0;
+    let run = 0;
+    let prev: string | null = null;
+    for (const key of achieved) {
+        run = prev !== null && shiftDay(prev, 1) === key ? run + 1 : 1;
+        if (run > longest) longest = run;
+        prev = key;
+    }
+
+    return { current, longest: Math.max(longest, current), todayMet };
+};
+
+/** 지난주 평균을 기준으로 이번 주 목표치를 정한다 (조금만 더 높게) */
+export const getWeeklyTarget = (lastWeekAvg: number): number => {
+    if (lastWeekAvg <= 0) return 60;
+    return Math.min(95, Math.max(50, Math.round(lastWeekAvg) + 2));
 };
 
 // Format minutes as human-readable string (e.g., 90 → "1h30m")

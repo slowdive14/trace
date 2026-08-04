@@ -12,11 +12,13 @@ import {
     parseTodos,
     calculateTotalWeightedRate,
     calculateWeightedSummary,
-    getLevelInfo,
     getEncouragementMessage,
     getProgressColor,
     getRealLevel,
-    formatDuration
+    formatDuration,
+    calculateStreak,
+    getWeeklyTarget,
+    STREAK_THRESHOLD
 } from '../utils/todoUtils';
 import {
     DndContext,
@@ -559,6 +561,30 @@ const TodoTab: React.FC<TodoTabProps> = ({
         if (!hasTodayTodoDoc) return pastCompleted;
         return pastCompleted + parseTodos(content).filter(item => item.checked).length;
     }, [pastCompleted, hasTodayTodoDoc, content]);
+
+    // 연속 달성(스트릭)용 일자별 완료율.
+    // totalCompleted와 같은 이유로 과거분/오늘분을 분리해 두어야
+    // 입력 중에 전 기간 문서를 다시 파싱하지 않는다.
+    const pastRatesByDate = useMemo(() => {
+        const todayStr = format(getLogicalDate(), 'yyyy-MM-dd');
+        const map: Record<string, number> = {};
+        allTodos.forEach(todo => {
+            const key = format(new Date(todo.date), 'yyyy-MM-dd');
+            if (key === todayStr) return;
+            const items = parseTodos(todo.content);
+            if (items.length > 0) map[key] = calculateWeightedSummary(items).percentage;
+        });
+        return map;
+    }, [allTodos, currentLogicalDay]);
+
+    const streak = useMemo(() => {
+        const todayStr = format(getLogicalDate(), 'yyyy-MM-dd');
+        const todayItems = parseTodos(content);
+        const rates = todayItems.length > 0
+            ? { ...pastRatesByDate, [todayStr]: calculateWeightedSummary(todayItems).percentage }
+            : pastRatesByDate;
+        return calculateStreak(rates, todayStr);
+    }, [pastRatesByDate, content, currentLogicalDay]);
 
     const handleSave = useCallback((newContent: string) => {
         if (!user) return;
@@ -1679,7 +1705,6 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                     const total = todos.length;
                                     const summary = calculateWeightedSummary(todos);
                                     const percentage = summary.percentage;
-                                    const levelInfo = getLevelInfo(percentage);
                                     const message = getEncouragementMessage(percentage);
                                     const progressColor = getProgressColor(percentage);
 
@@ -1693,46 +1718,100 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                         timeLabel = `${formatDuration(Math.round(summary.completedWeight))} / ${formatDuration(Math.round(summary.totalWeight))}`;
                                     }
 
+                                    const thisWeekAvg = weeklyStats.thisWeek.avgPercentage;
+                                    const lastWeekAvg = weeklyStats.lastWeek.avgPercentage;
+                                    const weeklyTarget = getWeeklyTarget(lastWeekAvg);
+                                    const weekDiff = thisWeekAvg - lastWeekAvg;
+                                    const weekAchieved = thisWeekAvg >= weeklyTarget;
+
+                                    // 오늘 스트릭 기준까지 남은 양 (조금만 더 하면 유지된다는 신호)
+                                    const streakSafe = percentage >= STREAK_THRESHOLD;
+
                                     return (
                                         <div className={`mb-6 p-4 bg-bg-secondary rounded-xl border border-bg-tertiary ${percentage >= 100 ? 'animate-pulse' : ''}`}>
-                                            {/* Real Level (Cumulative) */}
+                                            {/* 연속 달성 (헤드라인) */}
                                             <div className="flex items-center justify-between mb-3 pb-3 border-b border-bg-tertiary">
                                                 <div className="flex items-center gap-2">
+                                                    <span className="text-xl leading-none">{streak.current > 0 ? '🔥' : '🌱'}</span>
                                                     <span className="text-base font-bold text-text-primary">
-                                                        Lv.{realLevel.level} {realLevel.title}
+                                                        {streak.current > 0 ? `${streak.current}일 연속` : '오늘부터 시작'}
                                                     </span>
+                                                    {streakSafe && (
+                                                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-500/15 text-green-400 font-bold">
+                                                            오늘 달성
+                                                        </span>
+                                                    )}
                                                 </div>
-                                                <span className="text-xs text-text-tertiary">
-                                                    {totalCompleted}/{realLevel.nextLevelAt} 완료
-                                                </span>
+                                                {streak.longest > 0 && (
+                                                    <span className="text-xs text-text-tertiary">최장 {streak.longest}일</span>
+                                                )}
                                             </div>
 
-                                            {/* Today's Progress */}
-                                            <div className="flex items-center justify-between mb-2">
-                                                <span className="text-sm text-text-secondary">
-                                                    오늘의 {levelInfo.title}
-                                                </span>
+                                            {/* 오늘 */}
+                                            <div className="flex items-center justify-between mb-1.5">
+                                                <span className="text-sm text-text-secondary">오늘</span>
                                                 <span className="text-sm text-text-secondary">
                                                     {percentage}% ({timeLabel})
                                                 </span>
                                             </div>
-
-                                            {/* Progress Bar */}
-                                            <div className="h-3 bg-bg-tertiary rounded-full overflow-hidden mb-3">
+                                            <div className="relative h-3 bg-bg-tertiary rounded-full overflow-hidden mb-1">
                                                 <div
                                                     className={`h-full ${progressColor} transition-all duration-500 ease-out rounded-full`}
                                                     style={{ width: `${percentage}%` }}
                                                 />
+                                                {/* 스트릭 유지선 */}
+                                                <div
+                                                    className="absolute top-0 bottom-0 w-px bg-white/50"
+                                                    style={{ left: `${STREAK_THRESHOLD}%` }}
+                                                    title={`${STREAK_THRESHOLD}% 넘기면 연속 유지`}
+                                                />
+                                            </div>
+                                            <div className="text-[10px] text-text-tertiary mb-3 h-3">
+                                                {!streakSafe && (
+                                                    <span>{STREAK_THRESHOLD}%까지 {STREAK_THRESHOLD - percentage}%p — 넘기면 연속 유지 🔥</span>
+                                                )}
                                             </div>
 
-                                            {/* Weekly Stats */}
-                                            <div className="flex items-center justify-between text-xs text-text-tertiary mb-2">
-                                                <span>이번 주: {weeklyStats.thisWeek.avgPercentage}% ({weeklyStats.thisWeek.totalCompleted}개)</span>
-                                                <span>지난 주: {weeklyStats.lastWeek.avgPercentage}%</span>
+                                            {/* 이번 주 */}
+                                            <div className="flex items-center justify-between mb-1.5">
+                                                <span className="text-sm text-text-secondary">이번 주</span>
+                                                <span className="text-sm">
+                                                    <span className={weekAchieved ? 'text-green-400 font-bold' : 'text-text-secondary'}>
+                                                        {thisWeekAvg}%
+                                                    </span>
+                                                    <span className="text-text-tertiary text-xs"> / 목표 {weeklyTarget}%</span>
+                                                </span>
+                                            </div>
+                                            <div className="relative h-2 bg-bg-tertiary rounded-full overflow-hidden mb-1">
+                                                <div
+                                                    className={`h-full transition-all duration-500 ease-out rounded-full ${weekAchieved ? 'bg-green-500' : 'bg-accent'}`}
+                                                    style={{ width: `${Math.min(100, thisWeekAvg)}%` }}
+                                                />
+                                                <div
+                                                    className="absolute top-0 bottom-0 w-px bg-white/50"
+                                                    style={{ left: `${Math.min(100, weeklyTarget)}%` }}
+                                                    title={`이번 주 목표 ${weeklyTarget}%`}
+                                                />
+                                            </div>
+                                            <div className="flex items-center justify-between text-[10px] text-text-tertiary mb-2">
+                                                <span>지난 주 {lastWeekAvg}%</span>
+                                                {lastWeekAvg > 0 && (
+                                                    <span className={weekDiff >= 0 ? 'text-green-400' : 'text-orange-400'}>
+                                                        {weekDiff >= 0 ? `▲ ${weekDiff}%p` : `▼ ${Math.abs(weekDiff)}%p`}
+                                                    </span>
+                                                )}
+                                            </div>
+
+                                            {/* 누적·레벨 (각주) */}
+                                            <div className="flex items-center justify-between text-[11px] text-text-tertiary pt-2 border-t border-bg-tertiary">
+                                                <span>
+                                                    누적 {totalCompleted.toLocaleString()}개 · Lv.{realLevel.level} {realLevel.title}
+                                                </span>
+                                                <span>다음 {realLevel.nextLevelAt.toLocaleString()}</span>
                                             </div>
 
                                             {/* Encouragement Message */}
-                                            <p className="text-xs text-text-secondary text-center pt-2 border-t border-bg-tertiary">
+                                            <p className="text-xs text-text-secondary text-center pt-2">
                                                 {message}
                                             </p>
                                         </div>
