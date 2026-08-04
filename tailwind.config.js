@@ -15,6 +15,9 @@ export default {
         text: {
           primary: '#f5f5f5',
           secondary: '#94a3b8',
+          // 앱 전반에서 text-text-tertiary를 쓰고 있었지만 토큰이 없어
+          // 전부 상속색(사실상 primary)으로 렌더돼 위계가 무너져 있었다.
+          tertiary: '#64748b',
         },
         accent: {
           DEFAULT: '#8b5cf6',
