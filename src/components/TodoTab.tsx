@@ -423,17 +423,32 @@ const TodoTab: React.FC<TodoTabProps> = ({
     }, [user, viewMode, collectionName, currentLogicalDay]);
 
     // Load all todos for level calculation (all time)
+    // 전체 기간 문서를 다 받아오는 무거운 쿼리라, 오늘 할 일·30일 히스토리 등
+    // 화면에 바로 보이는 데이터의 로딩과 경쟁하지 않도록 idle 시점으로 미룬다.
+    // (누적 레벨 표시에만 쓰이므로 조금 늦게 채워져도 무방)
     useEffect(() => {
+        if (!user) return;
+        let cancelled = false;
+
         const loadAllTodos = async () => {
-            if (!user) return;
             try {
                 const todos = await getAllTodos(user.uid, collectionName);
-                setAllTodos(todos);
+                if (!cancelled) setAllTodos(todos);
             } catch (error) {
                 console.error("Failed to load all todos:", error);
             }
         };
-        loadAllTodos();
+
+        const w = window as typeof window & {
+            requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+            cancelIdleCallback?: (id: number) => void;
+        };
+        if (w.requestIdleCallback) {
+            const id = w.requestIdleCallback(() => loadAllTodos(), { timeout: 3000 });
+            return () => { cancelled = true; w.cancelIdleCallback?.(id); };
+        }
+        const t = setTimeout(loadAllTodos, 800);
+        return () => { cancelled = true; clearTimeout(t); };
     }, [user, collectionName, currentLogicalDay]);
 
     // Navigation: scroll to a specific todo date when navigationTarget is set
@@ -520,21 +535,30 @@ const TodoTab: React.FC<TodoTabProps> = ({
         };
     }, [historyTodos, content, currentLogicalDay]);
 
-    // Calculate total completed (all time) for real level - memoized for performance
-    const totalCompleted = useMemo(() => {
-        const logicalToday = getLogicalDate();
-        const todayStr = format(logicalToday, 'yyyy-MM-dd');
-
+    // Calculate total completed (all time) for real level
+    // 과거분과 오늘분을 분리해 메모이즈한다. 예전에는 content(입력 중인 오늘 할 일)가
+    // 의존성에 있어 글자를 칠 때마다 전체 기간 문서를 다시 파싱했고, 기록이 쌓일수록
+    // 입력이 느려졌다. 과거분은 allTodos가 바뀔 때만 계산한다.
+    const pastCompleted = useMemo(() => {
+        const todayStr = format(getLogicalDate(), 'yyyy-MM-dd');
         let total = 0;
         allTodos.forEach(todo => {
-            const todoDateStr = format(new Date(todo.date), 'yyyy-MM-dd');
-            // Use current content for today (real-time update)
-            const todoContent = todoDateStr === todayStr ? content : todo.content;
-            const items = parseTodos(todoContent);
-            total += items.filter(item => item.checked).length;
+            if (format(new Date(todo.date), 'yyyy-MM-dd') === todayStr) return;
+            total += parseTodos(todo.content).filter(item => item.checked).length;
         });
         return total;
-    }, [allTodos, content, currentLogicalDay]);
+    }, [allTodos, currentLogicalDay]);
+
+    // 오늘 문서가 이미 존재할 때만 오늘분을 더한다 (기존 동작 유지)
+    const hasTodayTodoDoc = useMemo(() => {
+        const todayStr = format(getLogicalDate(), 'yyyy-MM-dd');
+        return allTodos.some(todo => format(new Date(todo.date), 'yyyy-MM-dd') === todayStr);
+    }, [allTodos, currentLogicalDay]);
+
+    const totalCompleted = useMemo(() => {
+        if (!hasTodayTodoDoc) return pastCompleted;
+        return pastCompleted + parseTodos(content).filter(item => item.checked).length;
+    }, [pastCompleted, hasTodayTodoDoc, content]);
 
     const handleSave = useCallback((newContent: string) => {
         if (!user) return;
