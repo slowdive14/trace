@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { format, isToday, isYesterday } from 'date-fns';
 import { ko } from 'date-fns/locale';
-import type { Expense, NavigationTarget } from '../types/types';
+import type { Expense, ExpenseCategory, NavigationTarget } from '../types/types';
 import { deleteExpense } from '../services/firestore';
 import { useAuth } from './AuthContext';
 import { onSnapshot, collection, query, orderBy } from 'firebase/firestore';
@@ -22,6 +22,8 @@ const ExpenseTimeline: React.FC<ExpenseTimelineProps> = ({ onDateSelect, navigat
     const { user } = useAuth();
     const [deletingId, setDeletingId] = useState<string | null>(null);
     const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+    // 통계 카드에서 카테고리를 누르면 그 카테고리 내역만 보여준다
+    const [selectedCategory, setSelectedCategory] = useState<ExpenseCategory | null>(null);
 
     useEffect(() => {
         if (!user) return;
@@ -78,7 +80,11 @@ const ExpenseTimeline: React.FC<ExpenseTimelineProps> = ({ onDateSelect, navigat
         }
     };
 
-    const groupedExpenses = expenses.reduce((groups: Record<string, Expense[]>, expense: Expense) => {
+    const visibleExpenses = selectedCategory
+        ? expenses.filter(e => e.category === selectedCategory)
+        : expenses;
+
+    const groupedExpenses = visibleExpenses.reduce((groups: Record<string, Expense[]>, expense: Expense) => {
         const dateKey = format(expense.timestamp, 'yyyy-MM-dd');
         if (!groups[dateKey]) {
             groups[dateKey] = [];
@@ -108,7 +114,27 @@ const ExpenseTimeline: React.FC<ExpenseTimelineProps> = ({ onDateSelect, navigat
                 selectedDate={selectedDate}
                 onSelectDate={handleDateSelect}
             />
-            <ExpenseInsights expenses={expenses} />
+            <ExpenseInsights
+                expenses={expenses}
+                selectedCategory={selectedCategory}
+                onSelectCategory={setSelectedCategory}
+            />
+
+            {selectedCategory && (
+                <div className="flex items-center justify-between mb-4 px-1">
+                    <span className="text-xs text-text-secondary">
+                        <span className="text-text-tertiary">필터</span>{' '}
+                        {EXPENSE_CATEGORY_EMOJI[selectedCategory]} {selectedCategory}
+                        <span className="text-text-tertiary"> · {visibleExpenses.length}건</span>
+                    </span>
+                    <button
+                        onClick={() => setSelectedCategory(null)}
+                        className="text-xs text-text-tertiary hover:text-text-primary transition-colors"
+                    >
+                        ✕ 해제
+                    </button>
+                </div>
+            )}
 
             {Object.entries(groupedExpenses).map(([date, dayExpenses]) => (
                 <div key={date} className="mb-8">
@@ -170,6 +196,11 @@ const ExpenseTimeline: React.FC<ExpenseTimelineProps> = ({ onDateSelect, navigat
                 <div className="text-center text-text-secondary mt-20">
                     <p>아직 지출 내역이 없습니다.</p>
                     <p className="text-sm mt-2">"커피 1500" 처럼 입력해보세요.</p>
+                </div>
+            )}
+            {expenses.length > 0 && visibleExpenses.length === 0 && (
+                <div className="text-center text-text-tertiary mt-10 text-sm">
+                    이 카테고리의 지출 내역이 없습니다.
                 </div>
             )}
         </div>

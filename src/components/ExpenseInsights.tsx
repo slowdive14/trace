@@ -1,210 +1,223 @@
 import React, { useState, useMemo } from 'react';
-import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval, addWeeks, subWeeks, addMonths, subMonths, format, getWeekOfMonth } from 'date-fns';
+import { addWeeks, subWeeks, addMonths, subMonths, format, getWeekOfMonth } from 'date-fns';
 import { ko } from 'date-fns/locale';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
-import type { Expense } from '../types/types';
-import { EXPENSE_CATEGORIES, EXPENSE_CATEGORY_EMOJI } from '../types/types';
+import { ChevronLeft, ChevronRight, X } from 'lucide-react';
+import type { Expense, ExpenseCategory } from '../types/types';
+import { EXPENSE_CATEGORY_EMOJI } from '../types/types';
+import {
+    type Period,
+    getPeriodRange,
+    summarizePeriod,
+    detectRecurringKeys,
+    getRecentMonthTotals,
+    getTopExpenses,
+    canGoNext,
+} from '../utils/expenseUtils';
 
 interface ExpenseInsightsProps {
     expenses: Expense[];
+    selectedCategory: ExpenseCategory | null;
+    onSelectCategory: (category: ExpenseCategory | null) => void;
 }
 
-type Period = 'week' | 'month' | 'all';
+const won = (n: number) => n.toLocaleString();
 
-const ExpenseInsights: React.FC<ExpenseInsightsProps> = ({ expenses }) => {
-    const [selectedPeriod, setSelectedPeriod] = useState<Period>('week');
+/** 지난 기간 대비 증감 표시 — 지출은 늘면 빨강, 줄면 초록 */
+const Delta: React.FC<{ pct: number | null; className?: string }> = ({ pct, className = '' }) => {
+    if (pct === null || pct === 0) return null;
+    const up = pct > 0;
+    return (
+        <span className={`tabular-nums ${up ? 'text-rose-400' : 'text-emerald-400'} ${className}`}>
+            {up ? '▲' : '▼'}{Math.abs(pct)}%
+        </span>
+    );
+};
+
+const ExpenseInsights: React.FC<ExpenseInsightsProps> = ({
+    expenses, selectedCategory, onSelectCategory,
+}) => {
+    const [period, setPeriod] = useState<Period>('month');
     const [currentDate, setCurrentDate] = useState(new Date());
 
-    const handlePrev = () => {
-        if (selectedPeriod === 'week') {
-            setCurrentDate(prev => subWeeks(prev, 1));
-        } else if (selectedPeriod === 'month') {
-            setCurrentDate(prev => subMonths(prev, 1));
-        }
+    // 고정비 판정은 전체 기록을 봐야 하므로 기간 필터와 무관하게 계산한다
+    const recurringKeys = useMemo(() => detectRecurringKeys(expenses), [expenses]);
+    const summary = useMemo(
+        () => summarizePeriod(expenses, period, currentDate, recurringKeys),
+        [expenses, period, currentDate, recurringKeys]
+    );
+    const range = useMemo(() => getPeriodRange(period, currentDate), [period, currentDate]);
+    const monthTotals = useMemo(() => getRecentMonthTotals(expenses, new Date(), 6), [expenses]);
+    const topExpenses = useMemo(() => getTopExpenses(expenses, range, 3), [expenses, range]);
+    const maxMonth = useMemo(() => Math.max(...monthTotals.map(m => m.total), 1), [monthTotals]);
+
+    const shift = (dir: -1 | 1) => {
+        setCurrentDate(prev => period === 'week'
+            ? (dir === 1 ? addWeeks(prev, 1) : subWeeks(prev, 1))
+            : (dir === 1 ? addMonths(prev, 1) : subMonths(prev, 1)));
     };
 
-    const handleNext = () => {
-        if (selectedPeriod === 'week') {
-            setCurrentDate(prev => addWeeks(prev, 1));
-        } else if (selectedPeriod === 'month') {
-            setCurrentDate(prev => addMonths(prev, 1));
-        }
-    };
+    const periodLabel = period === 'week'
+        ? `${format(currentDate, 'M월', { locale: ko })} ${getWeekOfMonth(currentDate, { weekStartsOn: 1, locale: ko })}주차`
+        : format(currentDate, 'yyyy년 M월', { locale: ko });
 
-    const periodLabel = useMemo(() => {
-        if (selectedPeriod === 'all') return '전체 기간';
-
-        if (selectedPeriod === 'week') {
-            const weekNum = getWeekOfMonth(currentDate, { weekStartsOn: 1, locale: ko });
-            const month = format(currentDate, 'M월', { locale: ko });
-            return `${month} ${weekNum}주차`;
-        }
-
-        return format(currentDate, 'yyyy년 M월', { locale: ko });
-    }, [selectedPeriod, currentDate]);
-
-    const stats = useMemo(() => {
-        // Determine period filters
-        let filteredExpenses: Expense[];
-
-        if (selectedPeriod === 'week') {
-            const startOfThisWeek = startOfWeek(currentDate, { weekStartsOn: 1 });
-            const endOfThisWeek = endOfWeek(currentDate, { weekStartsOn: 1 });
-            filteredExpenses = expenses.filter(e =>
-                isWithinInterval(e.timestamp, { start: startOfThisWeek, end: endOfThisWeek })
-            );
-        } else if (selectedPeriod === 'month') {
-            const startOfThisMonth = startOfMonth(currentDate);
-            const endOfThisMonth = endOfMonth(currentDate);
-            filteredExpenses = expenses.filter(e =>
-                isWithinInterval(e.timestamp, { start: startOfThisMonth, end: endOfThisMonth })
-            );
-        } else {
-            filteredExpenses = expenses;
-        }
-
-        // Calculate totals
-        const totalSpent = filteredExpenses
-            .filter(e => e.amount > 0)
-            .reduce((sum, e) => sum + e.amount, 0);
-
-        const totalSaved = filteredExpenses
-            .filter(e => e.amount < 0)
-            .reduce((sum, e) => sum + Math.abs(e.amount), 0);
-
-        // Calculate all category breakdowns
-        const categoryBreakdown = EXPENSE_CATEGORIES.map(category => {
-            const total = filteredExpenses
-                .filter(e => e.category === category && e.amount > 0)
-                .reduce((sum, e) => sum + e.amount, 0);
-
-            return {
-                category,
-                amount: total,
-                percentage: totalSpent > 0 ? (total / totalSpent) * 100 : 0
-            };
-        })
-            .filter(c => c.amount > 0)
-            .sort((a, b) => b.amount - a.amount);
-
-        return {
-            totalSpent,
-            totalSaved,
-            categoryBreakdown,
-            count: filteredExpenses.length
-        };
-    }, [expenses, selectedPeriod, currentDate]);
-
-    const periods: { key: Period; label: string }[] = [
-        { key: 'week', label: '주간' },
-        { key: 'month', label: '월간' },
-        { key: 'all', label: '전체' }
-    ];
+    const nextAvailable = canGoNext(period, currentDate);
 
     return (
-        <div className="bg-bg-secondary rounded-xl p-4 mb-6 animate-fade-in">
-            {/* Controls Header */}
-            <div className="flex flex-col gap-4 mb-6">
-                {/* Period Type Selector */}
-                <div className="flex bg-bg-tertiary/50 p-1 rounded-lg">
-                    {periods.map(period => (
+        <div className="bg-bg-secondary rounded-xl p-4 mb-6">
+            {/* 기간 전환 + 이동 */}
+            <div className="flex items-center justify-between mb-4">
+                <div className="flex bg-bg-tertiary/50 p-0.5 rounded-lg">
+                    {(['week', 'month'] as Period[]).map(p => (
                         <button
-                            key={period.key}
-                            onClick={() => {
-                                setSelectedPeriod(period.key);
-                                setCurrentDate(new Date()); // Reset date when switching modes
-                            }}
-                            className={`flex-1 py-1.5 px-3 rounded-md text-xs font-medium transition-all ${selectedPeriod === period.key
-                                ? 'bg-bg-primary text-text-primary shadow-sm'
-                                : 'text-text-secondary hover:text-text-primary'
-                                }`}
+                            key={p}
+                            onClick={() => { setPeriod(p); setCurrentDate(new Date()); }}
+                            className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+                                period === p ? 'bg-bg-primary text-text-primary' : 'text-text-tertiary hover:text-text-secondary'
+                            }`}
                         >
-                            {period.label}
+                            {p === 'week' ? '주간' : '월간'}
                         </button>
                     ))}
                 </div>
-
-                {/* Date Navigation */}
-                {selectedPeriod !== 'all' && (
-                    <div className="flex items-center justify-between px-2">
-                        <button
-                            onClick={handlePrev}
-                            className="p-2 hover:bg-bg-tertiary rounded-full text-text-secondary hover:text-text-primary transition-colors"
-                        >
-                            <ChevronLeft size={20} />
-                        </button>
-                        <span className="text-base font-bold text-text-primary">
-                            {periodLabel}
-                        </span>
-                        <button
-                            onClick={handleNext}
-                            className="p-2 hover:bg-bg-tertiary rounded-full text-text-secondary hover:text-text-primary transition-colors"
-                        >
-                            <ChevronRight size={20} />
-                        </button>
-                    </div>
-                )}
+                <div className="flex items-center gap-1">
+                    <button onClick={() => shift(-1)} className="p-1 text-text-tertiary hover:text-text-primary transition-colors">
+                        <ChevronLeft size={16} />
+                    </button>
+                    <span className="text-xs text-text-secondary tabular-nums min-w-[86px] text-center">{periodLabel}</span>
+                    <button
+                        onClick={() => shift(1)}
+                        disabled={!nextAvailable}
+                        className="p-1 text-text-tertiary hover:text-text-primary transition-colors disabled:opacity-25 disabled:hover:text-text-tertiary"
+                    >
+                        <ChevronRight size={16} />
+                    </button>
+                </div>
             </div>
 
-            {stats.count === 0 ? (
-                <div className="text-center py-8 text-text-secondary text-sm">
-                    이 기간의 지출 내역이 없습니다.
-                </div>
+            {summary.count === 0 ? (
+                <div className="text-center py-6 text-text-tertiary text-sm">이 기간의 지출 내역이 없습니다.</div>
             ) : (
                 <>
-                    {/* Summary */}
-                    <div className="flex justify-between items-end mb-6 px-2">
-                        <div>
-                            <h3 className="text-text-secondary text-xs font-bold uppercase tracking-wider mb-1">
-                                총 지출
-                            </h3>
-                            <div className="text-2xl font-bold text-text-primary">
-                                {stats.totalSpent.toLocaleString()}원
-                            </div>
+                    {/* 총액 · 일평균 · 비교 */}
+                    <div className="mb-4">
+                        <div className="flex items-baseline justify-between">
+                            <span className="text-2xl font-semibold text-text-primary tabular-nums">
+                                {won(summary.totalSpent)}<span className="text-base font-normal text-text-tertiary">원</span>
+                            </span>
+                            <span className="text-xs text-text-tertiary tabular-nums">
+                                일 평균 {won(summary.dailyAverage)}원
+                            </span>
                         </div>
-                        {stats.totalSaved > 0 && (
-                            <div className="text-right">
-                                <div className="text-text-secondary text-xs font-bold uppercase tracking-wider mb-1">절약</div>
-                                <div className="text-lg font-bold text-green-500">
-                                    +{stats.totalSaved.toLocaleString()}원
-                                </div>
-                            </div>
-                        )}
+                        <div className="flex items-baseline gap-2 mt-1 text-[11px] text-text-tertiary tabular-nums">
+                            <span>
+                                {period === 'week' ? '지난주' : '지난달'} {won(summary.prevTotalSpent)}
+                            </span>
+                            <Delta pct={summary.totalChangePct} />
+                            {summary.projected !== null && (
+                                <span className="ml-auto">이 페이스면 ≈ {won(summary.projected)}원</span>
+                            )}
+                        </div>
                     </div>
 
-                    {/* Category Breakdown */}
-                    {stats.categoryBreakdown.length > 0 && (
-                        <div className="space-y-3">
-                            <div className="text-xs text-text-secondary font-medium px-2">카테고리별 분석</div>
-                            {stats.categoryBreakdown.map(({ category, amount, percentage }) => (
-                                <div key={category} className="space-y-1.5 px-2">
-                                    <div className="flex items-center justify-between text-sm">
-                                        <div className="flex items-center gap-1.5">
+                    {/* 고정비 / 변동비 */}
+                    {summary.fixed > 0 && (
+                        <div className="mb-4">
+                            <div className="flex h-1 rounded-full overflow-hidden bg-bg-tertiary">
+                                <div className="bg-text-tertiary" style={{ width: `${(summary.fixed / summary.totalSpent) * 100}%` }} />
+                                <div className="bg-accent flex-1" />
+                            </div>
+                            <div className="flex justify-between mt-1.5 text-[11px] text-text-tertiary tabular-nums">
+                                <span>고정비 {won(summary.fixed)}</span>
+                                <span>변동비 {won(summary.variable)}</span>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 카테고리 — 탭하면 아래 내역이 필터링된다 */}
+                    <div className="space-y-2.5">
+                        {summary.categories.map(({ category, amount, percentage, changePct }) => {
+                            const active = selectedCategory === category;
+                            return (
+                                <button
+                                    key={category}
+                                    onClick={() => onSelectCategory(active ? null : category)}
+                                    className={`w-full text-left transition-opacity ${
+                                        selectedCategory && !active ? 'opacity-35' : 'opacity-100'
+                                    }`}
+                                    aria-pressed={active}
+                                >
+                                    <div className="flex items-center justify-between text-xs mb-1">
+                                        <span className="flex items-center gap-1.5 min-w-0">
                                             <span>{EXPENSE_CATEGORY_EMOJI[category]}</span>
-                                            <span className="text-text-primary font-medium">{category}</span>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-text-secondary text-xs">
-                                                {percentage.toFixed(0)}%
+                                            <span className={active ? 'text-text-primary font-medium' : 'text-text-secondary'}>
+                                                {category}
                                             </span>
-                                            <span className="text-text-primary font-mono">
-                                                {amount.toLocaleString()}원
-                                            </span>
-                                        </div>
+                                            {active && <X size={11} className="text-text-tertiary shrink-0" />}
+                                        </span>
+                                        <span className="flex items-baseline gap-1.5 tabular-nums shrink-0">
+                                            <Delta pct={changePct} className="text-[10px]" />
+                                            <span className="text-text-tertiary text-[10px]">{percentage.toFixed(0)}%</span>
+                                            <span className="text-text-secondary">{won(amount)}</span>
+                                        </span>
                                     </div>
-                                    {/* Progress Bar */}
-                                    <div className="w-full bg-bg-tertiary rounded-full h-2">
+                                    <div className="h-1 bg-bg-tertiary rounded-full">
                                         <div
-                                            className="bg-accent h-2 rounded-full transition-all duration-500"
+                                            className={`h-full rounded-full transition-all duration-500 ${active ? 'bg-accent' : 'bg-accent/50'}`}
                                             style={{ width: `${percentage}%` }}
                                         />
                                     </div>
-                                </div>
+                                </button>
+                            );
+                        })}
+                    </div>
+
+                    {/* 가장 큰 지출 */}
+                    {topExpenses.length > 0 && (
+                        <div className="mt-4 pt-3 text-[11px] text-text-tertiary tabular-nums">
+                            가장 큰 지출{' '}
+                            {topExpenses.map((e, i) => (
+                                <span key={e.id}>
+                                    {i > 0 && ' · '}
+                                    {e.description} {won(e.amount)}
+                                </span>
                             ))}
+                        </div>
+                    )}
+
+                    {summary.totalRefund > 0 && (
+                        <div className="mt-1 text-[11px] text-text-tertiary tabular-nums">
+                            환불·수입 +{won(summary.totalRefund)}원
                         </div>
                     )}
                 </>
             )}
+
+            {/* 최근 6개월 추이 — 막대를 눌러 해당 월로 이동 */}
+            <div className="mt-4 pt-3 border-t border-bg-tertiary">
+                <div className="flex items-end justify-between gap-1 h-12">
+                    {monthTotals.map(m => {
+                        const isCurrent = period === 'month' && format(currentDate, 'yyyy-MM') === m.key;
+                        return (
+                            <button
+                                key={m.key}
+                                onClick={() => { setPeriod('month'); setCurrentDate(m.date); }}
+                                className="flex-1 flex flex-col items-center gap-1 group"
+                                title={`${m.label} ${won(m.total)}원`}
+                            >
+                                <div className="w-full h-9 flex items-end">
+                                    <div
+                                        className={`w-full rounded-sm transition-all ${isCurrent ? 'bg-accent' : 'bg-bg-tertiary group-hover:bg-accent/40'}`}
+                                        style={{ height: `${Math.max((m.total / maxMonth) * 100, 3)}%` }}
+                                    />
+                                </div>
+                                <span className={`text-[9px] tabular-nums ${isCurrent ? 'text-accent' : 'text-text-tertiary'}`}>
+                                    {m.label}
+                                </span>
+                            </button>
+                        );
+                    })}
+                </div>
+            </div>
         </div>
     );
 };
