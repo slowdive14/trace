@@ -216,6 +216,8 @@ const AppContent: React.FC = () => {
       setSelectedTag(null);
     } else if (target.type === 'todo') {
       setActiveTab('todo');
+    } else if (target.type === 'expense') {
+      setActiveTab('expense');
     }
 
     setNavigationTarget(target);
@@ -295,7 +297,11 @@ const AppContent: React.FC = () => {
             <BrainDumpTab />
           ) : activeTab === 'expense' ? (
             <>
-              <ExpenseTimeline onDateSelect={setSelectedExpenseDate} />
+              <ExpenseTimeline
+                onDateSelect={setSelectedExpenseDate}
+                navigationTarget={navigationTarget}
+                onNavigationComplete={handleNavigationComplete}
+              />
               <ExpenseInput externalDate={selectedExpenseDate} />
             </>
           ) : activeTab === 'todo' ? (

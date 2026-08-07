@@ -35,3 +35,22 @@ html {
 :focus-visible {
   @apply outline-none ring-2 ring-accent/50;
 }
+
+/* 검색 결과에서 이동했을 때 대상 항목을 잠시 강조.
+   Timeline/TodoTab/ExpenseTimeline이 이 클래스를 붙여 왔지만
+   정의가 없어 아무 효과도 없었다. */
+.search-highlight {
+  animation: search-highlight-fade 2s ease-out;
+  border-radius: 0.5rem;
+}
+
+@keyframes search-highlight-fade {
+  0%, 40% {
+    background-color: rgb(139 92 246 / 0.22);
+    box-shadow: 0 0 0 2px rgb(139 92 246 / 0.45);
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: 0 0 0 2px transparent;
+  }
+}

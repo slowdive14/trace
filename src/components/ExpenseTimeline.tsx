@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { format, isToday, isYesterday } from 'date-fns';
 import { ko } from 'date-fns/locale';
-import type { Expense } from '../types/types';
+import type { Expense, NavigationTarget } from '../types/types';
 import { deleteExpense } from '../services/firestore';
 import { useAuth } from './AuthContext';
 import { onSnapshot, collection, query, orderBy } from 'firebase/firestore';
@@ -13,9 +13,11 @@ import ExpenseCalendar from './ExpenseCalendar';
 
 interface ExpenseTimelineProps {
     onDateSelect?: (date: Date) => void;
+    navigationTarget?: NavigationTarget | null;
+    onNavigationComplete?: () => void;
 }
 
-const ExpenseTimeline: React.FC<ExpenseTimelineProps> = ({ onDateSelect }) => {
+const ExpenseTimeline: React.FC<ExpenseTimelineProps> = ({ onDateSelect, navigationTarget, onNavigationComplete }) => {
     const [expenses, setExpenses] = useState<Expense[]>([]);
     const { user } = useAuth();
     const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -40,6 +42,28 @@ const ExpenseTimeline: React.FC<ExpenseTimelineProps> = ({ onDateSelect }) => {
 
         return () => unsubscribe();
     }, [user]);
+
+    // 검색 결과에서 넘어온 지출로 스크롤 + 잠시 강조
+    useEffect(() => {
+        if (!navigationTarget || navigationTarget.type !== 'expense') return;
+        if (expenses.length === 0) return;  // 데이터 로딩 대기
+
+        const timer = setTimeout(() => {
+            const el = document.querySelector(`[data-expense-id="${navigationTarget.id}"]`);
+            if (!el) {
+                onNavigationComplete?.();
+                return;
+            }
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            el.classList.add('search-highlight');
+            setTimeout(() => {
+                el.classList.remove('search-highlight');
+                onNavigationComplete?.();
+            }, 2000);
+        }, 300);
+
+        return () => clearTimeout(timer);
+    }, [navigationTarget, expenses.length]);
 
     const handleDelete = async (id: string) => {
         if (!user) return;
@@ -98,7 +122,7 @@ const ExpenseTimeline: React.FC<ExpenseTimelineProps> = ({ onDateSelect }) => {
                     </div>
                     <div className="space-y-2">
                         {dayExpenses.map(expense => (
-                            <div key={expense.id} className="flex items-center justify-between bg-bg-secondary p-3 rounded-lg group relative">
+                            <div key={expense.id} data-expense-id={expense.id} className="flex items-center justify-between bg-bg-secondary p-3 rounded-lg group relative">
                                 <div className="flex items-center gap-3 overflow-hidden">
                                     <span className="text-xl shrink-0" role="img" aria-label={expense.category}>
                                         {EXPENSE_CATEGORY_EMOJI[expense.category]}

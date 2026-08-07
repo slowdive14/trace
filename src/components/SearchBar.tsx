@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Search, ArrowRight } from 'lucide-react';
 import type { Entry, SearchResult, NavigationTarget } from '../types/types';
-import { getEntries, getTodos, deleteEntry, updateEntry } from '../services/firestore';
+import { getEntries, getTodos, getExpenses, deleteEntry, updateEntry } from '../services/firestore';
 import { extractTags } from '../utils/tagUtils';
 import { useAuth } from './AuthContext';
 import EntryItem from './EntryItem';
 import TodoSearchItem from './TodoSearchItem';
+import ExpenseSearchItem from './ExpenseSearchItem';
 import { subDays, startOfDay, endOfDay } from 'date-fns';
 
 function getCollectionName(category?: string): string {
@@ -43,6 +44,9 @@ const SearchBar: React.FC<SearchBarProps> = ({ onClose, onNavigate }) => {
             const startDate = startOfDay(subDays(new Date(), 180));
             const todos = await getTodos(user.uid, startDate, endDate, 'todos');
 
+            // 5. Fetch expenses (가계부)
+            const expenses = await getExpenses(user.uid);
+
             // Convert to SearchResult and combine
             const allResults: SearchResult[] = [
                 ...entries.map(e => ({
@@ -64,6 +68,14 @@ const SearchBar: React.FC<SearchBarProps> = ({ onClose, onNavigate }) => {
                     type: 'todo' as const,
                     ...t,
                     timestamp: t.date
+                })),
+                ...expenses.map(x => ({
+                    type: 'expense' as const,
+                    id: x.id,
+                    content: x.description,
+                    timestamp: x.timestamp,
+                    amount: x.amount,
+                    expenseCategory: x.category,
                 }))
             ];
 
@@ -116,6 +128,10 @@ const SearchBar: React.FC<SearchBarProps> = ({ onClose, onNavigate }) => {
                 // Entry: search in content and tags
                 return result.content.toLowerCase().includes(lowerQuery) ||
                        result.tags?.some(tag => tag.toLowerCase().includes(lowerQuery));
+            } else if (result.type === 'expense') {
+                // 지출: 내역명 + 카테고리명 ('식사', '커피/음료'처럼 분류로도 찾게)
+                return result.content.toLowerCase().includes(lowerQuery) ||
+                       (result.expenseCategory?.toLowerCase().includes(lowerQuery) ?? false);
             } else {
                 // Todo: search in content only
                 return result.content.toLowerCase().includes(lowerQuery);
@@ -140,7 +156,7 @@ const SearchBar: React.FC<SearchBarProps> = ({ onClose, onNavigate }) => {
                         type="text"
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
-                        placeholder="Search entries, chores, todos or #tags..."
+                        placeholder="기록·할일·투두·지출 또는 #태그 검색..."
                         className="w-full bg-bg-secondary text-text-primary rounded-lg pl-10 pr-4 py-3 focus:outline-none focus:ring-1 focus:ring-accent"
                     />
                 </div>
@@ -170,6 +186,11 @@ const SearchBar: React.FC<SearchBarProps> = ({ onClose, onNavigate }) => {
                                         onEdit={handleEdit}
                                         highlightQuery={query}
                                         showDate={true}
+                                    />
+                                ) : result.type === 'expense' ? (
+                                    <ExpenseSearchItem
+                                        expense={result as SearchResult & { type: 'expense' }}
+                                        highlightQuery={query}
                                     />
                                 ) : (
                                     <TodoSearchItem

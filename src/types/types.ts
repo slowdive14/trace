@@ -42,7 +42,7 @@ export interface DailyReflection {
 }
 
 // Search result types
-export type SearchResultType = 'entry' | 'todo';
+export type SearchResultType = 'entry' | 'todo' | 'expense';
 
 export interface SearchResult {
     type: SearchResultType;
@@ -57,11 +57,14 @@ export interface SearchResult {
     updatedAt?: Date;
     // Todo-specific (optional)
     date?: Date;
+    // Expense-specific (optional)
+    amount?: number;
+    expenseCategory?: ExpenseCategory;
 }
 
 export interface NavigationTarget {
     id: string;
-    type: 'entry' | 'todo';
+    type: 'entry' | 'todo' | 'expense';
     category?: 'action' | 'thought' | 'chore' | 'book';
     timestamp: Date;
     date?: Date;
