@@ -8,7 +8,6 @@ import {
     type Period,
     getPeriodRange,
     summarizePeriod,
-    detectRecurringKeys,
     getRecentMonthTotals,
     getTopExpenses,
     canGoNext,
@@ -39,11 +38,9 @@ const ExpenseInsights: React.FC<ExpenseInsightsProps> = ({
     const [period, setPeriod] = useState<Period>('month');
     const [currentDate, setCurrentDate] = useState(new Date());
 
-    // 고정비 판정은 전체 기록을 봐야 하므로 기간 필터와 무관하게 계산한다
-    const recurringKeys = useMemo(() => detectRecurringKeys(expenses), [expenses]);
     const summary = useMemo(
-        () => summarizePeriod(expenses, period, currentDate, recurringKeys),
-        [expenses, period, currentDate, recurringKeys]
+        () => summarizePeriod(expenses, period, currentDate),
+        [expenses, period, currentDate]
     );
     const range = useMemo(() => getPeriodRange(period, currentDate), [period, currentDate]);
     const monthTotals = useMemo(() => getRecentMonthTotals(expenses, new Date(), 6), [expenses]);
@@ -118,20 +115,6 @@ const ExpenseInsights: React.FC<ExpenseInsightsProps> = ({
                             )}
                         </div>
                     </div>
-
-                    {/* 고정비 / 변동비 */}
-                    {summary.fixed > 0 && (
-                        <div className="mb-4">
-                            <div className="flex h-1 rounded-full overflow-hidden bg-bg-tertiary">
-                                <div className="bg-text-tertiary" style={{ width: `${(summary.fixed / summary.totalSpent) * 100}%` }} />
-                                <div className="bg-accent flex-1" />
-                            </div>
-                            <div className="flex justify-between mt-1.5 text-[11px] text-text-tertiary tabular-nums">
-                                <span>고정비 {won(summary.fixed)}</span>
-                                <span>변동비 {won(summary.variable)}</span>
-                            </div>
-                        </div>
-                    )}
 
                     {/* 카테고리 — 탭하면 아래 내역이 필터링된다 */}
                     <div className="space-y-2.5">

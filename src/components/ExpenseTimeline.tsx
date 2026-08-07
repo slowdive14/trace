@@ -2,14 +2,15 @@ import React, { useEffect, useState } from 'react';
 import { format, isToday, isYesterday } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import type { Expense, ExpenseCategory, NavigationTarget } from '../types/types';
-import { deleteExpense } from '../services/firestore';
+import { deleteExpense, applyDueRecurringExpenses } from '../services/firestore';
 import { useAuth } from './AuthContext';
 import { onSnapshot, collection, query, orderBy } from 'firebase/firestore';
 import { db } from '../services/firebase';
-import { Trash2 } from 'lucide-react';
+import { Trash2, Repeat } from 'lucide-react';
 import { EXPENSE_CATEGORY_EMOJI } from '../types/types';
 import ExpenseInsights from './ExpenseInsights';
 import ExpenseCalendar from './ExpenseCalendar';
+import RecurringExpenseModal from './RecurringExpenseModal';
 
 interface ExpenseTimelineProps {
     onDateSelect?: (date: Date) => void;
@@ -24,6 +25,8 @@ const ExpenseTimeline: React.FC<ExpenseTimelineProps> = ({ onDateSelect, navigat
     const [selectedDate, setSelectedDate] = useState<Date>(new Date());
     // 통계 카드에서 카테고리를 누르면 그 카테고리 내역만 보여준다
     const [selectedCategory, setSelectedCategory] = useState<ExpenseCategory | null>(null);
+    const [showRecurring, setShowRecurring] = useState(false);
+    const [autoPosted, setAutoPosted] = useState<string[]>([]);
 
     useEffect(() => {
         if (!user) return;
@@ -43,6 +46,16 @@ const ExpenseTimeline: React.FC<ExpenseTimelineProps> = ({ onDateSelect, navigat
         });
 
         return () => unsubscribe();
+    }, [user]);
+
+    // 이번 달 지정일이 지난 반복 지출을 자동 입력 (탭 진입 시 1회)
+    useEffect(() => {
+        if (!user) return;
+        let cancelled = false;
+        applyDueRecurringExpenses(user.uid)
+            .then(posted => { if (!cancelled && posted.length > 0) setAutoPosted(posted); })
+            .catch(e => console.error('Failed to apply recurring expenses:', e));
+        return () => { cancelled = true; };
     }, [user]);
 
     // 검색 결과에서 넘어온 지출로 스크롤 + 잠시 강조
@@ -119,6 +132,29 @@ const ExpenseTimeline: React.FC<ExpenseTimelineProps> = ({ onDateSelect, navigat
                 selectedCategory={selectedCategory}
                 onSelectCategory={setSelectedCategory}
             />
+
+            {/* 자동 입력 알림 */}
+            {autoPosted.length > 0 && (
+                <div className="flex items-start gap-2 mb-4 px-3 py-2 rounded-lg bg-accent/10 text-[11px] text-text-secondary">
+                    <Repeat size={13} className="text-accent shrink-0 mt-0.5" />
+                    <span className="flex-1">
+                        반복 지출 {autoPosted.join(', ')} 이(가) 이번 달 내역으로 자동 입력됐습니다.
+                    </span>
+                    <button onClick={() => setAutoPosted([])} className="text-text-tertiary hover:text-text-primary shrink-0">
+                        ✕
+                    </button>
+                </div>
+            )}
+
+            <button
+                onClick={() => setShowRecurring(true)}
+                className="flex items-center gap-1.5 mb-4 text-[11px] text-text-tertiary hover:text-text-primary transition-colors"
+            >
+                <Repeat size={12} />
+                반복 지출 관리
+            </button>
+
+            {showRecurring && <RecurringExpenseModal onClose={() => setShowRecurring(false)} />}
 
             {selectedCategory && (
                 <div className="flex items-center justify-between mb-4 px-1">

@@ -27,6 +27,24 @@ export interface Expense {
     createdAt: Date;
 }
 
+/**
+ * 매달 반복되는 지출(구독료 등) 등록 정보.
+ * 앱을 열었을 때 이번 달 지정일이 지났고 아직 기록되지 않았으면 자동으로 지출을 만든다.
+ */
+export interface RecurringExpense {
+    id: string;
+    description: string;
+    amount: number;
+    category: ExpenseCategory;
+    /** 매달 며칠에 나가는지 (1-31). 그 달에 없는 날짜면 말일로 당겨진다 */
+    dayOfMonth: number;
+    active: boolean;
+    /** 마지막으로 자동 입력한 달 (yyyy-MM) — 중복 입력 방지 */
+    lastPostedMonth?: string;
+    createdAt: Date;
+    updatedAt: Date;
+}
+
 export interface Todo {
     id: string;
     content: string;

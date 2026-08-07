@@ -1,8 +1,8 @@
 import {
     startOfWeek, endOfWeek, startOfMonth, endOfMonth,
-    subWeeks, subMonths, addMonths, differenceInCalendarDays, format, isWithinInterval,
+    subWeeks, subMonths, addMonths, differenceInCalendarDays, format, isWithinInterval, getDaysInMonth,
 } from 'date-fns';
-import type { Expense, ExpenseCategory } from '../types/types';
+import type { Expense, ExpenseCategory, RecurringExpense } from '../types/types';
 
 export type Period = 'week' | 'month';
 
@@ -24,55 +24,29 @@ const inRange = (e: Expense, r: DateRange) => isWithinInterval(e.timestamp, { st
 export const filterByRange = (expenses: Expense[], range: DateRange): Expense[] =>
     expenses.filter(e => inRange(e, range));
 
-// ===== 고정비(반복 지출) 감지 =====
-// "어디에 쓰는지"에서 가장 큰 축은 조절 불가능한 고정비와 조절 가능한 변동비의 구분이다.
-// 매달 비슷한 금액으로 한두 번씩 꾸준히 나가는 항목을 고정비로 본다.
-// (커피처럼 한 달에 여러 번, 금액이 들쭉날쭉한 것은 제외된다)
+// ===== 반복 지출 자동 입력 =====
 
-/** 고정비로 인정할 최소 발생 개월 수 */
-const RECURRING_MIN_MONTHS = 3;
-/** 월 평균 발생 횟수 상한 — 이보다 잦으면 생활성 지출로 본다 */
-const RECURRING_MAX_PER_MONTH = 1.5;
-/** 금액 안정성 허용 편차 (중앙값 대비) */
-const RECURRING_AMOUNT_TOLERANCE = 0.2;
-
-export const normalizeDescription = (description: string): string =>
-    description.toLowerCase().replace(/\s+/g, ' ').trim();
-
-const median = (nums: number[]): number => {
-    const s = [...nums].sort((a, b) => a - b);
-    const mid = Math.floor(s.length / 2);
-    return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+/**
+ * 이번 달에 실제로 기록될 날짜.
+ * 31일처럼 그 달에 없는 날짜는 말일로 당긴다(2월 31일 → 2월 28/29일).
+ */
+export const getEffectivePostDate = (dayOfMonth: number, now: Date): Date => {
+    const lastDay = getDaysInMonth(now);
+    return new Date(now.getFullYear(), now.getMonth(), Math.min(Math.max(dayOfMonth, 1), lastDay));
 };
 
-/** 반복 지출로 판정된 내역명(정규화) 집합 */
-export const detectRecurringKeys = (expenses: Expense[]): Set<string> => {
-    const groups = new Map<string, Expense[]>();
-    for (const e of expenses) {
-        if (e.amount <= 0) continue;  // 환불·수입은 제외
-        const key = normalizeDescription(e.description);
-        if (!key) continue;
-        const list = groups.get(key);
-        if (list) list.push(e);
-        else groups.set(key, [e]);
-    }
-
-    const recurring = new Set<string>();
-    for (const [key, list] of groups) {
-        const months = new Set(list.map(e => format(e.timestamp, 'yyyy-MM')));
-        if (months.size < RECURRING_MIN_MONTHS) continue;
-        if (list.length / months.size > RECURRING_MAX_PER_MONTH) continue;
-
-        const med = median(list.map(e => e.amount));
-        if (med <= 0) continue;
-        const stable = list.every(e => Math.abs(e.amount - med) / med <= RECURRING_AMOUNT_TOLERANCE);
-        if (stable) recurring.add(key);
-    }
-    return recurring;
+/**
+ * 지금 자동 입력해야 하는 규칙인지.
+ * 이번 달 지정일이 지났고, 이번 달에 아직 넣지 않았을 때만 참.
+ */
+export const isRuleDue = (rule: RecurringExpense, now: Date): boolean => {
+    if (!rule.active) return false;
+    if (rule.lastPostedMonth === format(now, 'yyyy-MM')) return false;
+    return now >= getEffectivePostDate(rule.dayOfMonth, now);
 };
 
-export const isRecurring = (e: Expense, recurringKeys: Set<string>): boolean =>
-    recurringKeys.has(normalizeDescription(e.description));
+export const getDueRules = (rules: RecurringExpense[], now: Date): RecurringExpense[] =>
+    rules.filter(r => isRuleDue(r, now));
 
 // ===== 기간 요약 =====
 
@@ -91,8 +65,6 @@ export interface PeriodSummary {
     /** 환불·수입 (음수 금액의 절댓값) */
     totalRefund: number;
     count: number;
-    fixed: number;
-    variable: number;
     categories: CategoryStat[];
     /** 하루 평균 (진행 중인 기간이면 경과일 기준) */
     dailyAverage: number;
@@ -112,7 +84,6 @@ export const summarizePeriod = (
     expenses: Expense[],
     period: Period,
     date: Date,
-    recurringKeys: Set<string>,
     now: Date = new Date()
 ): PeriodSummary => {
     const range = getPeriodRange(period, date);
@@ -123,8 +94,6 @@ export const summarizePeriod = (
     const totalSpent = sumSpent(current);
     const totalRefund = current.filter(e => e.amount < 0).reduce((s, e) => s + Math.abs(e.amount), 0);
     const prevTotalSpent = sumSpent(previous);
-
-    const fixed = sumSpent(current.filter(e => isRecurring(e, recurringKeys)));
 
     // 카테고리별 (지난 기간과 함께)
     const byCategory = new Map<ExpenseCategory, number>();
@@ -155,8 +124,6 @@ export const summarizePeriod = (
         totalSpent,
         totalRefund,
         count: current.length,
-        fixed,
-        variable: totalSpent - fixed,
         categories,
         dailyAverage,
         projected: isOngoing && elapsedDays > 0 ? Math.round((totalSpent / elapsedDays) * totalDays) : null,

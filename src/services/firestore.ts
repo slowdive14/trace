@@ -15,8 +15,9 @@ import {
     writeBatch
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { startOfDay } from 'date-fns';
-import type { Expense, ExpenseCategory, Todo, Worry, WorryEntry, BrainDump, BrainDumpStatus, BrainDumpInsight, DailyReflection, MonthlyReview, MonthlyInsight, EntryPhoto } from '../types/types';
+import { startOfDay, format as formatDateFns } from 'date-fns';
+import { getDueRules, getEffectivePostDate } from '../utils/expenseUtils';
+import type { Expense, ExpenseCategory, RecurringExpense, Todo, Worry, WorryEntry, BrainDump, BrainDumpStatus, BrainDumpInsight, DailyReflection, MonthlyReview, MonthlyInsight, EntryPhoto } from '../types/types';
 
 const EXPENSES_COLLECTION = 'expenses';
 
@@ -104,6 +105,82 @@ export const deleteExpense = async (userId: string, expenseId: string) => {
         console.error("Error deleting expense: ", e);
         throw e;
     }
+};
+
+// ===== 반복 지출(구독료 등) =====
+const RECURRING_COLLECTION = 'recurringExpenses';
+
+export const getRecurringExpenses = async (userId: string): Promise<RecurringExpense[]> => {
+    const snap = await getDocs(collection(db, `users/${userId}/${RECURRING_COLLECTION}`));
+    return snap.docs
+        .map(d => ({
+            id: d.id,
+            ...d.data(),
+            createdAt: d.data().createdAt?.toDate() ?? new Date(),
+            updatedAt: d.data().updatedAt?.toDate() ?? new Date(),
+        }) as RecurringExpense)
+        .sort((a, b) => a.dayOfMonth - b.dayOfMonth);
+};
+
+export const addRecurringExpense = async (
+    userId: string,
+    data: { description: string; amount: number; category: ExpenseCategory; dayOfMonth: number }
+): Promise<string> => {
+    const docRef = await addDoc(collection(db, `users/${userId}/${RECURRING_COLLECTION}`), {
+        ...data,
+        active: true,
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
+    });
+    return docRef.id;
+};
+
+export const updateRecurringExpense = async (
+    userId: string,
+    ruleId: string,
+    data: Partial<Pick<RecurringExpense, 'description' | 'amount' | 'category' | 'dayOfMonth' | 'active' | 'lastPostedMonth'>>
+): Promise<void> => {
+    await updateDoc(doc(db, `users/${userId}/${RECURRING_COLLECTION}`, ruleId), {
+        ...data,
+        updatedAt: Timestamp.now(),
+    });
+};
+
+export const deleteRecurringExpense = async (userId: string, ruleId: string): Promise<void> => {
+    await deleteDoc(doc(db, `users/${userId}/${RECURRING_COLLECTION}`, ruleId));
+};
+
+/**
+ * 이번 달 지정일이 지났는데 아직 기록되지 않은 반복 지출을 실제 지출로 만든다.
+ * lastPostedMonth를 먼저 갱신해 중복 입력을 막는다.
+ * 지난 달치를 소급 입력하지는 않는다 — 해지했을 수도 있는 항목을 임의로 만들지 않기 위함.
+ * @returns 이번에 자동 입력된 내역명 목록
+ */
+export const applyDueRecurringExpenses = async (userId: string, now: Date = new Date()): Promise<string[]> => {
+    const rules = await getRecurringExpenses(userId);
+    const due = getDueRules(rules, now);
+    if (due.length === 0) return [];
+
+    const monthKey = formatDateFns(now, 'yyyy-MM');
+    const posted: string[] = [];
+
+    for (const rule of due) {
+        try {
+            // 먼저 표시해 두면 중간에 실패해도 같은 달에 중복으로 쌓이지 않는다
+            await updateRecurringExpense(userId, rule.id, { lastPostedMonth: monthKey });
+            await addExpense(
+                userId,
+                rule.description,
+                rule.amount,
+                rule.category,
+                getEffectivePostDate(rule.dayOfMonth, now)
+            );
+            posted.push(rule.description);
+        } catch (e) {
+            console.error('Failed to post recurring expense:', rule.description, e);
+        }
+    }
+    return posted;
 };
 
 // Generic Entry functions
