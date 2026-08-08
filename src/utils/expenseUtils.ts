@@ -24,6 +24,16 @@ const inRange = (e: Expense, r: DateRange) => isWithinInterval(e.timestamp, { st
 export const filterByRange = (expenses: Expense[], range: DateRange): Expense[] =>
     expenses.filter(e => inRange(e, range));
 
+export const normalizeDescription = (description: string): string =>
+    description.toLowerCase().replace(/\s+/g, ' ').trim();
+
+const median = (nums: number[]): number => {
+    if (nums.length === 0) return 0;
+    const s = [...nums].sort((a, b) => a - b);
+    const mid = Math.floor(s.length / 2);
+    return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+};
+
 // ===== 반복 지출 자동 입력 =====
 
 /**
@@ -68,8 +78,6 @@ export interface PeriodSummary {
     categories: CategoryStat[];
     /** 하루 평균 (진행 중인 기간이면 경과일 기준) */
     dailyAverage: number;
-    /** 현재 진행 중인 기간일 때만, 이 페이스 기준 기간 말 예상액 */
-    projected: number | null;
     prevTotalSpent: number;
     /** 총액의 지난 기간 대비 증감률(%) */
     totalChangePct: number | null;
@@ -126,9 +134,109 @@ export const summarizePeriod = (
         count: current.length,
         categories,
         dailyAverage,
-        projected: isOngoing && elapsedDays > 0 ? Math.round((totalSpent / elapsedDays) * totalDays) : null,
         prevTotalSpent,
         totalChangePct: changePct(totalSpent, prevTotalSpent),
+    };
+};
+
+// ===== 기간 말 예상액 =====
+//
+// 단순히 (쓴 돈 ÷ 경과일 × 총일수)로 계산하면 노트북·월세처럼 큰 지출 하나가
+// "매일 그만큼 더 쓴다"로 반영돼 예상액이 크게 부풀려진다.
+// 그래서 지출을 성격별로 나눠 각각 다르게 반영한다.
+//
+//   예상 = 이미 쓴 돈 (큰 지출 포함 — 실제로 나간 돈이므로 한 번은 더한다)
+//        + 남은 일수 × 일상 지출 하루치 (큰 지출·반복 지출 제외한 값으로 산출)
+//        + 남은 기간에 예정된 반복 지출 (등록된 규칙으로 정확히 계산)
+
+/** 이 일수보다 적게 지났으면 추정이 불안정하므로 예상액을 내지 않는다 */
+const MIN_ELAPSED_DAYS = 3;
+/** 이상치 판정에 필요한 최소 표본 수 */
+const OUTLIER_MIN_SAMPLE = 8;
+
+/**
+ * '큰 지출'로 볼 금액 기준.
+ * 중앙값과 MAD(중앙값 절대편차)를 쓰는 로버스트 방식이라 이상치 자신에게 휘둘리지 않는다.
+ * 표본이 적으면 Infinity를 반환해 아무것도 이상치로 보지 않는다.
+ */
+export const getLargeExpenseThreshold = (amounts: number[]): number => {
+    const positive = amounts.filter(a => a > 0);
+    if (positive.length < OUTLIER_MIN_SAMPLE) return Infinity;
+
+    const med = median(positive);
+    if (med <= 0) return Infinity;
+
+    const mad = median(positive.map(a => Math.abs(a - med)));
+    const robustSigma = 1.4826 * mad;   // MAD를 표준편차 척도로 환산
+    // MAD가 0에 가까울 때 임계값이 너무 낮아지지 않도록 하한을 둔다
+    return Math.max(med + 3 * robustSigma, med * 3);
+};
+
+export interface ProjectionDetail {
+    total: number;
+    /** 일상 지출 하루치 (큰 지출·반복 지출 제외) */
+    routineDaily: number;
+    remainingDays: number;
+    /** 남은 기간에 예정된 반복 지출 합 */
+    upcomingRecurring: number;
+    /** 이번 기간에 이미 나간 큰 지출 합 (추정에서 제외됐음을 보여주기 위함) */
+    largeSpent: number;
+}
+
+export const projectPeriodTotal = (
+    expenses: Expense[],
+    period: Period,
+    date: Date,
+    rules: RecurringExpense[] = [],
+    now: Date = new Date()
+): ProjectionDetail | null => {
+    const range = getPeriodRange(period, date);
+    if (now < range.start || now > range.end) return null;   // 끝난 기간은 예상하지 않음
+
+    const totalDays = differenceInCalendarDays(range.end, range.start) + 1;
+    const elapsedDays = differenceInCalendarDays(now, range.start) + 1;
+    if (elapsedDays < MIN_ELAPSED_DAYS) return null;
+    const remainingDays = totalDays - elapsedDays;
+
+    // 이상치 기준은 최근 3개월 기록으로 잡는다 (이번 기간만 보면 표본이 너무 적다)
+    const lookback = filterByRange(expenses, { start: startOfMonth(subMonths(now, 2)), end: range.end });
+    const threshold = getLargeExpenseThreshold(lookback.map(e => e.amount));
+
+    const current = filterByRange(expenses, range).filter(e => e.amount > 0);
+    const spentSoFar = current.reduce((s, e) => s + e.amount, 0);
+    const ruleKeys = new Set(rules.map(r => normalizeDescription(r.description)));
+
+    let routine = 0;
+    let largeSpent = 0;
+    for (const e of current) {
+        if (e.amount >= threshold) { largeSpent += e.amount; continue; }        // 큰 지출: 반복 안 함
+        if (ruleKeys.has(normalizeDescription(e.description))) continue;        // 반복 지출: 아래서 따로
+        routine += e.amount;
+    }
+    const routineDaily = elapsedDays > 0 ? routine / elapsedDays : 0;
+
+    // 남은 기간에 아직 나가지 않은 반복 지출 (주가 달을 걸치는 경우까지 고려)
+    let upcomingRecurring = 0;
+    for (const rule of rules) {
+        if (!rule.active) continue;
+        const candidates = [now, range.end];
+        const seen = new Set<string>();
+        for (const anchor of candidates) {
+            const monthKey = format(anchor, 'yyyy-MM');
+            if (seen.has(monthKey)) continue;
+            seen.add(monthKey);
+            if (rule.lastPostedMonth === monthKey) continue;   // 이미 입력됨
+            const postDate = getEffectivePostDate(rule.dayOfMonth, anchor);
+            if (postDate > now && postDate <= range.end) upcomingRecurring += rule.amount;
+        }
+    }
+
+    return {
+        total: Math.round(spentSoFar + remainingDays * routineDaily + upcomingRecurring),
+        routineDaily: Math.round(routineDaily),
+        remainingDays,
+        upcomingRecurring,
+        largeSpent,
     };
 };
 

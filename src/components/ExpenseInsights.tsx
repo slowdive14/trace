@@ -2,12 +2,13 @@ import React, { useState, useMemo } from 'react';
 import { addWeeks, subWeeks, addMonths, subMonths, format, getWeekOfMonth } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
-import type { Expense, ExpenseCategory } from '../types/types';
+import type { Expense, ExpenseCategory, RecurringExpense } from '../types/types';
 import { EXPENSE_CATEGORY_EMOJI } from '../types/types';
 import {
     type Period,
     getPeriodRange,
     summarizePeriod,
+    projectPeriodTotal,
     getRecentMonthTotals,
     getTopExpenses,
     canGoNext,
@@ -17,6 +18,7 @@ interface ExpenseInsightsProps {
     expenses: Expense[];
     selectedCategory: ExpenseCategory | null;
     onSelectCategory: (category: ExpenseCategory | null) => void;
+    recurringRules?: RecurringExpense[];
 }
 
 const won = (n: number) => n.toLocaleString();
@@ -33,7 +35,7 @@ const Delta: React.FC<{ pct: number | null; className?: string }> = ({ pct, clas
 };
 
 const ExpenseInsights: React.FC<ExpenseInsightsProps> = ({
-    expenses, selectedCategory, onSelectCategory,
+    expenses, selectedCategory, onSelectCategory, recurringRules = [],
 }) => {
     const [period, setPeriod] = useState<Period>('month');
     const [currentDate, setCurrentDate] = useState(new Date());
@@ -41,6 +43,12 @@ const ExpenseInsights: React.FC<ExpenseInsightsProps> = ({
     const summary = useMemo(
         () => summarizePeriod(expenses, period, currentDate),
         [expenses, period, currentDate]
+    );
+
+    // 예상액은 등록된 반복 지출까지 알아야 정확해서 별도로 계산한다
+    const projection = useMemo(
+        () => projectPeriodTotal(expenses, period, currentDate, recurringRules),
+        [expenses, period, currentDate, recurringRules]
     );
     const range = useMemo(() => getPeriodRange(period, currentDate), [period, currentDate]);
     const monthTotals = useMemo(() => getRecentMonthTotals(expenses, new Date(), 6), [expenses]);
@@ -110,10 +118,20 @@ const ExpenseInsights: React.FC<ExpenseInsightsProps> = ({
                                 {period === 'week' ? '지난주' : '지난달'} {won(summary.prevTotalSpent)}
                             </span>
                             <Delta pct={summary.totalChangePct} />
-                            {summary.projected !== null && (
-                                <span className="ml-auto">이 페이스면 ≈ {won(summary.projected)}원</span>
+                            {projection && (
+                                <span className="ml-auto text-text-secondary">
+                                    {period === 'week' ? '주말' : '월말'} 예상 ≈ {won(projection.total)}원
+                                </span>
                             )}
                         </div>
+                        {/* 예상액이 어떻게 나온 값인지 드러낸다 */}
+                        {projection && (
+                            <div className="mt-1 text-[10px] text-text-tertiary tabular-nums">
+                                일상 {won(projection.routineDaily)}/일 × {projection.remainingDays}일
+                                {projection.upcomingRecurring > 0 && ` · 예정 반복 ${won(projection.upcomingRecurring)}`}
+                                {projection.largeSpent > 0 && ` · 큰 지출 ${won(projection.largeSpent)}은 반복 제외`}
+                            </div>
+                        )}
                     </div>
 
                     {/* 카테고리 — 탭하면 아래 내역이 필터링된다 */}

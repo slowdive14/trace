@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { format, isToday, isYesterday } from 'date-fns';
 import { ko } from 'date-fns/locale';
-import type { Expense, ExpenseCategory, NavigationTarget } from '../types/types';
-import { deleteExpense, applyDueRecurringExpenses } from '../services/firestore';
+import type { Expense, ExpenseCategory, NavigationTarget, RecurringExpense } from '../types/types';
+import { deleteExpense, applyDueRecurringExpenses, getRecurringExpenses } from '../services/firestore';
 import { useAuth } from './AuthContext';
 import { onSnapshot, collection, query, orderBy } from 'firebase/firestore';
 import { db } from '../services/firebase';
@@ -27,6 +27,8 @@ const ExpenseTimeline: React.FC<ExpenseTimelineProps> = ({ onDateSelect, navigat
     const [selectedCategory, setSelectedCategory] = useState<ExpenseCategory | null>(null);
     const [showRecurring, setShowRecurring] = useState(false);
     const [autoPosted, setAutoPosted] = useState<string[]>([]);
+    // 월말 예상액 계산에 쓰인다 (남은 기간에 예정된 반복 지출을 정확히 반영)
+    const [recurringRules, setRecurringRules] = useState<RecurringExpense[]>([]);
 
     useEffect(() => {
         if (!user) return;
@@ -49,14 +51,27 @@ const ExpenseTimeline: React.FC<ExpenseTimelineProps> = ({ onDateSelect, navigat
     }, [user]);
 
     // 이번 달 지정일이 지난 반복 지출을 자동 입력 (탭 진입 시 1회)
+    const loadRules = useCallback(async () => {
+        if (!user) return;
+        try {
+            setRecurringRules(await getRecurringExpenses(user.uid));
+        } catch (e) {
+            console.error('Failed to load recurring rules:', e);
+        }
+    }, [user]);
+
     useEffect(() => {
         if (!user) return;
         let cancelled = false;
         applyDueRecurringExpenses(user.uid)
-            .then(posted => { if (!cancelled && posted.length > 0) setAutoPosted(posted); })
+            .then(posted => {
+                if (cancelled) return;
+                if (posted.length > 0) setAutoPosted(posted);
+                return loadRules();
+            })
             .catch(e => console.error('Failed to apply recurring expenses:', e));
         return () => { cancelled = true; };
-    }, [user]);
+    }, [user, loadRules]);
 
     // 검색 결과에서 넘어온 지출로 스크롤 + 잠시 강조
     useEffect(() => {
@@ -131,6 +146,7 @@ const ExpenseTimeline: React.FC<ExpenseTimelineProps> = ({ onDateSelect, navigat
                 expenses={expenses}
                 selectedCategory={selectedCategory}
                 onSelectCategory={setSelectedCategory}
+                recurringRules={recurringRules}
             />
 
             {/* 자동 입력 알림 */}
@@ -154,7 +170,9 @@ const ExpenseTimeline: React.FC<ExpenseTimelineProps> = ({ onDateSelect, navigat
                 반복 지출 관리
             </button>
 
-            {showRecurring && <RecurringExpenseModal onClose={() => setShowRecurring(false)} />}
+            {showRecurring && (
+                <RecurringExpenseModal onClose={() => { setShowRecurring(false); loadRules(); }} />
+            )}
 
             {selectedCategory && (
                 <div className="flex items-center justify-between mb-4 px-1">
