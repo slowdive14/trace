@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { format, isToday, isYesterday } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import type { Expense, ExpenseCategory, NavigationTarget, RecurringExpense } from '../types/types';
@@ -11,6 +11,11 @@ import { EXPENSE_CATEGORY_EMOJI } from '../types/types';
 import ExpenseInsights from './ExpenseInsights';
 import ExpenseCalendar from './ExpenseCalendar';
 import RecurringExpenseModal from './RecurringExpenseModal';
+
+// 반복 지출 자동 입력을 이번 세션에서 이미 시도한 사용자·월.
+// 탭을 오갈 때마다 컴포넌트가 다시 마운트되는데, 그때마다 Firestore 쓰기를
+// 던지면 느린 네트워크에서 대기 중인 쓰기가 쌓인다. 세션당 한 번으로 제한한다.
+const recurringApplied = new Set<string>();
 
 interface ExpenseTimelineProps {
     onDateSelect?: (date: Date) => void;
@@ -63,13 +68,26 @@ const ExpenseTimeline: React.FC<ExpenseTimelineProps> = ({ onDateSelect, navigat
     useEffect(() => {
         if (!user) return;
         let cancelled = false;
+
+        const sessionKey = `${user.uid}:${format(new Date(), 'yyyy-MM')}`;
+        if (recurringApplied.has(sessionKey)) {
+            loadRules();   // 자동 입력은 건너뛰고 목록만 최신화
+            return;
+        }
+        recurringApplied.add(sessionKey);
+
         applyDueRecurringExpenses(user.uid)
             .then(posted => {
                 if (cancelled) return;
                 if (posted.length > 0) setAutoPosted(posted);
                 return loadRules();
             })
-            .catch(e => console.error('Failed to apply recurring expenses:', e));
+            .catch(e => {
+                // 실패하면 다음 진입에서 다시 시도할 수 있게 표시를 되돌린다
+                recurringApplied.delete(sessionKey);
+                console.error('Failed to apply recurring expenses:', e);
+            });
+
         return () => { cancelled = true; };
     }, [user, loadRules]);
 
@@ -78,6 +96,7 @@ const ExpenseTimeline: React.FC<ExpenseTimelineProps> = ({ onDateSelect, navigat
         if (!navigationTarget || navigationTarget.type !== 'expense') return;
         if (expenses.length === 0) return;  // 데이터 로딩 대기
 
+        let clearTimer: ReturnType<typeof setTimeout> | undefined;
         const timer = setTimeout(() => {
             const el = document.querySelector(`[data-expense-id="${navigationTarget.id}"]`);
             if (!el) {
@@ -86,13 +105,15 @@ const ExpenseTimeline: React.FC<ExpenseTimelineProps> = ({ onDateSelect, navigat
             }
             el.scrollIntoView({ behavior: 'smooth', block: 'center' });
             el.classList.add('search-highlight');
-            setTimeout(() => {
+            clearTimer = setTimeout(() => {
                 el.classList.remove('search-highlight');
                 onNavigationComplete?.();
             }, 2000);
         }, 300);
 
-        return () => clearTimeout(timer);
+        // 강조 해제 타이머까지 정리한다. 실시간 스냅샷으로 이 효과가 다시 실행되면
+        // 예전에는 안쪽 타이머가 남아 계속 쌓였다.
+        return () => { clearTimeout(timer); if (clearTimer) clearTimeout(clearTimer); };
     }, [navigationTarget, expenses.length]);
 
     const handleDelete = async (id: string) => {
@@ -101,25 +122,26 @@ const ExpenseTimeline: React.FC<ExpenseTimelineProps> = ({ onDateSelect, navigat
         setDeletingId(null);
     };
 
-    const handleDateSelect = (date: Date) => {
+    // React.memo가 걸린 자식(ExpenseCalendar)이 매 렌더마다 무효화되지 않도록 고정한다
+    const handleDateSelect = useCallback((date: Date) => {
         setSelectedDate(date);
-        if (onDateSelect) {
-            onDateSelect(date);
-        }
-    };
+        onDateSelect?.(date);
+    }, [onDateSelect]);
 
-    const visibleExpenses = selectedCategory
-        ? expenses.filter(e => e.category === selectedCategory)
-        : expenses;
+    const visibleExpenses = useMemo(
+        () => selectedCategory ? expenses.filter(e => e.category === selectedCategory) : expenses,
+        [expenses, selectedCategory]
+    );
 
-    const groupedExpenses = visibleExpenses.reduce((groups: Record<string, Expense[]>, expense: Expense) => {
-        const dateKey = format(expense.timestamp, 'yyyy-MM-dd');
-        if (!groups[dateKey]) {
-            groups[dateKey] = [];
+    // 날짜별 그룹화도 지출 건마다 format()을 호출하므로 메모이즈한다
+    const groupedExpenses = useMemo(() => {
+        const groups: Record<string, Expense[]> = {};
+        for (const expense of visibleExpenses) {
+            const dateKey = format(expense.timestamp, 'yyyy-MM-dd');
+            (groups[dateKey] ??= []).push(expense);
         }
-        groups[dateKey].push(expense);
         return groups;
-    }, {} as Record<string, Expense[]>);
+    }, [visibleExpenses]);
 
     const getDateLabel = (dateStr: string) => {
         const [year, month, day] = dateStr.split('-').map(Number);

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isToday, isSameDay, addMonths, subMonths } from 'date-fns';
 import { ko } from 'date-fns/locale';
@@ -20,23 +20,24 @@ const ExpenseCalendar: React.FC<ExpenseCalendarProps> = ({ expenses, selectedDat
     const calendarEnd = endOfWeek(monthEnd, { weekStartsOn: 0 });
     const days = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
 
-    const getDayTotal = (date: Date): number => {
-        const dateStr = format(date, 'yyyy-MM-dd');
-        return expenses
-            .filter(e => format(e.timestamp, 'yyyy-MM-dd') === dateStr)
-            .filter(e => e.amount > 0)
-            .reduce((sum, e) => sum + e.amount, 0);
-    };
+    // 날짜별 합계를 한 번만 훑어 만들어 둔다.
+    // 예전에는 달력 칸(42개)마다 전체 지출을 filter하며 건건이 format()을 호출해
+    // 렌더당 O(칸수 × 지출수)의 날짜 포맷이 발생했다. 기록이 쌓이면 모바일에서
+    // 렌더 한 번에 수백 ms가 걸려, 달력을 펼쳐둔 채로 스냅샷이 몇 번 들어오면
+    // 탭이 수 초간 멈춘 것처럼 보였다.
+    const { dayTotals, monthTotal } = useMemo(() => {
+        const map = new Map<string, number>();
+        let month = 0;
+        for (const e of expenses) {
+            if (e.amount <= 0) continue;   // 기존 동작 유지: 지출만 합산
+            const key = format(e.timestamp, 'yyyy-MM-dd');
+            map.set(key, (map.get(key) ?? 0) + e.amount);
+            if (isSameMonth(e.timestamp, currentMonth)) month += e.amount;
+        }
+        return { dayTotals: map, monthTotal: month };
+    }, [expenses, currentMonth]);
 
-    // 월간 총 지출 계산
-    const getMonthTotal = (): number => {
-        return expenses
-            .filter(e => isSameMonth(e.timestamp, currentMonth))
-            .filter(e => e.amount > 0)
-            .reduce((sum, e) => sum + e.amount, 0);
-    };
-
-    const monthTotal = getMonthTotal();
+    const getDayTotal = (date: Date): number => dayTotals.get(format(date, 'yyyy-MM-dd')) ?? 0;
 
     return (
         <div className="bg-bg-secondary rounded-xl mb-6 overflow-hidden">
@@ -132,4 +133,5 @@ const ExpenseCalendar: React.FC<ExpenseCalendarProps> = ({ expenses, selectedDat
     );
 };
 
-export default ExpenseCalendar;
+// 지출 배열이 그대로면 다시 그리지 않는다 (부모의 다른 상태 변경에 딸려 재계산되지 않도록)
+export default React.memo(ExpenseCalendar);
