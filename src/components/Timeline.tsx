@@ -48,14 +48,20 @@ interface TimelineProps {
 
 type DateFilter = 'today' | '7days' | '30days' | 'all' | 'specific';
 
+/** 발췌 기능은 없앴지만 예전 기록이 남아 있다. 이 태그가 붙은 것은 책으로 세지 않는다. */
+const EXCERPT_TAG = '#발췌';
+
 const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, onTagClick, collectionName = 'entries', subFilter, onSubFilterChange, navigationTarget, onNavigationComplete }) => {
     const [allEntries, setAllEntries] = useState<Entry[]>([]);
     const [displayLimit, setDisplayLimit] = useState(50);
-    const [dateFilter, setDateFilter] = useState<DateFilter>(category === 'chore' ? 'all' : 'today');
+    // 책 탭은 과거 기록을 훑어보는 게 목적이라 전체 기간을 기본으로 둔다
+    const [dateFilter, setDateFilter] = useState<DateFilter>(
+        category === 'chore' || category === 'book' ? 'all' : 'today'
+    );
     const [specificDate, setSpecificDate] = useState<string>('');
     const [viewMode, setViewMode] = useState<'list' | 'matrix'>(category === 'chore' ? 'matrix' : 'list');
-    // 책 탭 전용: 기록을 한눈에 훑어보는 책장 보기
-    const [bookView, setBookView] = useState<'list' | 'shelf'>('list');
+    // 책 탭 전용: 기록을 한눈에 훑어보는 책장 보기 (기본값)
+    const [bookView, setBookView] = useState<'list' | 'shelf'>('shelf');
     const [activeId, setActiveId] = useState<string | null>(null);
     const [matrixSearch, setMatrixSearch] = useState('');
     const [isInboxFolded, setIsInboxFolded] = useState(true);
@@ -199,12 +205,13 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
     }, [navigationTarget, allEntries.length, dateFilter, displayLimit, viewMode]);
 
     // 책장은 '한눈에 보기'가 목적이므로 날짜 필터·더보기 제한을 받지 않는다.
-    // 서브필터(전체/읽을책)만 반영한다.
+    // 서브필터(전체/읽을책)만 반영하고, 발췌 기록은 책이 아니므로 제외한다.
     const shelfEntries = useMemo(() => {
         if (category !== 'book') return [];
-        return subFilter
-            ? allEntries.filter(e => e.tags?.some(t => t === subFilter))
-            : allEntries;
+        return allEntries.filter(e => {
+            if (e.tags?.some(t => t === EXCERPT_TAG)) return false;
+            return !subFilter || e.tags?.some(t => t === subFilter);
+        });
     }, [allEntries, category, subFilter]);
 
     const handleDelete = async (id: string) => {
