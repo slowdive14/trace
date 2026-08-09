@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { format, subDays, startOfDay, isSameDay } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import type { Entry, NavigationTarget } from '../types/types';
@@ -15,6 +15,7 @@ import { getLogicalDate } from '../utils/dateUtils';
 import { getRepresentativePhotoByDate } from '../utils/photoUtils';
 import { SleepStats } from './SleepStats';
 import { WeeklyProgress } from './WeeklyProgress';
+import BookshelfView from './BookshelfView';
 import Toast from './common/Toast';
 import { useToast } from '../hooks/useToast';
 import {
@@ -53,6 +54,8 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
     const [dateFilter, setDateFilter] = useState<DateFilter>(category === 'chore' ? 'all' : 'today');
     const [specificDate, setSpecificDate] = useState<string>('');
     const [viewMode, setViewMode] = useState<'list' | 'matrix'>(category === 'chore' ? 'matrix' : 'list');
+    // 책 탭 전용: 기록을 한눈에 훑어보는 책장 보기
+    const [bookView, setBookView] = useState<'list' | 'shelf'>('list');
     const [activeId, setActiveId] = useState<string | null>(null);
     const [matrixSearch, setMatrixSearch] = useState('');
     const [isInboxFolded, setIsInboxFolded] = useState(true);
@@ -194,6 +197,15 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
         const timer = setTimeout(scrollToElement, 300);
         return () => clearTimeout(timer);
     }, [navigationTarget, allEntries.length, dateFilter, displayLimit, viewMode]);
+
+    // 책장은 '한눈에 보기'가 목적이므로 날짜 필터·더보기 제한을 받지 않는다.
+    // 서브필터(전체/읽을책)만 반영한다.
+    const shelfEntries = useMemo(() => {
+        if (category !== 'book') return [];
+        return subFilter
+            ? allEntries.filter(e => e.tags?.some(t => t === subFilter))
+            : allEntries;
+    }, [allEntries, category, subFilter]);
 
     const handleDelete = async (id: string) => {
         if (!user) return;
@@ -745,15 +757,6 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
                             전체
                         </button>
                         <button
-                            onClick={() => onSubFilterChange?.('#발췌')}
-                            className={`flex-1 py-1.5 px-2 text-xs font-medium rounded-md transition-colors ${subFilter === '#발췌'
-                                ? 'bg-amber-700 text-white'
-                                : 'bg-bg-secondary text-text-secondary hover:bg-bg-tertiary'
-                                }`}
-                        >
-                            발췌
-                        </button>
-                        <button
                             onClick={() => onSubFilterChange?.('#읽을책')}
                             className={`flex-1 py-1.5 px-2 text-xs font-medium rounded-md transition-colors ${subFilter === '#읽을책'
                                 ? 'bg-amber-700 text-white'
@@ -762,12 +765,37 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
                         >
                             읽을책
                         </button>
+                        <button
+                            onClick={() => setBookView(v => v === 'shelf' ? 'list' : 'shelf')}
+                            className={`px-2.5 py-1.5 rounded-md transition-colors ${bookView === 'shelf'
+                                ? 'bg-amber-700 text-white'
+                                : 'bg-bg-secondary text-text-secondary hover:bg-bg-tertiary'
+                                }`}
+                            title={bookView === 'shelf' ? '목록으로 보기' : '책장처럼 보기'}
+                            aria-label="책장 보기 전환"
+                        >
+                            {bookView === 'shelf' ? <List size={14} /> : <LayoutGrid size={14} />}
+                        </button>
                     </div>
                 </div>
             )}
 
             <div className={`px-4 ${category === 'chore' ? 'max-w-4xl' : 'max-w-md'} mx-auto ${category === 'book' ? 'pb-60' : 'pb-32'}`}>
-                {viewMode === 'list' ? (
+                {category === 'book' && bookView === 'shelf' ? (
+                    <BookshelfView
+                        entries={shelfEntries}
+                        onSelectEntry={(entry) => {
+                            // 카드를 누르면 목록으로 돌아가 해당 기록을 강조한다
+                            setBookView('list');
+                            setTimeout(() => {
+                                const el = document.querySelector(`[data-entry-id="${entry.id}"]`);
+                                el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                el?.classList.add('search-highlight');
+                                setTimeout(() => el?.classList.remove('search-highlight'), 2000);
+                            }, 100);
+                        }}
+                    />
+                ) : viewMode === 'list' ? (
                     <>
                         {/* Weekly Progress & Sleep Stats - 일상 탭에서만 표시 */}
                         {category === 'action' && (
