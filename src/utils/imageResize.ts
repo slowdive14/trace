@@ -28,6 +28,82 @@ export function withTimeout<T>(promise: Promise<T>, ms: number, label: string): 
     });
 }
 
+/** 진행률을 보고하고 취소할 수 있는 작업 (Firebase의 UploadTask 모양) */
+export interface ProgressTask {
+    on(
+        event: 'state_changed',
+        next: (snap: { bytesTransferred: number; totalBytes: number }) => void,
+        error: (e: unknown) => void,
+        complete: () => void,
+    ): void;
+    cancel(): void;
+}
+
+/**
+ * 진척이 stallMs 동안 없으면 작업을 '취소'하고 실패시킨다.
+ * 고정 벽시계 타임아웃과 달리, 느리지만 진행 중인 전송은 살려 둔다.
+ * 그리고 반드시 cancel()을 불러야 죽은 전송이 대역폭을 계속 먹지 않는다.
+ */
+export function runWithStallGuard(
+    task: ProgressTask,
+    stallMs: number,
+    onProgress?: (fraction: number) => void,
+): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+        let timer: ReturnType<typeof setTimeout>;
+        let settled = false;
+
+        const finish = (fn: () => void) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            fn();
+        };
+
+        const arm = () => {
+            clearTimeout(timer);
+            timer = setTimeout(() => {
+                finish(() => {
+                    task.cancel();
+                    reject(new Error('업로드가 멈춰 중단했습니다 (네트워크 확인)'));
+                });
+            }, stallMs);
+        };
+
+        arm();
+        task.on(
+            'state_changed',
+            snap => {
+                arm();   // 진척이 있으면 시계를 되감는다
+                if (snap.totalBytes > 0) onProgress?.(snap.bytesTransferred / snap.totalBytes);
+            },
+            err => finish(() => reject(err)),
+            () => finish(resolve),
+        );
+    });
+}
+
+/** 일시적 실패를 지수 백오프로 재시도. 권한 오류·취소는 즉시 포기한다. */
+export async function retryAsync<T>(
+    fn: () => Promise<T>,
+    attempts: number,
+    label: string,
+    delay: (ms: number) => Promise<void> = ms => new Promise(r => setTimeout(r, ms)),
+): Promise<T> {
+    let lastError: unknown;
+    for (let attempt = 0; attempt < attempts; attempt++) {
+        try {
+            return await fn();
+        } catch (e) {
+            lastError = e;
+            const code = (e as { code?: string })?.code ?? '';
+            if (code.includes('unauthorized') || code.includes('canceled')) break;
+            if (attempt < attempts - 1) await delay(800 * 2 ** attempt);
+        }
+    }
+    throw lastError instanceof Error ? lastError : new Error(`${label} 실패`);
+}
+
 // 파일 → 디코딩된 이미지 (ImageBitmap 우선, 실패/지연 시 <img> 폴백). 각 단계에 타임아웃.
 async function decodeImage(file: File): Promise<ImageBitmap | HTMLImageElement> {
     if (typeof createImageBitmap === 'function') {

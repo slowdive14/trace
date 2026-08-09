@@ -47,6 +47,10 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
     const [pendingPhotos, setPendingPhotos] = useState<{ file: File; preview: string }[]>([]);
     const [uploading, setUploading] = useState(false);
     const [uploadError, setUploadError] = useState<string | null>(null);
+    const [uploadProgress, setUploadProgress] = useState<{ done: number; total: number; fraction: number } | null>(null);
+    // 이미 올라간 사진은 기억해 둔다. 일부만 실패했을 때 재시도하면서
+    // 성공분까지 다시 올리면(예전 동작) 시간이 배로 들고 또 실패하기 쉬웠다.
+    const uploadedRef = useRef<Map<File, EntryPhoto>>(new Map());
 
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const autocompleteRef = useRef<HTMLDivElement>(null);
@@ -220,7 +224,10 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
     const removePendingPhoto = (index: number) => {
         setPendingPhotos((prev) => {
             const t = prev[index];
-            if (t) URL.revokeObjectURL(t.preview);
+            if (t) {
+                URL.revokeObjectURL(t.preview);
+                uploadedRef.current.delete(t.file);
+            }
             return prev.filter((_, i) => i !== index);
         });
     };
@@ -254,19 +261,37 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
             // Chores are pinned by default
             const isPinned = category === 'chore';
 
-            // 사진 압축 + 업로드 (순차)
+            // 사진 압축 + 업로드 (순차). 이미 올라간 것은 건너뛴다.
             const photos: EntryPhoto[] = [];
             if (pendingPhotos.length > 0) {
                 setUploading(true);
                 setUploadError(null);
-                for (const p of pendingPhotos) {
-                    photos.push(await uploadEntryPhoto(user.uid, p.file));
+
+                const total = pendingPhotos.length;
+                for (let i = 0; i < total; i++) {
+                    const p = pendingPhotos[i];
+
+                    const already = uploadedRef.current.get(p.file);
+                    if (already) {
+                        photos.push(already);
+                        setUploadProgress({ done: i + 1, total, fraction: 1 });
+                        continue;
+                    }
+
+                    setUploadProgress({ done: i, total, fraction: 0 });
+                    const uploaded = await uploadEntryPhoto(user.uid, p.file, (fraction) =>
+                        setUploadProgress({ done: i, total, fraction })
+                    );
+                    uploadedRef.current.set(p.file, uploaded);   // 재시도 시 다시 안 올리도록 기억
+                    photos.push(uploaded);
                 }
+                setUploadProgress({ done: total, total, fraction: 1 });
             }
 
             await addEntry(user.uid, content, tags, category, dateToUse, collectionName, isPinned, photos);
 
             pendingPhotos.forEach((p) => URL.revokeObjectURL(p.preview));
+            uploadedRef.current.clear();
             setPendingPhotos([]);
             setContent('');
             setIsExpanded(false);
@@ -275,9 +300,15 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
         } catch (error) {
             console.error("Failed to add entry:", error);
             const detail = error instanceof Error ? error.message : String(error);
-            setUploadError(`업로드/저장 실패: ${detail}`);
+            const doneCount = uploadedRef.current.size;
+            // 성공분은 남겨 두므로, 다시 누르면 실패한 사진만 이어서 올라간다
+            const resume = doneCount > 0 && doneCount < pendingPhotos.length
+                ? ` (${pendingPhotos.length}장 중 ${doneCount}장 완료 — 다시 누르면 나머지만 이어서 올립니다)`
+                : '';
+            setUploadError(`업로드/저장 실패: ${detail}${resume}`);
         } finally {
             setUploading(false);
+            setUploadProgress(null);
         }
     };
 
@@ -539,6 +570,22 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
                                     </button>
                                 </div>
                             ))}
+                        </div>
+                    )}
+                    {/* 업로드 진행 상황 — 멈춘 것처럼 보이지 않게 장수와 진척을 보여준다 */}
+                    {uploadProgress && (
+                        <div className="flex items-center gap-2">
+                            <div className="flex-1 h-1 bg-bg-tertiary rounded-full overflow-hidden">
+                                <div
+                                    className="h-full bg-accent rounded-full transition-all duration-200"
+                                    style={{
+                                        width: `${Math.round(((uploadProgress.done + uploadProgress.fraction) / uploadProgress.total) * 100)}%`,
+                                    }}
+                                />
+                            </div>
+                            <span className="text-[10px] text-text-tertiary tabular-nums shrink-0">
+                                {Math.min(uploadProgress.done + 1, uploadProgress.total)}/{uploadProgress.total}장
+                            </span>
                         </div>
                     )}
                     {uploadError && <div className="text-xs text-red-300 bg-red-500/10 border border-red-500/20 rounded-lg px-2.5 py-1.5 break-words">{uploadError}</div>}
