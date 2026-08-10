@@ -37,3 +37,8 @@ dist-ssr
 /dump_log.txt
 /find_thought.txt
 /test_result.json
+
+# 옵시디언 동기화 스크립트의 로컬 설정과 서비스 계정 키 (절대 커밋 금지)
+/scripts/obsidian-sync.config.json
+/scripts/serviceAccountKey.json
+/scripts/*.local.json

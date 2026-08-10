@@ -1,0 +1,6 @@
+{
+  "vaultPath": "G:\\내 드라이브\\DriveSyncFiles\\Learning Journey",
+  "serviceAccountPath": "./serviceAccountKey.json",
+  "userEmail": "lookdiffangle@gmail.com",
+  "notePathTemplate": "일간노트/{yyyy}년/{yyyy}년 {M}월/{yyyyMMdd}{ddd}.md"
+}
