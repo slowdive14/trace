@@ -37,6 +37,8 @@ interface Config {
     serviceAccountPath: string;
     /** Serein 로그인 이메일 — 이걸로 uid를 찾는다 */
     userEmail: string;
+    /** uid를 직접 지정 (설정하면 userEmail 조회를 건너뛴다) */
+    uid?: string;
     /** 일간노트 경로 템플릿. {yyyy} {M} {yyyyMMdd} {ddd} 치환 */
     notePathTemplate?: string;
     /** 표식이 없는 노트에서 Serein 섹션의 끝으로 볼 헤딩 */
@@ -55,6 +57,31 @@ function loadConfig(): Config {
         process.exit(1);
     }
     return JSON.parse(readFileSync(path, 'utf8')) as Config;
+}
+
+/**
+ * 이메일로 uid를 찾는다. 못 찾으면 이 프로젝트에 실제로 등록된 계정을 보여준다.
+ * (Serein 로그인 계정과 다른 이메일을 적기 쉬워서, 원인을 바로 알 수 있게 한다)
+ */
+async function resolveUid(email: string): Promise<string> {
+    try {
+        return (await getAuth().getUserByEmail(email)).uid;
+    } catch (e) {
+        if ((e as { code?: string }).code !== 'auth/user-not-found') throw e;
+
+        const { users } = await getAuth().listUsers(20);
+        console.error(`\n'${email}' 계정을 이 Firebase 프로젝트에서 찾을 수 없습니다.`);
+        if (users.length === 0) {
+            console.error('등록된 계정이 하나도 없습니다. 서비스 계정 키가 다른 프로젝트의 것인지 확인해 주세요.');
+        } else {
+            console.error('이 프로젝트에 등록된 계정:');
+            for (const u of users) {
+                console.error(`  - ${u.email ?? '(이메일 없음)'}  (최근 로그인: ${u.metadata.lastSignInTime ?? '기록 없음'})`);
+            }
+            console.error(`\nscripts/obsidian-sync.config.json 의 "userEmail" 을 위 계정 중 하나로 고쳐주세요.`);
+        }
+        process.exit(1);
+    }
 }
 
 const toDate = (v: unknown): Date =>
@@ -85,7 +112,7 @@ async function main() {
     }
     initializeApp({ credential: cert(JSON.parse(readFileSync(keyPath, 'utf8'))) });
 
-    const uid = (await getAuth().getUserByEmail(cfg.userEmail)).uid;
+    const uid = cfg.uid ?? await resolveUid(cfg.userEmail);
     const db = getFirestore();
     const userRef = db.collection('users').doc(uid);
 

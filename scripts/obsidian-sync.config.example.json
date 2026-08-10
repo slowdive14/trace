@@ -1,7 +1,7 @@
 {
   "vaultPath": "G:\\내 드라이브\\DriveSyncFiles\\Learning Journey",
   "serviceAccountPath": "./serviceAccountKey.json",
-  "userEmail": "lookdiffangle@gmail.com",
+  "userEmail": "Serein에 로그인할 때 쓰는 구글 계정",
   "notePathTemplate": "일간노트/{yyyy}년/{yyyy}년 {M}월/{yyyyMMdd}{ddd}.md",
   "sectionEndHeading": "## 📊 목표 달성률 계산",
   "templatePath": "Templates/daily.md",

@@ -40,7 +40,8 @@ cp scripts/obsidian-sync.config.example.json scripts/obsidian-sync.config.json
 |---|---|
 | `vaultPath` | 옵시디언 볼트 루트 |
 | `serviceAccountPath` | 서비스 계정 키 경로 (`scripts/` 기준 상대경로) |
-| `userEmail` | Serein 로그인 이메일 — 이걸로 uid를 찾는다 |
+| `userEmail` | **Serein에 로그인할 때 쓰는 구글 계정** — 이걸로 uid를 찾는다 |
+| `uid` | (선택) uid를 직접 지정하면 `userEmail` 조회를 건너뛴다 |
 | `notePathTemplate` | 노트 경로 규칙. `{yyyy}` `{M}` `{yyyyMMdd}` `{ddd}`(요일) 치환 |
 | `sectionEndHeading` | 표식이 없는 노트에서 섹션 끝으로 볼 헤딩 (기본 `## 📊 목표 달성률 계산`) |
 | `templatePath` | 노트가 없을 때 쓸 Templater 템플릿 (기본 `Templates/daily.md`) |
@@ -121,5 +122,6 @@ npm run sync:obsidian -- --dry-run     # 파일을 쓰지 않고 출력만
 |---|---|
 | `설정 파일이 없습니다` | 2번 단계를 건너뜀 |
 | `서비스 계정 키를 찾을 수 없습니다` | 1번 단계를 건너뛰었거나 경로가 다름 |
+| `... 계정을 찾을 수 없습니다` | `userEmail`이 Serein 로그인 계정과 다름. 이 경우 스크립트가 **프로젝트에 등록된 계정 목록을 출력**하니 그중 하나로 고치면 된다 |
 | `노트 없음` 으로 계속 건너뜀 | `notePathTemplate`이 실제 폴더 구조와 다름 |
 | `'# Serein' 섹션 없음` | 해당 노트가 옛 템플릿으로 만들어짐 — 노트에 `# Serein` 한 줄 추가 |
