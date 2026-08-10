@@ -43,6 +43,22 @@ cp scripts/obsidian-sync.config.example.json scripts/obsidian-sync.config.json
 | `userEmail` | Serein 로그인 이메일 — 이걸로 uid를 찾는다 |
 | `notePathTemplate` | 노트 경로 규칙. `{yyyy}` `{M}` `{yyyyMMdd}` `{ddd}`(요일) 치환 |
 | `sectionEndHeading` | 표식이 없는 노트에서 섹션 끝으로 볼 헤딩 (기본 `## 📊 목표 달성률 계산`) |
+| `templatePath` | 노트가 없을 때 쓸 Templater 템플릿 (기본 `Templates/daily.md`) |
+| `createMissingNotes` | 노트가 없으면 템플릿으로 만들지 (기본 `true`) |
+
+### 노트가 없는 날은 만들어 준다
+
+옵시디언을 켜지 않은 날은 일간노트 자체가 없다. 그런 날은 `templatePath`의
+Templater 템플릿을 그 날짜 기준으로 렌더링해 노트를 만든 뒤 Serein 섹션을 채운다.
+필요한 폴더(`일간노트/2026년/2026년 8월/`)도 함께 만든다.
+
+Templater 전체를 흉내 내지는 않고 이 템플릿이 쓰는 범위만 처리한다.
+
+- `<% tp.date.now("...") %>` → 해당 날짜로 치환 (`YYYY-MM-DD`, `YYYY-MM`, `YYYY`, `ww` 등)
+- `<%* ... %>` 실행 블록 → 제거 (파일명 변경용이라 불필요 — 이름은 스크립트가 정한다)
+- 그 밖의 태그가 남으면 경고를 출력한다. 템플릿에 새 태그를 넣었다면 확인할 것.
+
+> Serein 기록이 아예 없는 날은 노트를 만들지 않는다. 빈 노트를 흩뿌리지 않기 위함이다.
 
 ## 3. 시험 실행
 
@@ -95,9 +111,9 @@ npm run sync:obsidian -- --dry-run     # 파일을 쓰지 않고 출력만
 
 안전을 위해 아래 상황에서는 **아무것도 쓰지 않고 건너뛴다**(로그에 이유가 남는다).
 
-- 그날 Serein 기록이 아예 없을 때
-- 일간노트 파일이 없을 때 — 노트 생성은 Templater에 맡긴다
-- 노트에 `# Serein` 섹션이 없을 때 (예전 노트)
+- 그날 Serein 기록이 아예 없을 때 (노트도 만들지 않는다)
+- 노트에 `# Serein` 섹션이 없을 때 (예전 템플릿으로 만든 노트)
+- `createMissingNotes: false` 인데 노트가 없을 때
 
 ## 문제가 생기면
 

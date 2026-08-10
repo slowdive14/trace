@@ -13,7 +13,7 @@
  *   npm run sync:obsidian -- --date 2026-08-10
  *   npm run sync:obsidian -- --dry-run # 파일을 쓰지 않고 결과만 출력
  */
-import { readFileSync, existsSync, writeFileSync } from 'node:fs';
+import { readFileSync, existsSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { cert, initializeApp } from 'firebase-admin/app';
@@ -23,7 +23,10 @@ import { format, subDays, addDays, startOfDay } from 'date-fns';
 
 import { exportDailyMarkdown } from '../src/utils/exportUtils';
 import type { Entry, Expense, Todo, Worry, WorryEntry } from '../src/types/types';
-import { replaceSereinSection, noteRelPath, DEFAULT_NOTE_PATH, SECTION_HEADING } from './obsidianNote';
+import {
+    replaceSereinSection, noteRelPath, renderTemplate, findUnresolvedTags,
+    DEFAULT_NOTE_PATH, DEFAULT_TEMPLATE_PATH, SECTION_HEADING,
+} from './obsidianNote';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -38,6 +41,10 @@ interface Config {
     notePathTemplate?: string;
     /** 표식이 없는 노트에서 Serein 섹션의 끝으로 볼 헤딩 */
     sectionEndHeading?: string;
+    /** 일간노트가 없을 때 쓸 Templater 템플릿 (볼트 기준 상대경로) */
+    templatePath?: string;
+    /** 노트가 없으면 템플릿으로 만들지 여부 (기본 true) */
+    createMissingNotes?: boolean;
 }
 
 function loadConfig(): Config {
@@ -139,14 +146,38 @@ async function main() {
             continue;
         }
 
-        const notePath = join(cfg.vaultPath, noteRelPath(date, template));
+        const relPath = noteRelPath(date, template);
+        const notePath = join(cfg.vaultPath, relPath);
+        let created = false;
+
         if (!existsSync(notePath)) {
-            // 일간노트는 Templater가 만들도록 두고, 없는 날은 건드리지 않는다
-            skipped.push(`${dateStr} (노트 없음: ${noteRelPath(date, template)})`);
-            continue;
+            if (cfg.createMissingNotes === false) {
+                skipped.push(`${dateStr} (노트 없음: ${relPath})`);
+                continue;
+            }
+            // 옵시디언을 켜지 않은 날은 노트가 아예 없다. 템플릿으로 만들어 준다.
+            const tplPath = join(cfg.vaultPath, cfg.templatePath ?? DEFAULT_TEMPLATE_PATH);
+            if (!existsSync(tplPath)) {
+                skipped.push(`${dateStr} (템플릿 없음: ${cfg.templatePath ?? DEFAULT_TEMPLATE_PATH})`);
+                continue;
+            }
+
+            const rendered = renderTemplate(readFileSync(tplPath, 'utf8'), date);
+            const unresolved = findUnresolvedTags(rendered);
+            if (unresolved.length) {
+                console.warn(`  ⚠ ${dateStr} 템플릿에 처리 못한 태그가 남았습니다: ${unresolved.join(', ')}`);
+            }
+
+            if (!dryRun) {
+                mkdirSync(dirname(notePath), { recursive: true });
+                writeFileSync(notePath, rendered, 'utf8');
+            }
+            created = true;
         }
 
-        const original = readFileSync(notePath, 'utf8');
+        const original = created && dryRun
+            ? renderTemplate(readFileSync(join(cfg.vaultPath, cfg.templatePath ?? DEFAULT_TEMPLATE_PATH), 'utf8'), date)
+            : readFileSync(notePath, 'utf8');
         const next = replaceSereinSection(original, markdown, cfg.sectionEndHeading);
         if (next === null) {
             skipped.push(`${dateStr} ('${SECTION_HEADING}' 섹션 없음)`);
@@ -163,7 +194,7 @@ async function main() {
             writeFileSync(notePath, next, 'utf8');
         }
         updated++;
-        console.log(`✔ ${dateStr} → ${noteRelPath(date, template)}`);
+        console.log(`✔ ${dateStr} → ${relPath}${created ? ' (노트 새로 만듦)' : ''}`);
     }
 
     console.log(`\n완료: ${updated}건 갱신${dryRun ? ' (dry-run, 파일 미변경)' : ''}`);
