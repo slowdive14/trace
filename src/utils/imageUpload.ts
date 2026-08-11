@@ -1,5 +1,5 @@
 // Firebase Storage 업로드/삭제 (사진 메타데이터 반환)
-import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
+import { ref, uploadBytes, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 import { storage } from '../services/firebase';
 import { compressImage, withTimeout, runWithStallGuard, retryAsync } from './imageResize';
 import type { EntryPhoto } from '../types/types';
@@ -20,6 +20,14 @@ const MAX_ATTEMPTS = 3;
  *  사용자가 다시 눌러도 못 올린 것만 이어서 올라간다.)
  */
 const UPLOAD_ATTEMPTS = 2;
+/**
+ * 이보다 작으면 단순 업로드(단일 요청)를 쓴다.
+ * 재개 가능 업로드는 첫 바이트가 움직이기까지 CORS 프리플라이트 → 세션 생성 →
+ * 청크 전송으로 왕복이 여러 번이라, 불안정한 모바일 회선에서 시작조차 못하는
+ * 일이 생긴다. 압축된 사진은 대개 이 크기 아래이므로 왕복이 한 번인 쪽이 낫다.
+ * 진행률·중단이 실제로 의미 있는 큰 파일만 재개 가능 업로드로 보낸다.
+ */
+const SIMPLE_UPLOAD_MAX_BYTES = 1024 * 1024;
 /** Storage 보안 규칙 상한 */
 const MAX_BYTES = 5 * 1024 * 1024;
 
@@ -69,19 +77,31 @@ export async function uploadEntryPhoto(
     const path = `users/${uid}/photos/${crypto.randomUUID()}.jpg`;
     const objectRef = ref(storage, path);
 
-    // 진척이 끊기면 실제로 취소한다. 예전에는 타임아웃 시 Promise만 reject하고
-    // 업로드는 계속 돌게 둬서, 여러 장을 올릴 때 죽은 업로드가 대역폭을 계속 먹고
-    // 뒤따르는 사진까지 연쇄로 시간 초과되는 원인이 됐다.
-    await retryAsync(
-        () => runWithStallGuard(
-            uploadBytesResumable(objectRef, blob, { contentType }),
-            FIRST_PROGRESS_TIMEOUT_MS,
-            STALL_TIMEOUT_MS,
-            onProgress,
-        ),
-        UPLOAD_ATTEMPTS,
-        '업로드',
-    );
+    if (blob.size <= SIMPLE_UPLOAD_MAX_BYTES) {
+        // 단일 요청. 진행률은 시작·완료 두 지점으로만 알린다.
+        onProgress?.(0);
+        await retryAsync(
+            () => withTimeout(uploadBytes(objectRef, blob, { contentType }), FIRST_PROGRESS_TIMEOUT_MS, '업로드'),
+            UPLOAD_ATTEMPTS,
+            '업로드',
+        );
+        onProgress?.(1);
+    } else {
+        // 큰 파일은 진행률·중단이 의미 있으므로 재개 가능 업로드.
+        // 진척이 끊기면 실제로 취소한다. 예전에는 타임아웃 시 Promise만 reject하고
+        // 업로드는 계속 돌게 둬서, 여러 장을 올릴 때 죽은 업로드가 대역폭을 계속 먹고
+        // 뒤따르는 사진까지 연쇄로 시간 초과되는 원인이 됐다.
+        await retryAsync(
+            () => runWithStallGuard(
+                uploadBytesResumable(objectRef, blob, { contentType }),
+                FIRST_PROGRESS_TIMEOUT_MS,
+                STALL_TIMEOUT_MS,
+                onProgress,
+            ),
+            UPLOAD_ATTEMPTS,
+            '업로드',
+        );
+    }
     const url = await retryAsync(
         () => withTimeout(getDownloadURL(objectRef), 20000, 'URL 가져오기'),
         MAX_ATTEMPTS,

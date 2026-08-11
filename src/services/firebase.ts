@@ -64,4 +64,11 @@ const initDb = () => {
 };
 
 export const db = initDb();
+
 export const storage = getStorage(app);
+// Storage SDK는 요청이 실패하면 기본 10분 동안 조용히 재시도한다. 그동안 진척
+// 이벤트를 하나도 내지 않아서, 진짜 원인(권한·용량·CORS 등)이 재시도에 가려진 채
+// 앱에서는 '업로드를 시작하지 못했습니다' 같은 시간 초과로만 보였다.
+// 짧게 잡아 실제 오류 코드가 표면으로 올라오게 한다.
+storage.maxUploadRetryTime = 30000;
+storage.maxOperationRetryTime = 20000;

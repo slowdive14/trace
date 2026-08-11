@@ -320,7 +320,11 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
             setShowAutocomplete(false);
         } catch (error) {
             console.error("Failed to add entry:", error);
-            const detail = error instanceof Error ? error.message : String(error);
+            // Firebase 오류 코드까지 보여준다. 코드가 있으면 원인(권한·용량·회선)을
+            // 바로 좁힐 수 있는데, 예전에는 메시지만 나와 진단이 어려웠다.
+            const code = (error as { code?: string })?.code;
+            const detail = (error instanceof Error ? error.message : String(error))
+                + (code ? ` [${code}]` : '');
             const doneCount = uploadedRef.current.size;
             // 성공분은 남겨 두므로, 다시 누르면 실패한 사진만 이어서 올라간다
             const resume = doneCount > 0 && doneCount < pendingPhotos.length
