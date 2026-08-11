@@ -3,6 +3,7 @@ import { Send, Maximize2, Minimize2, Calendar, Smile, Moon, Sun, CloudMoon, Imag
 import { extractTags } from '../utils/tagUtils';
 import { addEntry } from '../services/firestore';
 import { uploadEntryPhoto } from '../utils/imageUpload';
+import { withTimeout } from '../utils/imageResize';
 import { useAuth } from './AuthContext';
 import { format, isSameDay } from 'date-fns';
 import { searchEmotions, type EmotionTag } from '../utils/emotionTags';
@@ -270,6 +271,22 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
             if (pendingPhotos.length > 0) {
                 setUploading(true);
                 setUploadError(null);
+
+                // 업로드 전에 오프라인·토큰 문제를 먼저 걸러낸다.
+                // Storage는 전송을 시작하기 전에 인증 토큰을 받아오는데, 토큰이 만료돼
+                // 갱신이 네트워크에서 막히면 진척 이벤트가 하나도 오지 않는다. 그러면
+                // '업로드를 시작하지 못했습니다'로만 보여 원인을 알 수 없었다.
+                // 토큰은 1시간마다 만료되므로 "잘 되다가 또 안 되는" 패턴이 된다.
+                if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+                    throw new Error('오프라인 상태입니다. 네트워크 연결을 확인해 주세요.');
+                }
+                try {
+                    // force 없이 호출한다. 유효하면 즉시 반환되고(정상 경로에 부담 없음),
+                    // 만료가 임박했을 때만 갱신을 시도하므로 문제 구간만 정확히 잡힌다.
+                    await withTimeout(user.getIdToken(), 15000, '로그인 정보 갱신');
+                } catch {
+                    throw new Error('로그인 정보를 갱신하지 못했습니다. 네트워크를 확인하거나 다시 로그인해 주세요.');
+                }
 
                 const total = pendingPhotos.length;
                 for (let i = 0; i < total; i++) {
