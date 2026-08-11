@@ -255,8 +255,12 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
             // If selectedDate is null, it means "Now".
             // If selectedDate is set, check if it's today. If it is today, we still use "Now" (undefined).
             // This preserves the behavior of using current time for today's entries.
-            const isToday = selectedDate && isSameDay(selectedDate, new Date());
-            const dateToUse = (selectedDate && !isToday) ? selectedDate : undefined;
+            // 잘못된 날짜는 '지금'으로 되돌린다. isSameDay(Invalid, now)가 false를 돌려주는
+            // 탓에, 예전에는 Invalid Date가 그대로 통과해 사진을 전부 올린 뒤 마지막
+            // 저장에서 Timestamp 변환이 실패했다(사용자에겐 '업로드 실패'로 보임).
+            const validDate = selectedDate && !isNaN(selectedDate.getTime()) ? selectedDate : null;
+            const isToday = validDate && isSameDay(validDate, new Date());
+            const dateToUse = (validDate && !isToday) ? validDate : undefined;
 
             // Chores are pinned by default
             const isPinned = category === 'chore';
@@ -376,7 +380,8 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
     }, [content, isExpanded]);
 
     // For display purposes, default to today if null
-    const displayDate = selectedDate || new Date();
+    // 렌더에서 format()에 들어가므로 유효한 날짜만 쓴다 (Invalid Date면 던져서 입력창이 깨진다)
+    const displayDate = selectedDate && !isNaN(selectedDate.getTime()) ? selectedDate : new Date();
     const isDisplayDateToday = isSameDay(displayDate, new Date());
 
     // 적정 수면 시간 계산
@@ -671,7 +676,15 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
                             value={format(displayDate, 'yyyy-MM-dd')}
                             onChange={(e) => {
                                 // 정오(12:00)로 설정: getLogicalDate가 5AM 이전을 전날로 처리하는 문제 방지
-                                setSelectedDate(new Date(e.target.value + 'T12:00:00'));
+                                // 값이 비면 Invalid Date가 되고, 그대로 두면 렌더의 format()이 던져
+                                // 입력창이 깨지고 저장 시 Timestamp 변환도 실패한다.
+                                // 부분 입력('2026-05')은 Invalid이 아니라 5월 1일로 조용히 해석되므로
+                                // 형식까지 확인한다.
+                                const value = e.target.value;
+                                if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return;
+                                const picked = new Date(`${value}T12:00:00`);
+                                if (isNaN(picked.getTime())) return;
+                                setSelectedDate(picked);
                                 setShowDatePicker(false);
                             }}
                             className="w-full bg-bg-tertiary text-text-primary rounded-lg p-3 focus:outline-none focus:ring-1 focus:ring-accent"

@@ -104,12 +104,21 @@ export async function retryAsync<T>(
     throw lastError instanceof Error ? lastError : new Error(`${label} 실패`);
 }
 
+/**
+ * 디코딩 제한 시간.
+ * 예전 12초는 너무 짧았다. 몇 달 전 사진처럼 원본 해상도가 큰 파일(1200만 화소 이상)을
+ * 여러 장 연달아 처리하면 모바일 CPU에서 12초를 넘기기 쉽고, 그러면 압축이 '실패'로
+ * 처리돼 원본이 그대로 올라가다 5MB 규칙에 걸려 업로드가 실패했다.
+ * 네트워크가 아니라 CPU 작업이라 조금 더 기다려 주는 편이 낫다.
+ */
+const DECODE_TIMEOUT_MS = 25000;
+
 // 파일 → 디코딩된 이미지 (ImageBitmap 우선, 실패/지연 시 <img> 폴백). 각 단계에 타임아웃.
 async function decodeImage(file: File): Promise<ImageBitmap | HTMLImageElement> {
     if (typeof createImageBitmap === 'function') {
         try {
             // 주의: resize 옵션은 일부 모바일 브라우저에서 특정 HDR JPEG에 대해 hang하므로 쓰지 않는다.
-            return await withTimeout(createImageBitmap(file), 12000, '이미지 디코딩');
+            return await withTimeout(createImageBitmap(file), DECODE_TIMEOUT_MS, '이미지 디코딩');
         } catch {
             // HEIC/HDR 등 일부 포맷·환경에서 실패하거나 지연 → <img>로 폴백
         }
@@ -118,7 +127,7 @@ async function decodeImage(file: File): Promise<ImageBitmap | HTMLImageElement> 
         const img = new Image();
         const url = URL.createObjectURL(file);
         const cleanup = () => URL.revokeObjectURL(url);
-        const timer = setTimeout(() => { cleanup(); reject(new Error('이미지 디코딩 시간 초과')); }, 12000);
+        const timer = setTimeout(() => { cleanup(); reject(new Error('이미지 디코딩 시간 초과')); }, DECODE_TIMEOUT_MS);
         img.onload = () => { clearTimeout(timer); cleanup(); resolve(img); };
         img.onerror = () => { clearTimeout(timer); cleanup(); reject(new Error('이미지를 디코딩할 수 없습니다 (지원되지 않는 형식일 수 있어요)')); };
         img.src = url;

@@ -4,7 +4,7 @@ import {
     getFirestore,
     initializeFirestore,
     persistentLocalCache,
-    persistentMultipleTabManager,
+    persistentSingleTabManager,
 } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
@@ -41,12 +41,20 @@ export const googleProvider = new GoogleAuthProvider();
 // 기본(메모리 캐시)은 앱을 켤 때마다 모든 문서를 네트워크에서 다시 받아
 // 첫 화면이 뜨기까지 오래 걸린다. 영속 캐시를 쓰면 재방문 시 로컬에서
 // 즉시 렌더하고 변경분만 백그라운드로 동기화한다.
+//
+// 탭 매니저는 단일 탭 + forceOwnership을 쓴다.
+// 멀티탭 매니저는 IndexedDB 리더 선출(lease)에 기대는데, 모바일 PWA는 OS가
+// 앱을 그냥 죽이는 일이 잦아 이전 세션의 lease가 남는다. 그러면 새로 켠
+// 인스턴스가 선출을 기다리며 네트워크를 잡지 못해, 새로고침하기 전까지
+// 데이터가 뜨지 않는 증상이 생긴다. 사실상 단일 인스턴스로 쓰는 앱이므로
+// 선출을 건너뛰고 바로 소유권을 갖게 한다.
+//
 // 시크릿 모드 등 IndexedDB를 못 쓰는 환경에서는 메모리 캐시로 폴백.
 const initDb = () => {
     try {
         return initializeFirestore(app, {
             localCache: persistentLocalCache({
-                tabManager: persistentMultipleTabManager(),
+                tabManager: persistentSingleTabManager({ forceOwnership: true }),
             }),
         });
     } catch (e) {

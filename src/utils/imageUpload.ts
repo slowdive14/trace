@@ -25,15 +25,27 @@ export async function uploadEntryPhoto(
     let contentType = file.type || 'image/jpeg';
     let w: number | undefined;
     let h: number | undefined;
-    try {
-        const r = await compressImage(file);
-        blob = r.blob;
-        contentType = 'image/jpeg';
-        w = r.w;
-        h = r.h;
-    } catch (e) {
-        // 압축 실패 → 원본 그대로 업로드 (Storage 규칙상 5MB 미만·image/* 이어야 함)
-        console.warn('compressImage 실패, 원본 업로드 폴백:', e);
+
+    // 1차: 기본 설정으로 압축.
+    // 2차: 실패하면 해상도·품질을 낮춰 한 번 더. 큰 사진을 여러 장 연달아 처리하면
+    //      메모리 압박으로 캔버스 작업이 실패할 수 있는데, 작게 잡으면 성공하는 경우가 많다.
+    //      여기서 포기하면 원본(수 MB)이 그대로 올라가 5MB 규칙에 걸린다.
+    const attempts: Array<{ maxEdge: number; quality: number }> = [
+        { maxEdge: 1600, quality: 0.82 },
+        { maxEdge: 1024, quality: 0.72 },
+    ];
+    for (const [i, opt] of attempts.entries()) {
+        try {
+            const r = await compressImage(file, opt.maxEdge, opt.quality);
+            blob = r.blob;
+            contentType = 'image/jpeg';
+            w = r.w;
+            h = r.h;
+            break;
+        } catch (e) {
+            const last = i === attempts.length - 1;
+            console.warn(`compressImage 실패 (${opt.maxEdge}px)${last ? ' — 원본 업로드로 폴백' : ' — 더 작게 재시도'}:`, e);
+        }
     }
 
     // 압축이 실패한 원본은 수 MB일 수 있다. 규칙에 걸려 어차피 거부되므로

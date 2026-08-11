@@ -56,26 +56,14 @@ const AppContent: React.FC = () => {
   // 두 번째부터는 즉시 열린다.
   const [calendarDataEnabled, setCalendarDataEnabled] = useState(false);
 
-  // 모달을 열면 즉시 구독
+  // 모달을 열 때만 구독한다.
+  // 예전에는 첫 화면이 뜬 뒤 idle 시점에 미리 구독해 뒀는데, 시작 직후
+  // 전 컬렉션 5개(books·expenses·todos·worryEntries·worries) 리스너가 한꺼번에
+  // 붙으면서 IndexedDB 캐시 초기화와 겹쳐 앱이 멈춘 것처럼 보였다.
+  // 캘린더는 자주 여는 화면이 아니므로 열 때 받는 편이 낫다.
   useEffect(() => {
     if (showUnifiedCalendar) setCalendarDataEnabled(true);
   }, [showUnifiedCalendar]);
-
-  // 첫 화면이 그려진 뒤 한가할 때 미리 구독해 둔다 →
-  // 시작은 빠르게, 캘린더를 열 땐 이미 준비된 상태.
-  useEffect(() => {
-    if (!user || calendarDataEnabled) return;
-    const w = window as typeof window & {
-      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
-      cancelIdleCallback?: (id: number) => void;
-    };
-    if (w.requestIdleCallback) {
-      const id = w.requestIdleCallback(() => setCalendarDataEnabled(true), { timeout: 4000 });
-      return () => w.cancelIdleCallback?.(id);
-    }
-    const t = setTimeout(() => setCalendarDataEnabled(true), 2000);
-    return () => clearTimeout(t);
-  }, [user, calendarDataEnabled]);
 
 
   // Subscribe to entries
