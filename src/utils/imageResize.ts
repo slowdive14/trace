@@ -40,18 +40,31 @@ export interface ProgressTask {
 }
 
 /**
- * 진척이 stallMs 동안 없으면 작업을 '취소'하고 실패시킨다.
+ * 전송이 멈추면 작업을 '취소'하고 실패시킨다.
  * 고정 벽시계 타임아웃과 달리, 느리지만 진행 중인 전송은 살려 둔다.
  * 그리고 반드시 cancel()을 불러야 죽은 전송이 대역폭을 계속 먹지 않는다.
+ *
+ * 제한 시간을 두 단계로 나눈 이유:
+ * Firebase의 재개 가능 업로드는 청크 단위로 진척을 보고하는데 첫 청크가 256KB다.
+ * 압축된 사진은 대개 그보다 작아서 청크가 하나뿐이고, 그러면 진척 보고가
+ * '0%'와 '완료' 둘뿐이다. 단일 무진척 타이머를 쓰면 그 시간이 곧 총 제한이 되어,
+ * 느린 모바일 회선에서 멀쩡한 업로드가 잘려나간다.
+ * 그래서 첫 진척이 오기까지는 넉넉히 기다리고(토큰 발급·세션 생성·단일 요청 포함),
+ * 바이트가 움직이기 시작한 뒤에야 짧은 정체 감지로 전환한다.
+ *
+ * @param firstProgressMs 첫 바이트가 움직이기까지 허용할 시간
+ * @param stallMs         전송이 시작된 뒤 정체로 볼 시간
  */
 export function runWithStallGuard(
     task: ProgressTask,
+    firstProgressMs: number,
     stallMs: number,
     onProgress?: (fraction: number) => void,
 ): Promise<void> {
     return new Promise<void>((resolve, reject) => {
         let timer: ReturnType<typeof setTimeout>;
         let settled = false;
+        let moved = false;   // 실제로 바이트가 움직였는가
 
         const finish = (fn: () => void) => {
             if (settled) return;
@@ -60,21 +73,29 @@ export function runWithStallGuard(
             fn();
         };
 
-        const arm = () => {
+        const arm = (ms: number, message: string) => {
             clearTimeout(timer);
             timer = setTimeout(() => {
                 finish(() => {
-                    task.cancel();
-                    reject(new Error('업로드가 멈춰 중단했습니다 (네트워크 확인)'));
+                    try { task.cancel(); } catch { /* 이미 끝난 작업이면 무시 */ }
+                    reject(new Error(message));
                 });
-            }, stallMs);
+            }, ms);
         };
 
-        arm();
+        const armStart = () => arm(firstProgressMs, '업로드를 시작하지 못했습니다 (네트워크 확인)');
+        const armStall = () => arm(stallMs, '업로드가 도중에 멈췄습니다 (네트워크 확인)');
+
+        armStart();
         task.on(
             'state_changed',
             snap => {
-                arm();   // 진척이 있으면 시계를 되감는다
+                if (snap.bytesTransferred > 0) {
+                    moved = true;
+                    armStall();     // 전송이 시작됐다 → 짧은 정체 감지로 전환
+                } else if (!moved) {
+                    armStart();     // 아직 0바이트 (running 통지 등) → 시작 대기 시간을 되감는다
+                }
                 if (snap.totalBytes > 0) onProgress?.(snap.bytesTransferred / snap.totalBytes);
             },
             err => finish(() => reject(err)),

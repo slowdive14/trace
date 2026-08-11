@@ -5,12 +5,21 @@ import { compressImage, withTimeout, runWithStallGuard, retryAsync } from './ima
 import type { EntryPhoto } from '../types/types';
 
 /**
- * 전송이 이 시간 동안 한 바이트도 진척되지 않으면 멈춘 것으로 보고 중단한다.
- * 예전에는 파일 크기와 무관하게 60초 벽시계로 잘랐는데, 느리지만 정상 동작하는
- * 회선에서 큰 사진이 억울하게 실패했다. 진척 여부로 판단하는 편이 정확하다.
+ * 첫 바이트가 움직이기까지 허용할 시간.
+ * 토큰 발급·업로드 세션 생성이 여기 포함되고, 압축된 사진은 대개 256KB 미만이라
+ * 청크가 하나뿐이어서 '완료될 때 한 번' 진척이 보고된다. 즉 이 값이 작은 사진의
+ * 사실상 총 제한이 되므로 넉넉히 잡는다.
  */
-const STALL_TIMEOUT_MS = 20000;
+const FIRST_PROGRESS_TIMEOUT_MS = 60000;
+/** 전송이 시작된 뒤 정체로 볼 시간 */
+const STALL_TIMEOUT_MS = 30000;
 const MAX_ATTEMPTS = 3;
+/**
+ * 업로드는 한 번 실패에 최대 60초가 걸리므로 시도 횟수를 줄여 둔다.
+ * (3회면 사진 한 장에 3분까지 매달릴 수 있다. 성공분은 기억해 두므로
+ *  사용자가 다시 눌러도 못 올린 것만 이어서 올라간다.)
+ */
+const UPLOAD_ATTEMPTS = 2;
 /** Storage 보안 규칙 상한 */
 const MAX_BYTES = 5 * 1024 * 1024;
 
@@ -66,10 +75,11 @@ export async function uploadEntryPhoto(
     await retryAsync(
         () => runWithStallGuard(
             uploadBytesResumable(objectRef, blob, { contentType }),
+            FIRST_PROGRESS_TIMEOUT_MS,
             STALL_TIMEOUT_MS,
             onProgress,
         ),
-        MAX_ATTEMPTS,
+        UPLOAD_ATTEMPTS,
         '업로드',
     );
     const url = await retryAsync(
