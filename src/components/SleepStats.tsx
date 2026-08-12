@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import SleepCoachSection from './SleepCoachSection';
 import { Moon, Sun, Clock, ChevronDown, ChevronLeft, ChevronRight, Check, TrendingUp, TrendingDown, Minus, HelpCircle } from 'lucide-react';
 import { startOfWeek, endOfWeek, format, subWeeks } from 'date-fns';
 import { ko } from 'date-fns/locale';
@@ -563,6 +564,11 @@ export function SleepStats({ entries }: Props) {
                         avgSleepTime={stats.avgSleepTime}
                         avgWakeTime={stats.avgWakeTime}
                         avgDuration={stats.avgDuration}
+                    />
+                    <SleepCoachSection
+                        score={weeklyStats.currentScore}
+                        allRecords={allRecords}
+                        weekOffset={weekOffset}
                     />
                 </div>
             )}

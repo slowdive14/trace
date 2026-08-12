@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import type { BrainDumpInsight, MonthlyReview } from "../types/types";
+import type { BrainDumpInsight, MonthlyReview, SleepCoaching } from "../types/types";
 
 const getApiKey = () => {
     // 1. Try environment variable
@@ -197,6 +197,119 @@ ${recordsText}
         };
     } catch (error) {
         console.error("Error analyzing month:", error);
+        throw error;
+    }
+};
+
+/**
+ * 수면 점수 진단을 받아 '무엇을 어떻게 할지' 행동 지침을 만든다.
+ *
+ * 점수 계산은 이미 코드(sleepCoach.analyzeSleepGaps)가 끝냈고, AI는 그 숫자를
+ * 인용해 행동으로 옮기는 역할만 한다. 언어모델에 산수를 맡기면 그럴듯한 점수를
+ * 지어내는데, 점수 이야기가 틀리면 조언 전체를 믿을 수 없게 된다.
+ */
+export const generateSleepCoaching = async (
+    diagnosisText: string,
+    recordsText: string,
+    scheduleHint: string,
+): Promise<SleepCoaching> => {
+    const key = getApiKey();
+    if (!key) {
+        throw new Error("Gemini API key is not configured. Please add it in settings or .env file.");
+    }
+
+    const genAI = new GoogleGenerativeAI(key);
+    const model = genAI.getGenerativeModel({
+        model: "gemini-3.5-flash",
+        generationConfig: {
+            maxOutputTokens: 8192,
+            temperature: 0.4,
+        },
+    });
+
+    const prompt = `
+너는 수면 습관 코치다. 아래는 사용자의 수면 점수 진단과 실제 기록이다.
+점수를 올리면서 동시에 수면 루틴이 안정되도록, 구체적이고 바로 실행 가능한 행동 지침을 짜줘.
+
+⚠️ 숫자 규칙 (어기면 조언 전체가 무용지물이다):
+- 점수·시간·일수는 아래 [진단]에 있는 값을 그대로 인용해. 직접 계산하거나 새로 만들어내지 마.
+- [진단]에 없는 점수를 추정해서 쓰지 마.
+
+⚠️ 범위 규칙:
+- 생활습관(수면위생) 조언만 해라. 질병 진단, 약·영양제 복용 권유는 절대 하지 마.
+- 코골이·수면무호흡·만성 불면처럼 습관으로 해결되지 않는 신호가 기록에서 보이면,
+  단정하지 말고 qualityNotes에 "전문가 상담을 고려해볼 만하다"고만 적어.
+
+[진단]
+${diagnosisText}
+
+[최근 수면 기록]
+${recordsText}
+
+[앱이 계산한 다음 단계 목표 시각]
+${scheduleHint}
+
+다음 JSON 형식으로만 응답해. 유효한 JSON 외의 텍스트는 절대 넣지 마.
+
+{
+  "diagnosis": "지금 수면 상태를 3~4문장으로 진단. 반드시 [진단]의 수치를 인용하고, 실제 기록에서 관찰되는 패턴(예: 주말에만 늦게 잠)을 짚어줘.",
+  "biggestLever": {
+    "target": "가장 먼저 손댈 항목 이름",
+    "expectedGain": "되찾을 점수 (진단의 값 그대로)",
+    "why": "왜 이것부터인지 2~3문장. 점수 효율과 실행 난이도를 함께 근거로."
+  },
+  "actions": [
+    {
+      "title": "행동 제목 (짧고 명령형)",
+      "points": "이 행동이 노리는 점수 (진단의 값 인용)",
+      "timing": "실행 시각 또는 시점 (예: 22:30, 기상 직후)",
+      "steps": ["구체적 실행 단계 2~4개. 무엇을 어디서 어떻게 하는지까지."]
+    }
+  ],
+  "weekPlan": ["월요일: ...", "화요일: ...", "수요일: ...", "목요일: ...", "금요일: ...", "토요일: ...", "일요일: ..."],
+  "pitfalls": ["이 계획에서 흔히 무너지는 지점과 대처법 2~4개"],
+  "qualityNotes": ["점수에는 안 잡히지만 수면의 질에 중요한 것 2~4개"]
+}
+
+지침:
+- actions는 4~6개. 점수 이득이 큰 순서로 배치해.
+- 추상적인 말("일찍 자라", "규칙적으로") 금지. 몇 시에 무엇을 하는지까지 적어.
+- 사용자의 실제 취침·기상 시각에서 출발해. 지금보다 2시간 이른 취침처럼 갑작스러운 변화를 요구하지 말고,
+  [다음 단계 목표 시각]을 기준으로 15~30분 단위의 점진적 조정을 제안해.
+- weekPlan은 요일마다 다른 구체적 초점을 줘. 주말에 무너지기 쉬운 점을 반영해.
+- 훈계하지 말고, 담백하고 실용적인 톤으로.
+`;
+
+    try {
+        const result = await model.generateContent(prompt);
+        const text = (await result.response).text();
+        const jsonStr = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        const parsed = JSON.parse(jsonStr);
+
+        return {
+            diagnosis: parsed.diagnosis || '',
+            biggestLever: {
+                target: parsed.biggestLever?.target || '',
+                expectedGain: parsed.biggestLever?.expectedGain || '',
+                why: parsed.biggestLever?.why || '',
+            },
+            actions: Array.isArray(parsed.actions)
+                ? parsed.actions
+                    .filter((a: unknown): a is Record<string, unknown> => !!a && typeof a === 'object')
+                    .map((a: Record<string, unknown>) => ({
+                        title: String(a.title ?? ''),
+                        points: String(a.points ?? ''),
+                        timing: String(a.timing ?? ''),
+                        steps: Array.isArray(a.steps) ? a.steps.map(String) : [],
+                    }))
+                    .filter((a: { title: string }) => a.title)
+                : [],
+            weekPlan: Array.isArray(parsed.weekPlan) ? parsed.weekPlan.map(String) : [],
+            pitfalls: Array.isArray(parsed.pitfalls) ? parsed.pitfalls.map(String) : [],
+            qualityNotes: Array.isArray(parsed.qualityNotes) ? parsed.qualityNotes.map(String) : [],
+        };
+    } catch (error) {
+        console.error("Error generating sleep coaching:", error);
         throw error;
     }
 };

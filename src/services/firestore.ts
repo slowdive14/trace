@@ -17,7 +17,7 @@ import {
 import { db } from './firebase';
 import { startOfDay, format as formatDateFns } from 'date-fns';
 import { getDueRules, getEffectivePostDate } from '../utils/expenseUtils';
-import type { Expense, ExpenseCategory, RecurringExpense, Todo, Worry, WorryEntry, BrainDump, BrainDumpStatus, BrainDumpInsight, DailyReflection, MonthlyReview, MonthlyInsight, EntryPhoto } from '../types/types';
+import type { Expense, ExpenseCategory, RecurringExpense, SleepCoaching, SleepCoachingRecord, Todo, Worry, WorryEntry, BrainDump, BrainDumpStatus, BrainDumpInsight, DailyReflection, MonthlyReview, MonthlyInsight, EntryPhoto } from '../types/types';
 
 const EXPENSES_COLLECTION = 'expenses';
 
@@ -713,6 +713,34 @@ export const getMonthlyInsight = async (userId: string, monthKey: string): Promi
         id: snap.id,
         review: data.review as MonthlyReview,
         entryCount: data.entryCount ?? 0,
+        generatedAt: data.generatedAt?.toDate() || new Date(),
+    };
+};
+
+// 수면 코칭 (문서 ID = 주 시작일 yyyy-MM-dd)
+const SLEEP_COACHING_COLLECTION = 'sleepCoaching';
+
+export const saveSleepCoaching = async (
+    userId: string,
+    weekKey: string,
+    coaching: SleepCoaching,
+    scoreSnapshot: number
+): Promise<void> => {
+    const docRef = doc(db, `users/${userId}/${SLEEP_COACHING_COLLECTION}`, weekKey);
+    await setDoc(docRef, { coaching, scoreSnapshot, generatedAt: Timestamp.now() });
+};
+
+export const getSleepCoaching = async (
+    userId: string,
+    weekKey: string
+): Promise<SleepCoachingRecord | null> => {
+    const snap = await getDoc(doc(db, `users/${userId}/${SLEEP_COACHING_COLLECTION}`, weekKey));
+    if (!snap.exists()) return null;
+    const data = snap.data();
+    return {
+        id: snap.id,
+        coaching: data.coaching as SleepCoaching,
+        scoreSnapshot: data.scoreSnapshot ?? 0,
         generatedAt: data.generatedAt?.toDate() || new Date(),
     };
 };

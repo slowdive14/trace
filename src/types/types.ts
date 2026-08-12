@@ -169,6 +169,34 @@ export interface MonthlyInsight {
     generatedAt: Date;
 }
 
+/** 수면 점수를 올리기 위한 AI 행동 지침 */
+export interface SleepAction {
+    title: string;        // 행동 제목
+    points: string;       // 이 행동이 노리는 점수 (예: "취침 목표 +7.7점")
+    timing: string;       // 언제 하는지 (예: "22:30")
+    steps: string[];      // 구체적 실행 단계
+}
+
+export interface SleepCoaching {
+    diagnosis: string;          // 현재 상태 진단 (수치 근거)
+    biggestLever: {
+        target: string;         // 가장 먼저 손댈 항목
+        expectedGain: string;   // 되찾을 점수
+        why: string;            // 왜 이것부터인지
+    };
+    actions: SleepAction[];
+    weekPlan: string[];         // 이번 주 요일별 계획
+    pitfalls: string[];         // 흔한 실패 지점
+    qualityNotes: string[];     // 점수엔 안 잡히지만 수면의 질에 중요한 것
+}
+
+export interface SleepCoachingRecord {
+    id: string;                 // 주 시작일 (YYYY-MM-DD)
+    coaching: SleepCoaching;
+    scoreSnapshot: number;      // 생성 시점 총점 (재생성 판단용)
+    generatedAt: Date;
+}
+
 export type BrainDumpStatus = 'writing' | 'analyzing' | 'completed';
 
 export interface BrainDump {
