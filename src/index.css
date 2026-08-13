@@ -6,6 +6,35 @@
   body {
     @apply bg-bg-primary text-text-primary selection:bg-accent/30 selection:text-white;
   }
+
+  /*
+   * 본문 기둥 너비.
+   * 모바일 우선으로 만들어져 448px(max-w-md)이 고정돼 있었는데, 넓은 화면에서도
+   * 그대로여서 답답했다. 화면이 커지면 함께 넓어지되, 글줄이 지나치게 길어지지
+   * 않도록 상한을 둔다.
+   *
+   * 고정 헤더·입력바·탭바가 본문과 같은 값을 써야 어긋나지 않으므로
+   * 반드시 이 변수 하나로만 제어한다.
+   */
+  :root {
+    --app-w: 28rem;   /* 448px */
+  }
+  @media (min-width: 768px) {
+    :root { --app-w: 34rem; }   /* 544px */
+  }
+  @media (min-width: 1280px) {
+    :root { --app-w: 42rem; }   /* 672px */
+  }
+}
+
+@layer components {
+  /* max-w-md mx-auto 를 대체한다 */
+  .app-container {
+    width: 100%;
+    max-width: var(--app-w);
+    margin-left: auto;
+    margin-right: auto;
+  }
 }
 
 /* Smooth Scrolling */

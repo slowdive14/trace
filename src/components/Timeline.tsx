@@ -648,7 +648,7 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
 
             {/* Header: Date Filter & View Toggle */}
             <div className="sticky top-0 bg-bg-primary/95 backdrop-blur border-b border-bg-tertiary z-20 px-4 py-3">
-                <div className={`${category === 'chore' ? 'max-w-4xl' : 'max-w-md'} mx-auto flex flex-col gap-3`}>
+                <div className={`${category === 'chore' ? 'max-w-4xl' : 'app-container'} mx-auto flex flex-col gap-3`}>
                     <div className="flex gap-2">
                         <div className="flex-1 flex gap-1 bg-bg-secondary rounded-lg p-1">
                             <button
@@ -753,7 +753,7 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
             {/* Sub-filter for Book Category */}
             {category === 'book' && (
                 <div className="sticky top-[57px] bg-bg-primary/95 backdrop-blur border-b border-bg-tertiary z-19 px-4 py-2">
-                    <div className="max-w-md mx-auto flex gap-2">
+                    <div className="app-container flex gap-2">
                         <button
                             onClick={() => onSubFilterChange?.(null)}
                             className={`flex-1 py-1.5 px-2 text-xs font-medium rounded-md transition-colors ${subFilter === null
@@ -787,7 +787,7 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
                 </div>
             )}
 
-            <div className={`px-4 ${category === 'chore' ? 'max-w-4xl' : 'max-w-md'} mx-auto ${category === 'book' ? 'pb-60' : 'pb-32'}`}>
+            <div className={`px-4 ${category === 'chore' ? 'max-w-4xl' : 'app-container'} mx-auto ${category === 'book' ? 'pb-60' : 'pb-32'}`}>
                 {category === 'book' && bookView === 'shelf' ? (
                     <BookshelfView
                         entries={shelfEntries}

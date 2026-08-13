@@ -53,7 +53,7 @@ const WorryInput: React.FC<WorryInputProps> = ({ activeWorryId, worryStartDate, 
         if (isEmbedded) return null;
         return (
             <div className="fixed bottom-[52px] left-0 right-0 bg-bg-secondary border-t border-bg-tertiary p-4 z-40">
-                <div className="max-w-md mx-auto text-center text-text-secondary text-sm">
+                <div className="app-container text-center text-text-secondary text-sm">
                     고민을 먼저 시작해주세요
                 </div>
             </div>
@@ -66,7 +66,7 @@ const WorryInput: React.FC<WorryInputProps> = ({ activeWorryId, worryStartDate, 
 
     return (
         <div className={containerClasses}>
-            <div className={isEmbedded ? "w-full" : "max-w-md mx-auto"}>
+            <div className={isEmbedded ? "w-full" : "app-container"}>
                 {!isEmbedded && worryTitle && (
                     <div className="text-center text-xs text-purple-400 mb-2">
                         💭 "{worryTitle}" 에 기록 중

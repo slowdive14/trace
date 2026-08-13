@@ -251,7 +251,7 @@ const WorryTab: React.FC = () => {
     if (loading) return <div className="p-4 text-center text-text-secondary">Loading...</div>;
 
     return (
-        <div className="flex flex-col h-full max-w-md mx-auto pb-48">
+        <div className="flex flex-col h-full app-container pb-48">
             <div className="p-4 bg-bg-secondary border-b border-bg-tertiary mb-4">
                 {/* Tab UI */}
                 <div className="flex gap-2 mb-4">

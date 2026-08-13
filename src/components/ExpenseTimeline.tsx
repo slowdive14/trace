@@ -158,7 +158,7 @@ const ExpenseTimeline: React.FC<ExpenseTimelineProps> = ({ onDateSelect, navigat
     };
 
     return (
-        <div className="pb-40 px-4 max-w-md mx-auto">
+        <div className="pb-40 px-4 app-container">
             <ExpenseCalendar
                 expenses={expenses}
                 selectedDate={selectedDate}

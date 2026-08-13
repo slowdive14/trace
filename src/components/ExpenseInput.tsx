@@ -127,7 +127,7 @@ const ExpenseInput: React.FC<ExpenseInputProps> = ({ externalDate }) => {
     return (
         <>
             <div className="fixed bottom-0 left-0 right-0 bg-bg-secondary border-t border-bg-tertiary transition-all duration-300 z-50" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
-                <div className="max-w-md mx-auto flex flex-col gap-3 p-4 max-h-[calc(100vh-160px)] overflow-y-auto">
+                <div className="app-container flex flex-col gap-3 p-4 max-h-[calc(100vh-160px)] overflow-y-auto">
                     {!isToday && (
                         <div className="text-xs text-accent text-center">
                             📅 {format(selectedDate, 'yyyy년 M월 d일')} 지출 기록

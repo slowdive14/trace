@@ -1465,7 +1465,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
         <div className="flex flex-col relative" style={{ height: 'calc(100vh - 160px)' }}>
             {/* Mode Tabs */}
             <div className="flex-shrink-0 bg-bg-primary/95 backdrop-blur border-b border-bg-tertiary z-20 px-4">
-                <div className="max-w-md mx-auto flex gap-2 py-2">
+                <div className="app-container flex gap-2 py-2">
                     <button
                         onClick={() => setViewMode('edit')}
                         className={`flex-1 py-2 px-4 text-sm font-medium rounded-md transition-colors ${viewMode === 'edit'
@@ -1508,7 +1508,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
             {/* Date Navigation (edit/matrix mode only) */}
             {(viewMode === 'edit' || viewMode === 'matrix') && (
                 <div className="flex-shrink-0 bg-bg-primary border-b border-bg-tertiary px-4 py-2 z-10">
-                    <div className="max-w-md mx-auto flex items-center justify-between">
+                    <div className="app-container flex items-center justify-between">
                         <button
                             onClick={() => handleDateChange('prev')}
                             className="p-1.5 text-text-secondary hover:text-text-primary transition-colors rounded-md hover:bg-bg-secondary"
@@ -1541,7 +1541,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
             {viewMode === 'history' ? (
                 /* History Mode */
                 <div className="flex-1 overflow-y-auto px-4 pb-8">
-                    <div className="max-w-md mx-auto pt-4">
+                    <div className="app-container pt-4">
                         {Object.entries(groupedTodos).map(([date, todo]) => {
                             const historyItems = parseTodos(todo.content);
                             const historySummary = calculateWeightedSummary(historyItems);
@@ -1681,7 +1681,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
                 </div>
             ) : (
                 /* Edit Mode & Template Mode */
-                <div className="w-full max-w-md mx-auto relative flex flex-col flex-1 overflow-hidden">
+                <div className="w-full app-container relative flex flex-col flex-1 overflow-hidden">
                     {/* Saving Indicator */}
                     <div className="absolute top-4 right-16 z-30 flex items-center gap-2 pointer-events-none">
                         <span className={`text-xs font-medium transition-opacity duration-300 ${isSaving ? 'text-accent opacity-100' : 'opacity-0'}`}>
@@ -1726,7 +1726,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
                             />
 
                             {/* Mobile Toolbar */}
-                            <div className="fixed bottom-0 left-0 right-0 bg-bg-secondary border-t border-bg-tertiary p-2 flex items-center justify-around z-20 max-w-md mx-auto">
+                            <div className="fixed bottom-0 left-0 right-0 bg-bg-secondary border-t border-bg-tertiary p-2 flex items-center justify-around z-20 app-container">
                                 <button onClick={() => insertText('- [ ] ')} className="p-2 text-text-secondary hover:text-accent" title="Checklist">
                                     <Square size={20} />
                                 </button>

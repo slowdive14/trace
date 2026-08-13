@@ -167,7 +167,7 @@ const SearchBar: React.FC<SearchBarProps> = ({ onClose, onNavigate }) => {
 
             <div className="flex-1 overflow-y-auto p-4">
                 {filteredResults.length > 0 ? (
-                    <div className="space-y-1 max-w-md mx-auto">
+                    <div className="space-y-1 app-container">
                         {filteredResults.map(result => (
                             <div
                                 key={result.id}

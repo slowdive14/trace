@@ -264,7 +264,7 @@ const AppContent: React.FC = () => {
         <>
           {selectedTag && activeTab !== 'expense' && activeTab !== 'todo' && activeTab !== 'book' && (
             <div className="sticky top-0 bg-bg-secondary/95 backdrop-blur border-b border-bg-tertiary py-2 px-4 z-20">
-              <div className="max-w-md mx-auto flex items-center justify-between">
+              <div className="app-container flex items-center justify-between">
                 <span className="text-sm text-text-secondary">
                   필터: <span className="text-accent font-medium">{selectedTag}</span>
                 </span>
@@ -340,7 +340,7 @@ const AppContent: React.FC = () => {
           {/* Category Tabs */}
           <div className={`fixed left-0 right-0 bg-bg-primary/80 backdrop-blur-xl border-t border-white/5 z-[45] safe-area-bottom transition-all duration-300 ${['worry', 'braindump'].includes(activeTab) ? 'bottom-0' : 'bottom-20'
             }`}>
-            <div className="max-w-md mx-auto flex px-2">
+            <div className="app-container flex px-2">
               {[
                 { id: 'todo', label: '투두', color: 'text-emerald-400', border: 'border-emerald-400/50' },
                 { id: 'action', label: '일상', color: 'text-blue-400', border: 'border-blue-400/50' },

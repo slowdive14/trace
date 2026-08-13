@@ -16,7 +16,7 @@ const Layout: React.FC<LayoutProps> = ({ children, onSearch, onCalendar, onGalle
 
     return (
         <div className="min-h-screen bg-bg-primary text-text-primary font-sans selection:bg-accent/30 tracking-tight">
-            <header className="fixed top-0 left-0 right-0 h-16 bg-bg-primary/70 backdrop-blur-xl border-b border-white/5 z-[50] px-6 flex items-center justify-between max-w-md mx-auto w-full transition-all duration-300">
+            <header className="fixed top-0 left-0 right-0 h-16 bg-bg-primary/70 backdrop-blur-xl border-b border-white/5 z-[50] px-6 flex items-center justify-between app-container transition-all duration-300">
                 <h1 className="text-xl font-bold tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-white to-white/60">Serein</h1>
                 <div className="flex items-center gap-5">
                     {user ? (
