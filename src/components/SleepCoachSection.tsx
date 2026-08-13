@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { format, startOfWeek, subWeeks } from 'date-fns';
-import { Sparkles, RefreshCw, Target, AlertTriangle, CalendarDays, Loader2 } from 'lucide-react';
+import { Sparkles, RefreshCw, Target, AlertTriangle, CalendarDays, Loader2, ChevronDown } from 'lucide-react';
 import type { SleepCoaching, SleepCoachingRecord } from '../types/types';
 import type { SleepRecord, SleepScore } from '../utils/sleepUtils';
 import { getIdealSleepSchedule, getWeeklyRecords } from '../utils/sleepUtils';
@@ -38,6 +38,8 @@ export const SleepCoachSection: React.FC<Props> = ({ score, allRecords, weekOffs
     const [savedScore, setSavedScore] = useState<number | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    // 수면 카드 안에서도 부피가 큰 영역이라 기본은 접어 둔다
+    const [open, setOpen] = useState(false);
 
     const weekKey = format(startOfWeek(subWeeks(new Date(), weekOffset), { weekStartsOn: 1 }), 'yyyy-MM-dd');
     const weekRecords = getWeeklyRecords(allRecords, weekOffset).records;
@@ -90,12 +92,32 @@ export const SleepCoachSection: React.FC<Props> = ({ score, allRecords, weekOffs
 
     return (
         <div className="pt-3 border-t border-bg-tertiary">
-            <div className="flex items-center justify-between mb-3">
+            {/* 접힌 상태에서도 되찾을 점수는 보여줘서, 열어볼 값어치가 있는지 알 수 있게 한다 */}
+            <button
+                onClick={() => setOpen(v => !v)}
+                className="w-full flex items-center justify-between"
+                aria-expanded={open}
+            >
                 <div className="flex items-center gap-1.5">
                     <Sparkles size={13} className="text-indigo-400" />
                     <span className="text-xs font-medium text-text-primary">수면 코칭</span>
+                    {diagnosis.biggest && (
+                        <span className="text-[10px] text-text-tertiary tabular-nums">
+                            {diagnosis.biggest.label} +{Math.round(diagnosis.biggest.lost)}점 여지
+                        </span>
+                    )}
+                    {coaching && <span className="text-[10px] text-indigo-400">· 지침 있음</span>}
                 </div>
-                {coaching && (
+                <ChevronDown
+                    size={14}
+                    className={`text-text-tertiary transition-transform ${open ? 'rotate-180' : ''}`}
+                />
+            </button>
+
+            {open && (
+            <div className="mt-3">
+            {coaching && (
+                <div className="flex justify-end mb-2">
                     <button
                         onClick={generate}
                         disabled={loading}
@@ -103,8 +125,8 @@ export const SleepCoachSection: React.FC<Props> = ({ score, allRecords, weekOffs
                     >
                         <RefreshCw size={10} className={loading ? 'animate-spin' : ''} /> 다시 생성
                     </button>
-                )}
-            </div>
+                </div>
+            )}
 
             {/* 코드가 계산한 항목별 손실 — AI 없이도 항상 보인다 */}
             <div className="space-y-2 mb-3">
@@ -221,6 +243,8 @@ export const SleepCoachSection: React.FC<Props> = ({ score, allRecords, weekOffs
                         {savedAt && ` · ${format(savedAt, 'M/d HH:mm')} 생성`}
                     </p>
                 </div>
+            )}
+            </div>
             )}
         </div>
     );
