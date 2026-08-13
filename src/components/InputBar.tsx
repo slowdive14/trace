@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Maximize2, Minimize2, Calendar, Smile, Moon, Sun, CloudMoon, ImagePlus, Loader2, X } from 'lucide-react';
+import { Send, Maximize2, Minimize2, Calendar, Smile, Moon, Sun, CloudMoon, ImagePlus, Loader2, X, Microscope } from 'lucide-react';
 import { extractTags } from '../utils/tagUtils';
 import { addEntry } from '../services/firestore';
 import { uploadEntryPhoto } from '../utils/imageUpload';
@@ -189,6 +189,40 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
         } catch (error) {
             console.error('Failed to add nap record:', error);
         }
+    };
+
+    /**
+     * 현장 관찰 템플릿을 삽입한다.
+     * 정신건강 현장에서 발견한 문제를 같은 틀로 모아두기 위한 것.
+     * 아직 실험 단계라 전용 컬렉션을 만들지 않고 #현장 태그로만 구분한다 —
+     * 기존 검색·태그 필터·옵시디언 동기화가 그대로 적용되고, 쓰면서 항목을
+     * 바꾸더라도 스키마 마이그레이션이 필요 없다.
+     */
+    const insertFieldNoteTemplate = () => {
+        const template = [
+            '#현장',
+            '**오늘 발견한 문제:** ',
+            '**누가 불편한가:** ',
+            '**얼마나 자주 발생하는가:** ',
+            '**현재는 어떻게 해결하고 있는가:** ',
+            '**기술로 해결한다면:** ',
+            '**사람의 판단이 반드시 필요한 부분:** ',
+        ].join('\n');
+
+        const base = content.trim();
+        const newContent = base ? `${base}\n\n${template}` : template;
+        setContent(newContent);
+        setIsExpanded(true);
+
+        // 첫 항목 끝으로 커서를 보내 바로 이어 쓰게 한다
+        setTimeout(() => {
+            const el = textareaRef.current;
+            if (!el) return;
+            const caret = newContent.indexOf('\n', newContent.indexOf('**오늘 발견한 문제:**'));
+            const pos = caret === -1 ? newContent.length : caret;
+            el.setSelectionRange(pos, pos);
+            el.focus();
+        }, 50);
     };
 
     const insertBookTag = (tag: string) => {
@@ -545,6 +579,20 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
             {/* 사진 미리보기/에러가 탭바·플로팅바에 가려지지 않도록 입력창을 그 위로 올린다 */}
             <div className={`fixed bottom-0 left-0 right-0 bg-bg-secondary border-t border-bg-tertiary p-3 transition-all duration-300 ${isExpanded ? 'h-1/2 z-50' : 'h-auto z-[70]'}`}>
                 <div className="app-container flex flex-col h-full gap-2 relative">
+                    {/* 확장 모드에서 현장 관찰 템플릿 (6개 항목이라 확장 입력창이 필요하다) */}
+                    {activeCategory === 'action' && isExpanded && (
+                        <div className="flex gap-2 flex-wrap p-2 bg-bg-tertiary rounded-lg border-b border-bg-primary">
+                            <button
+                                type="button"
+                                onClick={insertFieldNoteTemplate}
+                                className="flex items-center gap-1.5 py-1.5 px-3 text-xs font-medium rounded-md bg-teal-600 text-white hover:bg-teal-500 transition-colors"
+                                title="정신건강 현장에서 발견한 문제를 같은 틀로 기록"
+                            >
+                                <Microscope size={13} /> 현장관찰
+                            </button>
+                        </div>
+                    )}
+
                     {/* 확장 모드에서 책 태그 버튼 바를 InputBar 상단에 표시 */}
                     {activeCategory === 'book' && isExpanded && (
                         <div className="flex gap-2 flex-wrap p-2 bg-bg-tertiary rounded-lg border-b border-bg-primary">
