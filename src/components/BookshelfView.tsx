@@ -10,10 +10,13 @@ interface BookshelfViewProps {
     onSelectEntry?: (entry: Entry) => void;
 }
 
+// w-full이 없으면 button이 내용(제목) 크기에 맞춰져 카드 너비가 제목 길이에
+// 끌려간다. 표지가 aspect-[3/4]라 높이까지 제각각이 되고, 제목이 길면 열을
+// 넘어가 화면 밖으로 삐져나온다.
 const Card: React.FC<{ card: BookCard; highlight?: boolean; onClick?: () => void }> = ({ card, highlight, onClick }) => (
     <button
         onClick={onClick}
-        className={`text-left group flex flex-col ${highlight ? 'ring-2 ring-accent rounded-lg' : ''}`}
+        className={`w-full min-w-0 text-left group flex flex-col ${highlight ? 'ring-2 ring-accent rounded-lg' : ''}`}
     >
         {/* 표지 — 사진이 있으면 사진, 없으면 제목을 얹은 색면 */}
         <div
@@ -120,7 +123,7 @@ const BookshelfView: React.FC<BookshelfViewProps> = ({ entries, onSelectEntry })
 
             <div className="grid grid-cols-3 gap-x-3 gap-y-4">
                 {cards.map(card => (
-                    <div key={card.entry.id} data-shelf-id={card.entry.id}>
+                    <div key={card.entry.id} data-shelf-id={card.entry.id} className="min-w-0">
                         <Card
                             card={card}
                             highlight={card.entry.id === pickedId}
