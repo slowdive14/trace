@@ -1,4 +1,6 @@
-import React, { useState, useEffect, Suspense, lazy } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
+import { lazyWithReload } from './utils/lazyWithReload';
+import ChunkErrorBoundary from './components/ChunkErrorBoundary';
 import { AuthProvider, useAuth } from './components/AuthContext';
 import Layout from './components/Layout';
 import Timeline from './components/Timeline';
@@ -7,15 +9,15 @@ import EmotionPickerModal from './components/EmotionPickerModal';
 
 // 시작 화면(일상 탭 = Timeline + InputBar)에 필요 없는 화면은 코드 분할한다.
 // 하나의 번들을 전부 파싱해야 첫 화면이 뜨던 비용을 줄이기 위함.
-const CalendarView = lazy(() => import('./components/CalendarView'));
-const SearchBar = lazy(() => import('./components/SearchBar'));
-const ExpenseTimeline = lazy(() => import('./components/ExpenseTimeline'));
-const ExpenseInput = lazy(() => import('./components/ExpenseInput'));
-const UnifiedCalendarModal = lazy(() => import('./components/UnifiedCalendarModal'));
-const PhotoGallery = lazy(() => import('./components/PhotoGallery'));
-const TodoTab = lazy(() => import('./components/TodoTab'));
-const WorryTab = lazy(() => import('./components/WorryTab'));
-const BrainDumpTab = lazy(() => import('./components/BrainDumpTab'));
+const CalendarView = lazyWithReload(() => import('./components/CalendarView'));
+const SearchBar = lazyWithReload(() => import('./components/SearchBar'));
+const ExpenseTimeline = lazyWithReload(() => import('./components/ExpenseTimeline'));
+const ExpenseInput = lazyWithReload(() => import('./components/ExpenseInput'));
+const UnifiedCalendarModal = lazyWithReload(() => import('./components/UnifiedCalendarModal'));
+const PhotoGallery = lazyWithReload(() => import('./components/PhotoGallery'));
+const TodoTab = lazyWithReload(() => import('./components/TodoTab'));
+const WorryTab = lazyWithReload(() => import('./components/WorryTab'));
+const BrainDumpTab = lazyWithReload(() => import('./components/BrainDumpTab'));
 import Toast from './components/common/Toast';
 import { useToast } from './hooks/useToast';
 import { addEntry } from './services/firestore';
@@ -278,6 +280,7 @@ const AppContent: React.FC = () => {
             </div>
           )}
 
+          <ChunkErrorBoundary>
           <Suspense fallback={<div className="flex items-center justify-center py-20 text-text-secondary text-sm">불러오는 중…</div>}>
           {activeTab === 'worry' ? (
             <WorryTab />
@@ -336,6 +339,7 @@ const AppContent: React.FC = () => {
             </>
           )}
           </Suspense>
+          </ChunkErrorBoundary>
 
           {/* Category Tabs */}
           <div className={`fixed left-0 right-0 bg-bg-primary/80 backdrop-blur-xl border-t border-white/5 z-[45] safe-area-bottom transition-all duration-300 ${['worry', 'braindump'].includes(activeTab) ? 'bottom-0' : 'bottom-20'
@@ -441,6 +445,7 @@ const AppContent: React.FC = () => {
 
           <Toast message="감정이 기록되었어요" isVisible={emotionToast.isVisible} icon={<Smile size={16} />} />
 
+          <ChunkErrorBoundary>
           <Suspense fallback={null}>
             {showCalendar && (
               <CalendarView
@@ -476,6 +481,7 @@ const AppContent: React.FC = () => {
               />
             )}
           </Suspense>
+          </ChunkErrorBoundary>
         </>
       ) : (
         <div className="flex flex-col items-center justify-center min-h-[80vh] px-4 text-center">

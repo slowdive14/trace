@@ -26,26 +26,37 @@ export function extractSleepRecords(entries: Entry[]): SleepRecord[] {
 
     const records: SleepRecord[] = [];
     const usedSleepIndices = new Set<number>();
+    const DAY_MS = 24 * 60 * 60 * 1000;
 
-    // 각 기상에 대해 가장 가까운 이전 취침을 매칭
+    // 각 기상에 대해 '직전의 아직 쓰이지 않은 취침'을 매칭한다.
+    //
+    // 예전에는 기상마다 취침 배열 전체를 훑어서 O(기상수 × 취침수)였다. 기록이
+    // 쌓일수록 제곱으로 느려져(기록 2배 → 시간 약 3.7배) 일상 탭이 눈에 띄게
+    // 굼떠졌다. 두 배열이 모두 시간순이라는 점을 이용해 한 번씩만 훑는다.
+    //
+    // 아직 매칭되지 않은 '기상보다 앞선 취침'들을 스택에 쌓아두면 맨 위가 항상
+    // 가장 최근(=차이가 가장 작은) 취침이다. 맨 위가 24시간을 넘겼다면 그 아래는
+    // 모두 더 오래된 것이고, 이후의 기상은 시간이 더 흐른 뒤이므로 영영 매칭될
+    // 수 없다 — 그래서 통째로 버린다. 결과는 기존 구현과 동일하다.
+    const pendingSleeps: number[] = [];
+    let sleepCursor = 0;
+
     for (const wake of wakeEntries) {
         const wakeTime = wake.timestamp;
-        let bestSleepIdx = -1;
-        let bestDiff = Infinity;
 
-        for (let i = 0; i < sleepEntries.length; i++) {
-            if (usedSleepIndices.has(i)) continue;
+        while (
+            sleepCursor < sleepEntries.length &&
+            sleepEntries[sleepCursor].timestamp.getTime() < wakeTime.getTime()
+        ) {
+            pendingSleeps.push(sleepCursor++);
+        }
 
-            const sleepTime = sleepEntries[i].timestamp;
-            // 취침이 기상보다 앞서야 함
-            if (sleepTime >= wakeTime) continue;
-
-            const diff = wakeTime.getTime() - sleepTime.getTime();
-            // 24시간 이내의 취침만 매칭
-            if (diff < 24 * 60 * 60 * 1000 && diff < bestDiff) {
-                bestDiff = diff;
-                bestSleepIdx = i;
-            }
+        // 맨 위가 24시간을 넘겼으면 남은 것 전부 매칭 불가
+        while (
+            pendingSleeps.length > 0 &&
+            wakeTime.getTime() - sleepEntries[pendingSleeps[pendingSleeps.length - 1]].timestamp.getTime() >= DAY_MS
+        ) {
+            pendingSleeps.length = 0;
         }
 
         const record: SleepRecord = {
@@ -53,11 +64,12 @@ export function extractSleepRecords(entries: Entry[]): SleepRecord[] {
             wakeTime: wakeTime,
         };
 
-        if (bestSleepIdx !== -1) {
-            const sleepTime = sleepEntries[bestSleepIdx].timestamp;
+        if (pendingSleeps.length > 0) {
+            const idx = pendingSleeps.pop()!;
+            const sleepTime = sleepEntries[idx].timestamp;
             record.sleepTime = sleepTime;
             record.duration = differenceInMinutes(wakeTime, sleepTime);
-            usedSleepIndices.add(bestSleepIdx);
+            usedSleepIndices.add(idx);
         }
 
         records.push(record);
