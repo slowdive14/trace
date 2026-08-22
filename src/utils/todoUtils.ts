@@ -212,11 +212,30 @@ export const getRealLevel = (totalCompleted: number): RealLevelInfo => {
  */
 export const STREAK_THRESHOLD = 70;
 
+/**
+ * 이 완료율을 채운 날은 '메꾸기'를 하나 벌어, 기준에 못 미친 날 하루를 덮는다.
+ *
+ * 적립이 소급으로 작동한다는 점이 중요하다. 오늘 100%를 채우면 어제의 미달을
+ * 메울 수 있어야 한다 — 앞으로만 쓸 수 있으면 정작 끊긴 직후에는 쓸모가 없다.
+ * 그래서 오늘에서 거슬러 올라가며 만난 100% 날의 적립을, 그보다 앞선 미달일에 쓴다.
+ */
+export const STREAK_REPAIR_RATE = 100;
+
+/**
+ * 한 연속 구간에서 쓸 수 있는 메꾸기 상한.
+ * 없으면 100% 날이 많을수록 사실상 끊기지 않아 지표가 의미를 잃는다.
+ */
+export const MAX_STREAK_REPAIRS = 2;
+
 export interface StreakInfo {
     /** 현재 연속 일수 (오늘이 아직 미달이면 어제까지의 연속을 유지해서 보여준다) */
     current: number;
     longest: number;
     todayMet: boolean;
+    /** 아직 쓰지 않고 남은 메꾸기 (다음 미달일에 쓸 수 있는 몫) */
+    repairsAvailable: number;
+    /** 지금 연속을 잇기 위해 실제로 메꾼 날들 (최근 순) */
+    repairedDates: string[];
 }
 
 const shiftDay = (dateStr: string, delta: number): string => {
@@ -236,31 +255,81 @@ export const calculateStreak = (
     todayStr: string,
     threshold: number = STREAK_THRESHOLD
 ): StreakInfo => {
-    const met = (key: string) => (ratesByDate[key] ?? -1) >= threshold;
+    const rateOf = (key: string) => ratesByDate[key] ?? -1;
+    const met = (key: string) => rateOf(key) >= threshold;
     const todayMet = met(todayStr);
 
-    // 오늘은 아직 진행 중일 수 있으므로 어제부터 거슬러 세고, 오늘 달성 시에만 +1.
-    // (이렇게 해야 매일 아침 스트릭이 0으로 보이지 않는다)
+    const dates = Object.keys(ratesByDate).sort();
+    if (dates.length === 0) {
+        return { current: 0, longest: 0, todayMet: false, repairsAvailable: 0, repairedDates: [] };
+    }
+    const earliest = dates[0];
+
+    // 오늘에서 하루씩 거슬러 올라가며 연속 구간을 끊어 나간다.
+    // 뒤(더 최근)에서 번 메꾸기를 앞의 미달일에 쓰는 구조라 뒤에서부터 훑어야 한다.
+    // 끊길 때마다 새 구간이 시작되므로, 한 번의 역방향 순회로
+    // '오늘까지의 연속'과 '역대 최장'을 함께 얻는다.
     let current = 0;
+    let currentRepairs: string[] = [];
+    let repairsAvailable = 0;
+    let longest = 0;
+
+    let run = 0;
+    let credits = 0;
+    let repaired: string[] = [];
+    let isCurrentRun = true;   // 첫 구간만 '오늘까지의 연속'
+
+    // 오늘은 아직 진행 중일 수 있다. 달성했을 때만 세고, 미달이어도 끊지 않는다.
+    // (이렇게 해야 매일 아침 스트릭이 0으로 보이지 않는다)
+    if (todayMet) {
+        run = 1;
+        if (rateOf(todayStr) >= STREAK_REPAIR_RATE) credits++;
+    }
+
     let cursor = shiftDay(todayStr, -1);
-    while (met(cursor)) {
-        current++;
+    while (cursor >= earliest) {
+        const rate = rateOf(cursor);
+
+        if (rate >= threshold) {
+            run++;
+            if (rate >= STREAK_REPAIR_RATE) credits = Math.min(credits + 1, MAX_STREAK_REPAIRS);
+        } else if (credits > 0) {
+            // 미달이지만 뒤에서 번 메꾸기로 덮는다
+            credits--;
+            run++;
+            repaired.push(cursor);
+        } else {
+            // 구간 종료
+            if (isCurrentRun) {
+                current = run;
+                currentRepairs = repaired;
+                repairsAvailable = credits;
+                isCurrentRun = false;
+            }
+            if (run > longest) longest = run;
+            run = 0;
+            credits = 0;
+            repaired = [];
+        }
+
         cursor = shiftDay(cursor, -1);
     }
-    if (todayMet) current++;
 
-    // 최장 연속: 달성한 날짜들을 정렬해 연속 구간의 최댓값을 구한다
-    const achieved = Object.keys(ratesByDate).filter(met).sort();
-    let longest = 0;
-    let run = 0;
-    let prev: string | null = null;
-    for (const key of achieved) {
-        run = prev !== null && shiftDay(prev, 1) === key ? run + 1 : 1;
-        if (run > longest) longest = run;
-        prev = key;
+    // 기록 시작일까지 끊기지 않고 이어진 경우
+    if (isCurrentRun) {
+        current = run;
+        currentRepairs = repaired;
+        repairsAvailable = credits;
     }
+    if (run > longest) longest = run;
 
-    return { current, longest: Math.max(longest, current), todayMet };
+    return {
+        current,
+        longest: Math.max(longest, current),
+        todayMet,
+        repairsAvailable,
+        repairedDates: currentRepairs,
+    };
 };
 
 /** 지난주 평균을 기준으로 이번 주 목표치를 정한다 (조금만 더 높게) */

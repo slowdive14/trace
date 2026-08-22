@@ -21,7 +21,9 @@ import {
     countTodoIntroLines,
     stripTodoIntro,
     getWeeklyTarget,
-    STREAK_THRESHOLD
+    STREAK_THRESHOLD,
+    STREAK_REPAIR_RATE,
+    MAX_STREAK_REPAIRS
 } from '../utils/todoUtils';
 import {
     DndContext,
@@ -1840,16 +1842,29 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                                     {/* 기준을 함께 적어 둔다. 안 보이면 왜 끊겼는지 알 수 없다 */}
                                                     <span
                                                         className="text-xs text-text-tertiary"
-                                                        title={`하루 ${STREAK_THRESHOLD}% 이상 달성한 날이 이어진 일수`}
+                                                        title={`하루 ${STREAK_THRESHOLD}% 이상 달성한 날이 이어진 일수. ${STREAK_REPAIR_RATE}%를 채우면 메꾸기를 하나 벌어 미달한 날 하루를 덮는다 (최대 ${MAX_STREAK_REPAIRS}개).`}
                                                     >
                                                         일 연속 <span className="text-[10px]">({STREAK_THRESHOLD}%+)</span>
                                                     </span>
+                                                    {/* 메꾸기 보유분 — 오늘 100%를 채울 동기가 된다 */}
+                                                    {streak.repairsAvailable > 0 && (
+                                                        <span
+                                                            className="text-[10px] text-emerald-400 tabular-nums"
+                                                            title={`${STREAK_REPAIR_RATE}% 달성으로 번 메꾸기. 미달한 날을 덮는 데 쓰인다.`}
+                                                        >
+                                                            🛟{streak.repairsAvailable}
+                                                        </span>
+                                                    )}
                                                 </div>
-                                                {streak.longest > 0 && (
-                                                    <span className="text-[11px] text-text-tertiary tabular-nums">
-                                                        최장 {streak.longest}일
-                                                    </span>
-                                                )}
+                                                <span className="text-[11px] text-text-tertiary tabular-nums">
+                                                    {/* 메꿔서 이어지는 중이면 그 사실을 숨기지 않는다 */}
+                                                    {streak.repairedDates.length > 0 && (
+                                                        <span className="text-emerald-400/80 mr-2">
+                                                            {streak.repairedDates.length}일 메꿈
+                                                        </span>
+                                                    )}
+                                                    {streak.longest > 0 && `최장 ${streak.longest}일`}
+                                                </span>
                                             </div>
 
                                             {/* 오늘 */}
