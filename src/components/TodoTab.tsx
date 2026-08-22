@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useAuth } from './AuthContext';
 import { saveTodo, getTodo, getTodos, getAllTodos, saveTemplate, getTemplate, addEntry, deleteEntry } from '../services/firestore';
 import { extractTags } from '../utils/tagUtils';
-import { CheckSquare, Square, Bold, Highlighter, ArrowRight, ArrowLeft, Edit3, Check, X, ChevronLeft, ChevronRight, ChevronDown, Clock, Trash2, Plus, ArrowUpDown, ArrowUp, ArrowDown, GripVertical } from 'lucide-react';
+import { CheckSquare, Square, Bold, Highlighter, ArrowRight, ArrowLeft, Edit3, Check, X, ChevronLeft, ChevronRight, ChevronDown, Clock, Trash2, Plus, ArrowUpDown, ArrowUp, ArrowDown, GripVertical, Eraser } from 'lucide-react';
 import { format, subDays, addDays, startOfDay, endOfDay, startOfWeek, endOfWeek, isSameDay } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import type { Todo, NavigationTarget } from '../types/types';
@@ -18,6 +18,8 @@ import {
     getRealLevel,
     formatDuration,
     calculateStreak,
+    countTodoIntroLines,
+    stripTodoIntro,
     getWeeklyTarget,
     STREAK_THRESHOLD
 } from '../utils/todoUtils';
@@ -335,6 +337,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
     const [quickAddText, setQuickAddText] = useState('');
     const [subAddingIndex, setSubAddingIndex] = useState<number | null>(null);
     const [subAddText, setSubAddText] = useState('');
+    const [confirmClearIntro, setConfirmClearIntro] = useState(false);
     const [inlineEditIndex, setInlineEditIndex] = useState<number | null>(null);
     const [inlineEditText, setInlineEditText] = useState('');
     const [historyEditKey, setHistoryEditKey] = useState<{ dateStr: string; lineIndex: number } | null>(null);
@@ -615,6 +618,10 @@ const TodoTab: React.FC<TodoTabProps> = ({
         return map;
     }, [allTodos, currentLogicalDay]);
 
+    // 매일 템플릿 위쪽에 딸려 오는 리마인드 블록(가치관·목표·원칙).
+    // 읽고 나면 손으로 지우던 것을 버튼 한 번으로 대신한다.
+    const introLineCount = useMemo(() => countTodoIntroLines(content), [content]);
+
     const streak = useMemo(() => {
         const todayStr = format(getLogicalDate(), 'yyyy-MM-dd');
         const todayItems = parseTodos(content);
@@ -655,6 +662,18 @@ const TodoTab: React.FC<TodoTabProps> = ({
         setContent(newContent);
         handleSave(newContent);
     };
+
+    /**
+     * 본문 위쪽 리마인드 블록을 지운다.
+     * 템플릿은 그대로 두고(매일 다시 딸려 온다), 읽고 난 뒤의 정리만 대신한다.
+     */
+    const clearTodoIntro = useCallback(() => {
+        setConfirmClearIntro(false);
+        const next = stripTodoIntro(content);
+        if (next === content) return;
+        setContent(next);
+        handleSave(next);
+    }, [content, handleSave]);
 
     // Extract clean content from todo line for action entry
     const extractEntryContent = (lineText: string): string => {
@@ -1725,6 +1744,29 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                 spellCheck={false}
                             />
 
+                            {/* 리마인드 블록 지우기 확인 — 실수로 한 번에 날리지 않도록 두 단계 */}
+                            {confirmClearIntro && introLineCount > 0 && (
+                                <div className="fixed bottom-[52px] left-0 right-0 z-20 app-container px-2">
+                                    <div className="flex items-center gap-2 bg-bg-tertiary border border-bg-primary rounded-lg px-3 py-2 shadow-lg">
+                                        <span className="flex-1 text-xs text-text-secondary">
+                                            위쪽 리마인드 {introLineCount}줄을 지울까요?
+                                        </span>
+                                        <button
+                                            onClick={() => setConfirmClearIntro(false)}
+                                            className="text-xs text-text-tertiary hover:text-text-primary px-2 py-1"
+                                        >
+                                            취소
+                                        </button>
+                                        <button
+                                            onClick={clearTodoIntro}
+                                            className="text-xs text-white bg-red-500/80 hover:bg-red-500 px-2.5 py-1 rounded"
+                                        >
+                                            지우기
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
                             {/* Mobile Toolbar */}
                             <div className="fixed bottom-0 left-0 right-0 bg-bg-secondary border-t border-bg-tertiary p-2 flex items-center justify-around z-20 app-container">
                                 <button onClick={() => insertText('- [ ] ')} className="p-2 text-text-secondary hover:text-accent" title="Checklist">
@@ -1745,6 +1787,17 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                 <button onClick={() => handleIndent('in')} className="p-2 text-text-secondary hover:text-accent" title="Indent">
                                     <ArrowRight size={20} />
                                 </button>
+                                {/* 지울 리마인드 블록이 있을 때만 나타난다 */}
+                                {introLineCount > 0 && (
+                                    <button
+                                        onClick={() => setConfirmClearIntro(v => !v)}
+                                        className={`p-2 transition-colors ${confirmClearIntro ? 'text-red-400' : 'text-text-secondary hover:text-red-400'}`}
+                                        title={`위쪽 리마인드 ${introLineCount}줄 지우기`}
+                                        aria-label="위쪽 리마인드 지우기"
+                                    >
+                                        <Eraser size={20} />
+                                    </button>
+                                )}
                             </div>
                         </>
                     ) : (
@@ -1784,7 +1837,13 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                                     <span className="text-lg font-semibold text-text-primary tabular-nums leading-none">
                                                         {streak.current}
                                                     </span>
-                                                    <span className="text-xs text-text-tertiary">일 연속</span>
+                                                    {/* 기준을 함께 적어 둔다. 안 보이면 왜 끊겼는지 알 수 없다 */}
+                                                    <span
+                                                        className="text-xs text-text-tertiary"
+                                                        title={`하루 ${STREAK_THRESHOLD}% 이상 달성한 날이 이어진 일수`}
+                                                    >
+                                                        일 연속 <span className="text-[10px]">({STREAK_THRESHOLD}%+)</span>
+                                                    </span>
                                                 </div>
                                                 {streak.longest > 0 && (
                                                     <span className="text-[11px] text-text-tertiary tabular-nums">

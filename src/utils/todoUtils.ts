@@ -203,8 +203,15 @@ export const getRealLevel = (totalCompleted: number): RealLevelInfo => {
 // 누적 개수는 절대 줄지 않고 오늘 한 행동이 눈에 띄지 않아 동기가 되기 어렵다.
 // 스트릭은 끊길 수 있고 오늘 행동이 곧바로 결정하므로 동기 지표로 쓴다.
 
-/** 하루를 '달성'으로 인정하는 가중 완료율 기준(%) */
-export const STREAK_THRESHOLD = 70;
+/**
+ * 하루를 '달성'으로 인정하는 가중 완료율 기준(%).
+ *
+ * 처음엔 주간 평균(약 79%)을 보고 70%로 잡았는데 실제 기록으로는 너무 빡빡했다.
+ * 최근 20일 중 3일이 70% 아래(59·61·55%)로 떨어져 5~9일마다 스트릭이 끊겼다.
+ * 동기 지표가 계속 리셋되면 제 역할을 못 한다.
+ * 50%는 "오늘 몫의 절반은 해냈다"는 뜻이고, 같은 기록에서 13일 연속이 된다.
+ */
+export const STREAK_THRESHOLD = 50;
 
 export interface StreakInfo {
     /** 현재 연속 일수 (오늘이 아직 미달이면 어제까지의 연속을 유지해서 보여준다) */
@@ -270,6 +277,42 @@ export const formatDuration = (minutes: number): string => {
     if (h > 0 && m > 0) return `${h}h${m}m`;
     if (h > 0) return `${h}h`;
     return `${m}m`;
+};
+
+/**
+ * 투두 본문이 시작되는 줄 번호.
+ *
+ * 매일 템플릿 위쪽에 가치관·목표·원칙 같은 '리마인드' 블록이 딸려 오는데,
+ * 읽고 나면 매번 손으로 지우고 있었다. 그 경계를 찾아 준다.
+ * '## 이번 주'로 시작하는 줄을 우선 찾고, 없으면 첫 번째 헤딩을 경계로 본다.
+ *
+ * @returns 본문 시작 줄 index. 위쪽에 지울 내용이 없으면 0, 경계를 못 찾으면 -1
+ */
+export const findTodoBodyStart = (content: string): number => {
+    const lines = content.split('\n');
+
+    const explicit = lines.findIndex(l => /^#{1,6}\s*이번\s*주/.test(l.trim()));
+    if (explicit !== -1) return explicit;
+
+    return lines.findIndex(l => /^#{1,6}\s/.test(l));
+};
+
+/**
+ * 본문 시작 전(리마인드 블록)을 잘라낸 내용.
+ * 경계를 못 찾거나 위쪽이 비어 있으면 원본을 그대로 돌려준다.
+ */
+export const stripTodoIntro = (content: string): string => {
+    const start = findTodoBodyStart(content);
+    if (start <= 0) return content;
+    return content.split('\n').slice(start).join('\n');
+};
+
+/** 잘라낼 리마인드 블록이 몇 줄인지 (0이면 지울 것이 없다) */
+export const countTodoIntroLines = (content: string): number => {
+    const start = findTodoBodyStart(content);
+    if (start <= 0) return 0;
+    // 공백만 있는 줄은 세지 않는다 (버튼에 '3줄'처럼 알릴 때 과장되지 않게)
+    return content.split('\n').slice(0, start).filter(l => l.trim().length > 0).length;
 };
 
 /**
