@@ -5,9 +5,11 @@ import { AuthProvider, useAuth } from './components/AuthContext';
 import Layout from './components/Layout';
 import Timeline from './components/Timeline';
 import InputBar from './components/InputBar';
+// 시작 화면이므로 메인 번들에 둔다 — lazy면 첫 화면 전에 청크를 받아야 한다
+import TodoTab from './components/TodoTab';
 import EmotionPickerModal from './components/EmotionPickerModal';
 
-// 시작 화면(일상 탭 = Timeline + InputBar)에 필요 없는 화면은 코드 분할한다.
+// 시작 화면(투두 탭)에 필요 없는 화면은 코드 분할한다.
 // 하나의 번들을 전부 파싱해야 첫 화면이 뜨던 비용을 줄이기 위함.
 const CalendarView = lazyWithReload(() => import('./components/CalendarView'));
 const SearchBar = lazyWithReload(() => import('./components/SearchBar'));
@@ -15,7 +17,6 @@ const ExpenseTimeline = lazyWithReload(() => import('./components/ExpenseTimelin
 const ExpenseInput = lazyWithReload(() => import('./components/ExpenseInput'));
 const UnifiedCalendarModal = lazyWithReload(() => import('./components/UnifiedCalendarModal'));
 const PhotoGallery = lazyWithReload(() => import('./components/PhotoGallery'));
-const TodoTab = lazyWithReload(() => import('./components/TodoTab'));
 const WorryTab = lazyWithReload(() => import('./components/WorryTab'));
 const BrainDumpTab = lazyWithReload(() => import('./components/BrainDumpTab'));
 import Toast from './components/common/Toast';
@@ -38,7 +39,7 @@ const AppContent: React.FC = () => {
   const [pendingEmotion, setPendingEmotion] = useState<string | null>(null);
   const [emotionNote, setEmotionNote] = useState('');
   const emotionToast = useToast();
-  const [activeTab, setActiveTab] = useState<'action' | 'braindump' | 'chore' | 'book' | 'todo' | 'expense' | 'worry'>('action');
+  const [activeTab, setActiveTab] = useState<'action' | 'braindump' | 'chore' | 'book' | 'todo' | 'expense' | 'worry'>('todo');
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [selectedExpenseDate, setSelectedExpenseDate] = useState<Date | undefined>(undefined);
   const [bookSubFilter, setBookSubFilter] = useState<string | null>(null);
