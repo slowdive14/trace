@@ -14,6 +14,43 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#0d0d0d" />
   <title>Serein</title>
+  <script>
+    /*
+     * 백지화면 자동 복구.
+     *
+     * index.html은 프리캐시에서 빼고 NetworkFirst(3초)로 받는다. 그런데 PWA를
+     * 새로 켤 때는 통신이 깨어나느라 3초를 넘기기 쉽고, 그러면 캐시에 있던 옛
+     * index.html로 폴백한다. 그 파일이 가리키는 해시 JS는 새 배포로 서버에서
+     * 사라졌고 SW 캐시에서도 정리돼 404가 난다. 결과는 아무것도 못 그린 백지화면.
+     *
+     * 스크립트·스타일 로드가 실패하면 그 html 캐시를 비우고 한 번만 새로고침한다.
+     * (한 번으로 제한해 정말 오프라인일 때 무한 새로고침이 되지 않게 한다)
+     */
+    (function () {
+      var KEY = 'serein:boot-recovered';
+      window.addEventListener('error', function (e) {
+        var el = e.target;
+        if (!el || (el.tagName !== 'SCRIPT' && el.tagName !== 'LINK')) return;
+        if (sessionStorage.getItem(KEY)) return;
+        sessionStorage.setItem(KEY, '1');
+
+        var done = function () { location.reload(); };
+        if (!window.caches) return done();
+        caches.keys()
+          .then(function (keys) {
+            return Promise.all(keys.filter(function (k) {
+              return k.indexOf('html') !== -1;   // NetworkFirst로 만든 html 캐시만
+            }).map(function (k) { return caches.delete(k); }));
+          })
+          .then(done, done);
+      }, true);   // 리소스 오류는 버블링하지 않으므로 캡처 단계에서 받는다
+
+      // 정상적으로 떴으면 표시를 지워 다음 배포 때도 복구할 수 있게 한다
+      window.addEventListener('load', function () {
+        setTimeout(function () { sessionStorage.removeItem(KEY); }, 3000);
+      });
+    })();
+  </script>
 </head>
 
 <body>
