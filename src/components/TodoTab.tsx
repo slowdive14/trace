@@ -92,6 +92,35 @@ const renderText = (text: string): React.ReactNode => {
     return <span>{parts}</span>;
 };
 
+// 접었을 때 하위 항목 진행 상황을 부모 줄에 요약해 보여준다.
+// 접으면 안쪽이 통째로 사라져 "얼마나 했는지"를 펼쳐봐야만 알 수 있었다.
+// inline-flex(atomic inline)라 부모의 취소선이 이 배지까지 그어지지 않는다.
+const ChildProgress: React.FC<{ done: number; total: number }> = ({ done, total }) => {
+    if (total === 0) return null;
+
+    const pct = Math.round((done / total) * 100);
+    const complete = done === total;
+
+    return (
+        <span
+            className="ml-2 inline-flex items-center gap-1 align-middle select-none"
+            title={`하위 항목 ${done}/${total} 완료 (${pct}%)`}
+        >
+            <span className="w-8 h-1 rounded-full bg-text-tertiary/30 overflow-hidden">
+                <span
+                    className={`block h-full rounded-full transition-[width] duration-300 ${complete ? 'bg-green-500' : 'bg-accent'}`}
+                    style={{ width: `${pct}%` }}
+                />
+            </span>
+            <span
+                className={`text-[10px] tabular-nums ${complete ? 'text-green-400' : done > 0 ? 'text-text-secondary' : 'text-text-tertiary'}`}
+            >
+                {done}/{total}
+            </span>
+        </span>
+    );
+};
+
 // 편집 모드: 드래그로 순서를 바꿀 수 있는 최상위 그룹(부모 + 하위항목).
 // ⚠️ 모듈 스코프에 정의해야 리렌더마다 언마운트/리마운트되지 않아
 //    편집·하위추가 입력창의 포커스(모바일 키보드)가 유지된다.
@@ -152,7 +181,7 @@ const SortableTodoGroup: React.FC<SortableTodoGroupProps> = ({
 
     return (
         <div ref={setNodeRef} style={style} className={isDragging ? 'relative z-10' : ''}>
-            {rows.map(({ item, hasChildren, collapsed, hiddenCount }) => (
+            {rows.map(({ item, hasChildren, collapsed, childTotal, childDone }) => (
                 <React.Fragment key={item.lineIndex}>
                     <div className="group flex items-start gap-1 py-1">
                         {/* 드래그 핸들 (최상위 항목에만) */}
@@ -210,11 +239,7 @@ const SortableTodoGroup: React.FC<SortableTodoGroupProps> = ({
                                     onClick={() => startInlineEdit(item.lineIndex)}
                                 >
                                     {renderText(item.text)}
-                                    {collapsed && (
-                                        <span className="ml-1.5 text-[10px] text-text-tertiary tabular-nums align-middle">
-                                            +{hiddenCount}
-                                        </span>
-                                    )}
+                                    {collapsed && <ChildProgress done={childDone} total={childTotal} />}
                                 </span>
                             )}
                             <div className="flex items-center gap-0.5 shrink-0 mt-0.5">

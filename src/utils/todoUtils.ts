@@ -397,11 +397,18 @@ export interface TodoRow {
     collapsed: boolean;
     /** 접혀서 감춰진 하위 항목 수 */
     hiddenCount: number;
+    /** 하위 항목 전체 수 (더 깊은 단계까지 포함) */
+    childTotal: number;
+    /** 그중 완료된 수 */
+    childDone: number;
 }
 
 /**
  * 접힌 부모의 하위 항목을 제외한 렌더 대상 목록.
  * 들여쓰기가 더 깊은 연속 구간을 그 항목의 하위 항목으로 본다.
+ *
+ * 접으면 안쪽 진행 상황이 통째로 사라지므로, 부모 줄에 표시할 수 있도록
+ * 하위 항목의 완료/전체 개수를 같이 돌려준다.
  */
 export const getVisibleRows = (group: TodoItem[], collapsedKeys: Set<string>): TodoRow[] => {
     const out: TodoRow[] = [];
@@ -419,13 +426,22 @@ export const getVisibleRows = (group: TodoItem[], collapsedKeys: Set<string>): T
         const hasChildren = !!next && next.indent > item.indent;
         const collapsed = hasChildren && collapsedKeys.has(getCollapseKey(item));
 
-        let hiddenCount = 0;
-        if (collapsed) {
-            for (let j = i + 1; j < group.length && group[j].indent > item.indent; j++) hiddenCount++;
-            hideDeeperThan = item.indent;
+        let childTotal = 0;
+        let childDone = 0;
+        for (let j = i + 1; j < group.length && group[j].indent > item.indent; j++) {
+            childTotal++;
+            if (group[j].checked) childDone++;
         }
+        if (collapsed) hideDeeperThan = item.indent;
 
-        out.push({ item, hasChildren, collapsed, hiddenCount });
+        out.push({
+            item,
+            hasChildren,
+            collapsed,
+            hiddenCount: collapsed ? childTotal : 0,
+            childTotal,
+            childDone,
+        });
     }
     return out;
 };
