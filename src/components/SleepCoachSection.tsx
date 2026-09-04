@@ -4,7 +4,8 @@ import { Sparkles, RefreshCw, Target, AlertTriangle, CalendarDays, Loader2, Chev
 import type { SleepCoaching, SleepCoachingRecord } from '../types/types';
 import type { SleepRecord, SleepScore } from '../utils/sleepUtils';
 import { getIdealSleepSchedule, getWeeklyRecords } from '../utils/sleepUtils';
-import { analyzeSleepGaps, formatDiagnosisForPrompt, formatRecordsForPrompt } from '../utils/sleepCoach';
+import { analyzeSleepGaps, formatDiagnosisForPrompt, formatRecordsForPrompt, getWeekPlanDays } from '../utils/sleepCoach';
+import { getLogicalDate } from '../utils/dateUtils';
 import { generateSleepCoaching } from '../services/gemini';
 import { saveSleepCoaching, getSleepCoaching } from '../services/firestore';
 import { useAuth } from './AuthContext';
@@ -73,6 +74,7 @@ export const SleepCoachSection: React.FC<Props> = ({ score, allRecords, weekOffs
                 formatDiagnosisForPrompt(diagnosis),
                 formatRecordsForPrompt(weekRecords),
                 `다음 목표: ${schedule.bedtime} 취침 → ${schedule.waketime} 기상 (앱이 현재 평균에서 점진적으로 계산한 값)`,
+                getWeekPlanDays(getLogicalDate()),
             );
             setCoaching(result);
             setSavedAt(new Date());
@@ -203,11 +205,12 @@ export const SleepCoachSection: React.FC<Props> = ({ score, allRecords, weekOffs
                         <div>
                             <div className="flex items-center gap-1.5 mb-1.5">
                                 <CalendarDays size={11} className="text-text-tertiary" />
-                                <span className="text-[11px] font-medium text-text-secondary">이번 주 계획</span>
+                                <span className="text-[11px] font-medium text-text-secondary">오늘부터 7일 계획</span>
                             </div>
                             <ul className="space-y-0.5">
                                 {coaching.weekPlan.map((d, i) => (
-                                    <li key={i} className="text-[11px] text-text-tertiary leading-relaxed">{d}</li>
+                                    // 첫 줄이 오늘 몫이라 한 단계 밝게 둔다
+                                    <li key={i} className={`text-[11px] leading-relaxed ${i === 0 ? 'text-text-secondary' : 'text-text-tertiary'}`}>{d}</li>
                                 ))}
                             </ul>
                         </div>

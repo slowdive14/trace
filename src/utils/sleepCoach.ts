@@ -202,3 +202,19 @@ export function formatRecordsForPrompt(records: SleepRecord[]): string {
         })
         .join('\n');
 }
+
+const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
+
+/**
+ * 주간 계획에 쓸 '오늘부터 7일' 라벨 (예: 목요일이면 9/4(목) → 9/10(수)).
+ *
+ * 라벨을 만들어 넘기지 않으면 AI가 언제나 월요일부터 시작하는 계획을 쓴다.
+ * 목요일에 조언을 받아도 사흘 지난 월요일 항목부터 읽어야 해서 쓸모가 떨어진다.
+ */
+export function getWeekPlanDays(today: Date): string[] {
+    return Array.from({ length: 7 }, (_, i) => {
+        // 날짜 초과분은 Date가 알아서 넘겨준다 (월·연 경계 포함)
+        const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() + i);
+        return `${d.getMonth() + 1}/${d.getDate()}(${WEEKDAYS[d.getDay()]})`;
+    });
+}

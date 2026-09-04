@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { calculateSleepScore, type SleepRecord } from './sleepUtils';
-import { analyzeSleepGaps, formatDiagnosisForPrompt } from './sleepCoach';
+import { analyzeSleepGaps, formatDiagnosisForPrompt, getWeekPlanDays } from './sleepCoach';
 
 /** YYYY-MM-DD 하루치 기록 만들기 */
 const rec = (date: string, sleep: string, wake: string, napMin = 0): SleepRecord => {
@@ -156,5 +156,34 @@ describe('formatDiagnosisForPrompt', () => {
         expect(text).toContain('개선 시:');
         // AI가 숫자를 새로 만들지 않도록 하는 지시가 들어 있어야 한다
         expect(text).toContain('그대로 인용하고 새로 계산하지 마');
+    });
+});
+
+describe('getWeekPlanDays', () => {
+    it('월요일이 아니라 오늘부터 7일을 만든다', () => {
+        // 2026-09-04는 금요일 — 월요일(9/7)이 아니라 그날부터 시작해야 한다
+        expect(getWeekPlanDays(new Date(2026, 8, 4))).toEqual([
+            '9/4(금)', '9/5(토)', '9/6(일)', '9/7(월)', '9/8(화)', '9/9(수)', '9/10(목)',
+        ]);
+    });
+
+    it('월 경계를 넘어가도 날짜가 이어진다', () => {
+        expect(getWeekPlanDays(new Date(2026, 8, 29))).toEqual([
+            '9/29(화)', '9/30(수)', '10/1(목)', '10/2(금)', '10/3(토)', '10/4(일)', '10/5(월)',
+        ]);
+    });
+
+    it('연말을 넘어가도 날짜가 이어진다', () => {
+        expect(getWeekPlanDays(new Date(2026, 11, 30))).toEqual([
+            '12/30(수)', '12/31(목)', '1/1(금)', '1/2(토)', '1/3(일)', '1/4(월)', '1/5(화)',
+        ]);
+    });
+
+    it('어느 요일에 시작하든 첫 줄은 그날이다', () => {
+        for (let i = 0; i < 7; i++) {
+            const day = new Date(2026, 8, 6 + i);   // 9/6(일)부터 한 바퀴
+            const first = getWeekPlanDays(day)[0];
+            expect(first).toBe(`${day.getMonth() + 1}/${day.getDate()}(${'일월화수목금토'[day.getDay()]})`);
+        }
     });
 });

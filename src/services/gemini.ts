@@ -212,6 +212,8 @@ export const generateSleepCoaching = async (
     diagnosisText: string,
     recordsText: string,
     scheduleHint: string,
+    /** 주간 계획에 쓸 '오늘부터 7일' 라벨 (sleepCoach.getWeekPlanDays) */
+    weekDays: string[],
 ): Promise<SleepCoaching> => {
     const key = getApiKey();
     if (!key) {
@@ -266,7 +268,7 @@ ${scheduleHint}
       "steps": ["구체적 실행 단계 2~4개. 무엇을 어디서 어떻게 하는지까지."]
     }
   ],
-  "weekPlan": ["월요일: ...", "화요일: ...", "수요일: ...", "목요일: ...", "금요일: ...", "토요일: ...", "일요일: ..."],
+  "weekPlan": [${weekDays.map(d => `"${d}: ..."`).join(', ')}],
   "pitfalls": ["이 계획에서 흔히 무너지는 지점과 대처법 2~4개"],
   "qualityNotes": ["점수에는 안 잡히지만 수면의 질에 중요한 것 2~4개"]
 }
@@ -276,7 +278,9 @@ ${scheduleHint}
 - 추상적인 말("일찍 자라", "규칙적으로") 금지. 몇 시에 무엇을 하는지까지 적어.
 - 사용자의 실제 취침·기상 시각에서 출발해. 지금보다 2시간 이른 취침처럼 갑작스러운 변화를 요구하지 말고,
   [다음 단계 목표 시각]을 기준으로 15~30분 단위의 점진적 조정을 제안해.
-- weekPlan은 요일마다 다른 구체적 초점을 줘. 주말에 무너지기 쉬운 점을 반영해.
+- weekPlan은 오늘(${weekDays[0]})부터 7일이다. 위에 적힌 라벨 7개를 순서 그대로 쓰고,
+  월요일부터 시작하거나 라벨을 바꾸지 마. 첫 줄은 오늘 밤에 바로 할 일이어야 한다.
+- weekPlan은 날짜마다 다른 구체적 초점을 줘. 토·일에 무너지기 쉬운 점을 반영해.
 - 훈계하지 말고, 담백하고 실용적인 톤으로.
 `;
 
