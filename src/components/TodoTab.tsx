@@ -369,6 +369,10 @@ const TodoTab: React.FC<TodoTabProps> = ({
     const [inlineEditText, setInlineEditText] = useState('');
     const [historyEditKey, setHistoryEditKey] = useState<{ dateStr: string; lineIndex: number } | null>(null);
     const [historyEditText, setHistoryEditText] = useState('');
+    const [historyDeletingKey, setHistoryDeletingKey] = useState<{ dateStr: string; lineIndex: number } | null>(null);
+    // 히스토리에서 항목을 추가하는 중인 날짜 (하루에 하나만 열린다)
+    const [historyAddDate, setHistoryAddDate] = useState<string | null>(null);
+    const [historyAddText, setHistoryAddText] = useState('');
     // 접힌 하위 항목. 루틴이 매일 반복되므로 날짜별이 아니라 컬렉션 단위로 기억한다.
     const [collapsedKeys, setCollapsedKeys] = useState<Set<string>>(() => {
         try {
@@ -389,6 +393,10 @@ const TodoTab: React.FC<TodoTabProps> = ({
     const subAddInputRef = useRef<HTMLInputElement>(null);
     const inlineEditRef = useRef<HTMLInputElement>(null);
     const historyEditRef = useRef<HTMLInputElement>(null);
+    const historyAddRef = useRef<HTMLInputElement>(null);
+    // 같은 날짜를 연달아 고칠 때 직전 변경이 반영된 내용을 보도록 최신본을 따로 들고 있는다.
+    // (state만 보면 저장이 끝나기 전에 다시 입력했을 때 옛 내용을 덮어쓴다)
+    const historyTodosRef = useRef<Todo[]>([]);
 
     // Auto-refresh when logical day changes (5AM cutoff)
     useEffect(() => {
@@ -797,6 +805,89 @@ const TodoTab: React.FC<TodoTabProps> = ({
         setInlineEditIndex(null);
     };
 
+    // 외부(구독·재조회)에서 들어온 갱신도 최신본 참조에 반영한다
+    useEffect(() => {
+        historyTodosRef.current = historyTodos;
+    }, [historyTodos]);
+
+    /** 히스토리에 있는 특정 날짜의 최신 내용 (직전 편집까지 반영된 값) */
+    const getHistoryContent = useCallback((dateStr: string): string | null => {
+        const todo = historyTodosRef.current.find(t => format(t.date, 'yyyy-MM-dd') === dateStr);
+        return todo ? todo.content : null;
+    }, []);
+
+    /** 과거 날짜 투두를 화면·최신본 참조·Firestore에 한 번에 반영한다 */
+    const saveHistoryContent = useCallback(async (dateStr: string, newContent: string) => {
+        const updated = historyTodosRef.current.map(t =>
+            format(t.date, 'yyyy-MM-dd') === dateStr ? { ...t, content: newContent } : t
+        );
+        historyTodosRef.current = updated;   // 저장을 기다리는 동안에도 최신본을 보게 한다
+        setHistoryTodos(updated);
+
+        // 오늘 것을 히스토리에서 고쳤다면 편집 모드 화면도 같이 맞춘다
+        if (dateStr === format(getLogicalDate(), 'yyyy-MM-dd')) {
+            setContent(newContent);
+        }
+
+        if (!user) return;
+        try {
+            const [year, month, day] = dateStr.split('-').map(Number);
+            await saveTodo(user.uid, new Date(year, month - 1, day), newContent, collectionName);
+        } catch (error) {
+            console.error('Failed to save history todo:', error);
+        }
+    }, [user, collectionName]);
+
+    /** 히스토리의 그 날짜를 편집 모드에서 연다 (추가·삭제·순서 변경·접기까지 쓰려면) */
+    const openDateInEditor = useCallback((dateStr: string) => {
+        const [year, month, day] = dateStr.split('-').map(Number);
+        setSelectedDate(new Date(year, month - 1, day));
+        setHistoryEditKey(null);
+        setHistoryDeletingKey(null);
+        setHistoryAddDate(null);
+        setViewMode('edit');
+    }, []);
+
+    /** 히스토리에서 항목 한 줄 삭제 (연동된 일상 기록도 함께 지운다) */
+    const deleteHistoryLine = async (dateStr: string, lineIndex: number) => {
+        const current = getHistoryContent(dateStr);
+        if (current === null) { setHistoryDeletingKey(null); return; }
+
+        const lines = current.split('\n');
+        const line = lines[lineIndex];
+        if (line === undefined) { setHistoryDeletingKey(null); return; }
+
+        const eid = extractEid(line);
+        if (eid && user) {
+            try {
+                await deleteEntry(user.uid, eid, 'entries');
+            } catch (error) {
+                console.error('Failed to delete linked action entry:', error);
+            }
+        }
+
+        lines.splice(lineIndex, 1);
+        setHistoryDeletingKey(null);
+        await saveHistoryContent(dateStr, lines.join('\n'));
+    };
+
+    /** 히스토리에서 그 날짜 맨 아래에 항목 추가 (입력창은 열어둬 연속 입력 가능) */
+    const handleHistoryAdd = async (dateStr: string) => {
+        const text = historyAddText.trim();
+        if (!text) return;
+
+        const current = getHistoryContent(dateStr);
+        if (current === null) return;
+
+        const newLine = `- [ ] ${text}`;
+        const newContent = current
+            ? (current.endsWith('\n') ? current + newLine : current + '\n' + newLine)
+            : newLine;
+
+        setHistoryAddText('');
+        await saveHistoryContent(dateStr, newContent);
+    };
+
     // History inline edit
     const startHistoryEdit = (dateStr: string, lineIndex: number) => {
         const todo = historyTodos.find(t => format(t.date, 'yyyy-MM-dd') === dateStr);
@@ -819,10 +910,10 @@ const TodoTab: React.FC<TodoTabProps> = ({
         const newText = historyEditText.trim();
         if (!newText) { setHistoryEditKey(null); return; }
 
-        const todo = historyTodos.find(t => format(t.date, 'yyyy-MM-dd') === dateStr);
-        if (!todo) { setHistoryEditKey(null); return; }
+        const current = getHistoryContent(dateStr);
+        if (current === null) { setHistoryEditKey(null); return; }
 
-        const lines = todo.content.split('\n');
+        const lines = current.split('\n');
         const line = lines[lineIndex];
         if (!line) { setHistoryEditKey(null); return; }
 
@@ -831,29 +922,9 @@ const TodoTab: React.FC<TodoTabProps> = ({
         const prefix = prefixMatch ? prefixMatch[1] : '- [ ] ';
         const eid = eidMatch ? eidMatch[1] : '';
         lines[lineIndex] = `${prefix}${newText}${eid}`;
-        const newContent = lines.join('\n');
-
-        setHistoryTodos(prev => prev.map(t => {
-            if (format(t.date, 'yyyy-MM-dd') === dateStr) {
-                return { ...t, content: newContent };
-            }
-            return t;
-        }));
-
-        const logicalToday = format(getLogicalDate(), 'yyyy-MM-dd');
-        if (dateStr === logicalToday) {
-            setContent(newContent);
-        }
-
-        try {
-            const [year, month, day] = dateStr.split('-').map(Number);
-            const date = new Date(year, month - 1, day);
-            await saveTodo(user.uid, date, newContent, collectionName);
-        } catch (error) {
-            console.error('Failed to save history edit:', error);
-        }
 
         setHistoryEditKey(null);
+        await saveHistoryContent(dateStr, lines.join('\n'));
     };
 
     // Quick-add a todo item (reading mode)
@@ -935,11 +1006,12 @@ const TodoTab: React.FC<TodoTabProps> = ({
 
     const toggleHistoryCheckbox = async (dateStr: string, lineIndex: number) => {
         if (timePopup) return; // 팝업 열려있으면 무시
-        const todo = historyTodos.find(t => format(t.date, 'yyyy-MM-dd') === dateStr);
-        if (!todo || !user) return;
+        const current = getHistoryContent(dateStr);
+        if (current === null || !user) return;
 
-        const lines = todo.content.split('\n');
+        const lines = current.split('\n');
         const line = lines[lineIndex];
+        if (line === undefined) return;
 
         const isChecking = line.includes('- [ ]');
 
@@ -958,30 +1030,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
             lines[lineIndex] = line.replace('- [x]', '- [ ]').replace(/\s*\{eid:[^}]+\}/g, '');
         }
 
-        const newContent = lines.join('\n');
-
-        // Update local state
-        setHistoryTodos(prev => prev.map(t => {
-            if (format(t.date, 'yyyy-MM-dd') === dateStr) {
-                return { ...t, content: newContent };
-            }
-            return t;
-        }));
-
-        // Also update today's content state if it's today
-        const logicalToday = format(getLogicalDate(), 'yyyy-MM-dd');
-        if (dateStr === logicalToday) {
-            setContent(newContent);
-        }
-
-        // Save to Firestore
-        try {
-            const [year, month, day] = dateStr.split('-').map(Number);
-            const date = new Date(year, month - 1, day);
-            await saveTodo(user.uid, date, newContent, collectionName);
-        } catch (error) {
-            console.error('Failed to save history checkbox toggle:', error);
-        }
+        await saveHistoryContent(dateStr, lines.join('\n'));
 
         // 미완료 → 완료 시 시간 팝업 표시
         if (isChecking) {
@@ -1018,36 +1067,16 @@ const TodoTab: React.FC<TodoTabProps> = ({
 
             if (timePopup.dateStr) {
                 // 히스토리 뷰
-                const todo = historyTodos.find(t => format(t.date, 'yyyy-MM-dd') === timePopup.dateStr);
-                if (!todo || !user) { setTimePopup(null); return; }
+                const current = getHistoryContent(timePopup.dateStr);
+                if (current === null || !user) { setTimePopup(null); return; }
 
-                const lines = todo.content.split('\n');
+                const lines = current.split('\n');
                 const idx = findLineIndex(lines, timePopup.lineIndex, timePopup.lineText);
                 if (idx === -1) { setTimePopup(null); return; }
 
                 // 기존 (Xm) 제거 후 새 시간 추가
                 lines[idx] = lines[idx].replace(/\s*\(\d+m\)\s*$/, '') + ` ${timeStr}`;
-                const newContent = lines.join('\n');
-
-                setHistoryTodos(prev => prev.map(t => {
-                    if (format(t.date, 'yyyy-MM-dd') === timePopup.dateStr) {
-                        return { ...t, content: newContent };
-                    }
-                    return t;
-                }));
-
-                const logicalToday = format(getLogicalDate(), 'yyyy-MM-dd');
-                if (timePopup.dateStr === logicalToday) {
-                    setContent(newContent);
-                }
-
-                try {
-                    const [year, month, day] = timePopup.dateStr.split('-').map(Number);
-                    const date = new Date(year, month - 1, day);
-                    await saveTodo(user.uid, date, newContent, collectionName);
-                } catch (error) {
-                    console.error('Failed to save time:', error);
-                }
+                await saveHistoryContent(timePopup.dateStr, lines.join('\n'));
             } else {
                 // 오늘 뷰
                 const lines = content.split('\n');
@@ -1066,7 +1095,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
             let entryContent = extractEntryContent(timePopup.lineText);
             // 서브아이템이면 부모 이름 포함 (예: "회기 리뷰 2 - 1")
             const todoLines = (timePopup.dateStr
-                ? historyTodos.find(t => format(t.date, 'yyyy-MM-dd') === timePopup.dateStr)?.content
+                ? getHistoryContent(timePopup.dateStr)
                 : content)?.split('\n');
             if (todoLines && entryContent) {
                 const parentContent = findParentContent(todoLines, timePopup.lineIndex);
@@ -1089,44 +1118,16 @@ const TodoTab: React.FC<TodoTabProps> = ({
                     if (entryId) {
                         const eidMarker = ` {eid:${entryId}}`;
                         if (timePopup.dateStr) {
-                            // 히스토리 뷰: historyTodos에서 해당 라인에 eid 추가
-                            setHistoryTodos(prev => prev.map(t => {
-                                if (format(t.date, 'yyyy-MM-dd') === timePopup.dateStr) {
-                                    const lines = t.content.split('\n');
-                                    const idx = findLineIndex(lines, timePopup.lineIndex, timePopup.lineText);
-                                    if (idx !== -1) {
-                                        // 시간이 추가된 경우 현재 라인 텍스트에서 찾기
-                                        lines[idx] = lines[idx].replace(/\s*$/, '') + eidMarker;
-                                    }
-                                    return { ...t, content: lines.join('\n') };
+                            // 히스토리 뷰: 해당 라인에 eid 추가
+                            // 바로 위에서 시간을 붙인 최신 내용을 읽어야 (Xm) 표기가 지워지지 않는다
+                            const current = getHistoryContent(timePopup.dateStr);
+                            if (current !== null) {
+                                const lines = current.split('\n');
+                                const idx = findLineIndex(lines, timePopup.lineIndex, timePopup.lineText);
+                                if (idx !== -1) {
+                                    lines[idx] = lines[idx].replace(/\s*$/, '') + eidMarker;
                                 }
-                                return t;
-                            }));
-                            const logicalToday = format(getLogicalDate(), 'yyyy-MM-dd');
-                            if (timePopup.dateStr === logicalToday) {
-                                setContent(prev => {
-                                    const lines = prev.split('\n');
-                                    const idx = findLineIndex(lines, timePopup.lineIndex, timePopup.lineText);
-                                    if (idx !== -1) {
-                                        lines[idx] = lines[idx].replace(/\s*$/, '') + eidMarker;
-                                    }
-                                    const updated = lines.join('\n');
-                                    handleSave(updated);
-                                    return updated;
-                                });
-                            } else {
-                                // 히스토리 날짜 Firestore 저장
-                                const [year, month, day] = timePopup.dateStr.split('-').map(Number);
-                                const date = new Date(year, month - 1, day);
-                                const todo = historyTodos.find(t => format(t.date, 'yyyy-MM-dd') === timePopup.dateStr);
-                                if (todo) {
-                                    const lines = todo.content.split('\n');
-                                    const idx = findLineIndex(lines, timePopup.lineIndex, timePopup.lineText);
-                                    if (idx !== -1) {
-                                        lines[idx] = lines[idx].replace(/\s*$/, '') + eidMarker;
-                                    }
-                                    await saveTodo(user.uid, date, lines.join('\n'), collectionName);
-                                }
+                                await saveHistoryContent(timePopup.dateStr, lines.join('\n'));
                             }
                         } else {
                             // 오늘 뷰: content에 eid 추가
@@ -1149,7 +1150,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
         }
 
         setTimePopup(null);
-    }, [timePopup, content, historyTodos, user, collectionName, handleSave, selectedDate]);
+    }, [timePopup, content, user, handleSave, getHistoryContent, saveHistoryContent]);
 
     const insertText = (text: string, cursorOffset = 0) => {
         if (!textareaRef.current) return;
@@ -1601,15 +1602,25 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                     className="sticky top-0 bg-bg-primary/95 backdrop-blur py-3 border-b border-bg-tertiary mb-4"
                                     style={{ zIndex: 10 }}
                                 >
-                                    <div className="flex items-center justify-between">
+                                    <div className="flex items-center justify-between gap-2">
                                         <h2 className="text-text-secondary text-sm font-bold">
                                             {getDateLabel(date)}
                                         </h2>
-                                        {historyItems.length > 0 && (
-                                            <span className="text-xs text-text-tertiary">
-                                                {historySummary.percentage}% ({historyTimeLabel})
-                                            </span>
-                                        )}
+                                        <div className="flex items-center gap-2 shrink-0">
+                                            {historyItems.length > 0 && (
+                                                <span className="text-xs text-text-tertiary">
+                                                    {historySummary.percentage}% ({historyTimeLabel})
+                                                </span>
+                                            )}
+                                            <button
+                                                onClick={() => openDateInEditor(date)}
+                                                className="flex items-center gap-1 text-[11px] text-text-tertiary hover:text-accent px-2 py-1 rounded-md hover:bg-bg-secondary transition-colors"
+                                                title="이 날짜를 편집 모드에서 열기 (순서 변경·하위 항목까지)"
+                                            >
+                                                <Edit3 size={12} />
+                                                편집
+                                            </button>
+                                        </div>
                                     </div>
                                     {historyItems.length > 0 && (
                                         <div className="h-1 bg-bg-tertiary rounded-full overflow-hidden mt-2">
@@ -1621,10 +1632,10 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                     )}
                                 </div>
                                 <div className="space-y-1">
-                                    {parseTodos(todo.content).map((item, idx) => (
+                                    {historyItems.map(item => (
                                         <div
-                                            key={idx}
-                                            className="flex items-start gap-2 py-1"
+                                            key={item.lineIndex}
+                                            className="group flex items-start gap-2 py-1"
                                             style={{ paddingLeft: `${item.indent * 24}px` }}
                                         >
                                             <input
@@ -1647,16 +1658,98 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                                     className="flex-1 bg-bg-primary text-text-primary text-sm px-2 py-0.5 rounded border border-accent outline-none"
                                                 />
                                             ) : (
-                                                <span
-                                                    className={`flex-1 leading-relaxed cursor-text ${item.checked ? 'line-through text-text-secondary' : 'text-text-primary'}`}
-                                                    onClick={() => startHistoryEdit(date, item.lineIndex)}
-                                                >
-                                                    {renderText(item.text)}
-                                                </span>
+                                                <>
+                                                    <span
+                                                        className={`flex-1 leading-relaxed cursor-text ${item.checked ? 'line-through text-text-secondary' : 'text-text-primary'}`}
+                                                        onClick={() => startHistoryEdit(date, item.lineIndex)}
+                                                    >
+                                                        {renderText(item.text)}
+                                                    </span>
+                                                    <div className="flex items-center gap-0.5 shrink-0">
+                                                        {historyDeletingKey?.dateStr === date && historyDeletingKey?.lineIndex === item.lineIndex ? (
+                                                            <>
+                                                                <button
+                                                                    onClick={() => setHistoryDeletingKey(null)}
+                                                                    className="text-xs text-text-secondary hover:text-text-primary px-2 py-1 rounded"
+                                                                >
+                                                                    취소
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => deleteHistoryLine(date, item.lineIndex)}
+                                                                    className="text-xs text-red-400 hover:text-red-300 px-2 py-1 rounded"
+                                                                >
+                                                                    삭제
+                                                                </button>
+                                                            </>
+                                                        ) : (
+                                                            <button
+                                                                onClick={() => setHistoryDeletingKey({ dateStr: date, lineIndex: item.lineIndex })}
+                                                                className="text-text-tertiary hover:text-red-400 p-1.5 opacity-70 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
+                                                                title="삭제"
+                                                                aria-label="삭제"
+                                                            >
+                                                                <Trash2 size={16} />
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </>
                                             )}
                                         </div>
                                     ))}
                                 </div>
+
+                                {/* 지난 날짜에 빠뜨린 항목 추가 */}
+                                {historyAddDate === date ? (
+                                    <div className="flex items-center gap-1 py-1 mt-1">
+                                        <Plus size={14} className="text-accent shrink-0" />
+                                        <input
+                                            ref={historyAddRef}
+                                            type="text"
+                                            value={historyAddText}
+                                            onChange={e => setHistoryAddText(e.target.value)}
+                                            onKeyDown={e => {
+                                                if (e.key === 'Enter') handleHistoryAdd(date);
+                                                if (e.key === 'Escape') setHistoryAddDate(null);
+                                            }}
+                                            onBlur={() => {
+                                                if (!historyAddText.trim()) setHistoryAddDate(null);
+                                            }}
+                                            enterKeyHint="done"
+                                            placeholder="이 날짜에 추가 (연속 입력 가능)"
+                                            className="flex-1 min-w-0 bg-transparent text-text-primary text-base outline-none placeholder:text-text-tertiary"
+                                        />
+                                        <button
+                                            onMouseDown={e => e.preventDefault()}
+                                            onClick={() => handleHistoryAdd(date)}
+                                            className="text-accent hover:text-accent/80 p-2 shrink-0"
+                                            title="추가"
+                                            aria-label="추가"
+                                        >
+                                            <Plus size={18} />
+                                        </button>
+                                        <button
+                                            onMouseDown={e => e.preventDefault()}
+                                            onClick={() => setHistoryAddDate(null)}
+                                            className="text-text-tertiary hover:text-text-primary p-2 shrink-0"
+                                            title="닫기"
+                                            aria-label="닫기"
+                                        >
+                                            <X size={18} />
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <button
+                                        onClick={() => {
+                                            setHistoryAddDate(date);
+                                            setHistoryAddText('');
+                                            setTimeout(() => historyAddRef.current?.focus(), 50);
+                                        }}
+                                        className="flex items-center gap-1 mt-1 text-xs text-text-tertiary hover:text-accent px-1 py-1.5 transition-colors"
+                                    >
+                                        <Plus size={14} />
+                                        항목 추가
+                                    </button>
+                                )}
                             </div>
                         );})}
                         {historyTodos.length === 0 && (
