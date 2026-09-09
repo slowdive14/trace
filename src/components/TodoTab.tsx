@@ -5,7 +5,7 @@ import { extractTags } from '../utils/tagUtils';
 import { CheckSquare, Square, Bold, Highlighter, ArrowRight, ArrowLeft, Edit3, Check, X, ChevronLeft, ChevronRight, ChevronDown, Clock, Trash2, Plus, ArrowUpDown, ArrowUp, ArrowDown, GripVertical, Eraser } from 'lucide-react';
 import { format, subDays, addDays, startOfDay, endOfDay, startOfWeek, endOfWeek, isSameDay } from 'date-fns';
 import { ko } from 'date-fns/locale';
-import type { Todo, NavigationTarget } from '../types/types';
+import type { Todo, TodoBaseline, NavigationTarget } from '../types/types';
 import { getLogicalDate } from '../utils/dateUtils';
 import {
     type TodoItem,
@@ -21,6 +21,8 @@ import {
     countTodoIntroLines,
     stripTodoIntro,
     getWeeklyTarget,
+    makeTodoBaseline,
+    getTodoBonus,
     STREAK_THRESHOLD,
     STREAK_REPAIR_RATE,
     MAX_STREAK_REPAIRS
@@ -367,6 +369,8 @@ const TodoTab: React.FC<TodoTabProps> = ({
     const [confirmClearIntro, setConfirmClearIntro] = useState(false);
     const [inlineEditIndex, setInlineEditIndex] = useState<number | null>(null);
     const [inlineEditText, setInlineEditText] = useState('');
+    // 선택한 날짜의 기준점. 처음 100%를 채우면 굳어지고, 그 뒤 추가한 항목은 달성률을 깎지 않는다.
+    const [baseline, setBaseline] = useState<TodoBaseline | undefined>(undefined);
     const [historyEditKey, setHistoryEditKey] = useState<{ dateStr: string; lineIndex: number } | null>(null);
     const [historyEditText, setHistoryEditText] = useState('');
     const [historyDeletingKey, setHistoryDeletingKey] = useState<{ dateStr: string; lineIndex: number } | null>(null);
@@ -443,6 +447,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
         setContent('');
         setLastSaved(null);
         setDeletingLineIndex(null);
+        setBaseline(undefined);   // 새 날짜의 기준점은 loadContent가 다시 읽어 온다
     }, []);
 
     // Load content based on view mode
@@ -454,6 +459,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
                 if (viewMode === 'edit' || viewMode === 'matrix') {
                     // Load selected date's todo
                     const todo = await getTodo(user.uid, selectedDate, collectionName);
+                    setBaseline(todo?.baseline);
                     if (todo) {
                         setContent(todo.content);
                         setLastSaved(todo.updatedAt || new Date());
@@ -588,22 +594,33 @@ const TodoTab: React.FC<TodoTabProps> = ({
 
             let weightedPercentageSum = 0;
             let dayCount = 0;
+            let bonusCount = 0;
+            let bonusMinutes = 0;
 
             todosInRange.forEach(todo => {
                 const todoDateStr = format(new Date(todo.date), 'yyyy-MM-dd');
-                const todoContent = todoDateStr === todayStr ? content : todo.content;
+                const isEditingDay = todoDateStr === todayStr;
+                const todoContent = isEditingDay ? content : todo.content;
+                // 오늘 몫은 아직 저장 전일 수 있어 화면의 기준점을 쓴다
+                const dayBaseline = isEditingDay ? baseline : todo.baseline;
                 const items = parseTodos(todoContent);
                 if (items.length > 0) {
-                    weightedPercentageSum += calculateTotalWeightedRate(items);
+                    weightedPercentageSum += calculateTotalWeightedRate(items, dayBaseline);
                     dayCount++;
                 }
                 completed += items.filter(item => item.checked).length;
                 total += items.length;
+
+                const bonus = getTodoBonus(items, dayBaseline);
+                bonusCount += bonus.count;
+                bonusMinutes += bonus.minutes;
             });
 
             return {
                 avgPercentage: dayCount > 0 ? Math.round(weightedPercentageSum / dayCount) : 0,
-                totalCompleted: completed
+                totalCompleted: completed,
+                bonusCount,
+                bonusMinutes,
             };
         };
 
@@ -611,7 +628,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
             thisWeek: calcStats(thisWeekStart, thisWeekEnd, true),
             lastWeek: calcStats(lastWeekStart, lastWeekEnd)
         };
-    }, [historyTodos, content, currentLogicalDay]);
+    }, [historyTodos, content, currentLogicalDay, baseline]);
 
     // Calculate total completed (all time) for real level
     // 과거분과 오늘분을 분리해 메모이즈한다. 예전에는 content(입력 중인 오늘 할 일)가
@@ -648,7 +665,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
             const key = format(new Date(todo.date), 'yyyy-MM-dd');
             if (key === todayStr) return;
             const items = parseTodos(todo.content);
-            if (items.length > 0) map[key] = calculateWeightedSummary(items).percentage;
+            if (items.length > 0) map[key] = calculateWeightedSummary(items, todo.baseline).percentage;
         });
         return map;
     }, [allTodos, currentLogicalDay]);
@@ -661,10 +678,10 @@ const TodoTab: React.FC<TodoTabProps> = ({
         const todayStr = format(getLogicalDate(), 'yyyy-MM-dd');
         const todayItems = parseTodos(content);
         const rates = todayItems.length > 0
-            ? { ...pastRatesByDate, [todayStr]: calculateWeightedSummary(todayItems).percentage }
+            ? { ...pastRatesByDate, [todayStr]: calculateWeightedSummary(todayItems, baseline).percentage }
             : pastRatesByDate;
         return calculateStreak(rates, todayStr);
-    }, [pastRatesByDate, content, currentLogicalDay]);
+    }, [pastRatesByDate, content, currentLogicalDay, baseline]);
 
     const handleSave = useCallback((newContent: string) => {
         if (!user) return;
@@ -677,8 +694,18 @@ const TodoTab: React.FC<TodoTabProps> = ({
         saveTimeoutRef.current = setTimeout(async () => {
             try {
                 if (viewMode === 'edit' || viewMode === 'matrix') {
-                    // Save to selected date
-                    await saveTodo(user.uid, selectedDate, newContent, collectionName);
+                    // 아직 기준점이 없는데 지금 100%라면, 이 순간의 분모를 굳힌다.
+                    // 이후에 추가한 항목은 달성률을 깎지 않고 초과분으로만 쌓인다.
+                    let nextBaseline = baseline;
+                    if (!nextBaseline) {
+                        const items = parseTodos(newContent);
+                        if (items.length > 0 && calculateWeightedSummary(items).percentage >= 100) {
+                            nextBaseline = makeTodoBaseline(items);
+                        }
+                    }
+
+                    await saveTodo(user.uid, selectedDate, newContent, collectionName, nextBaseline);
+                    if (nextBaseline !== baseline) setBaseline(nextBaseline);
                 } else if (viewMode === 'template') {
                     // Save as template
                     await saveTemplate(user.uid, newContent, collectionName);
@@ -690,7 +717,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
                 setIsSaving(false);
             }
         }, 500);
-    }, [user, collectionName, viewMode, selectedDate]);
+    }, [user, collectionName, viewMode, selectedDate, baseline]);
 
     const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
         const newContent = e.target.value;
@@ -818,8 +845,19 @@ const TodoTab: React.FC<TodoTabProps> = ({
 
     /** 과거 날짜 투두를 화면·최신본 참조·Firestore에 한 번에 반영한다 */
     const saveHistoryContent = useCallback(async (dateStr: string, newContent: string) => {
+        // 편집 모드와 같은 규칙으로 기준점을 굳힌다. 여기서 빠뜨리면 히스토리에서
+        // 100%를 채운 날은 기준점이 없어, 항목을 더 적을 때 달성률이 도로 떨어진다.
+        const prev = historyTodosRef.current.find(t => format(t.date, 'yyyy-MM-dd') === dateStr);
+        let nextBaseline = prev?.baseline;
+        if (!nextBaseline) {
+            const items = parseTodos(newContent);
+            if (items.length > 0 && calculateWeightedSummary(items).percentage >= 100) {
+                nextBaseline = makeTodoBaseline(items);
+            }
+        }
+
         const updated = historyTodosRef.current.map(t =>
-            format(t.date, 'yyyy-MM-dd') === dateStr ? { ...t, content: newContent } : t
+            format(t.date, 'yyyy-MM-dd') === dateStr ? { ...t, content: newContent, baseline: nextBaseline } : t
         );
         historyTodosRef.current = updated;   // 저장을 기다리는 동안에도 최신본을 보게 한다
         setHistoryTodos(updated);
@@ -827,12 +865,13 @@ const TodoTab: React.FC<TodoTabProps> = ({
         // 오늘 것을 히스토리에서 고쳤다면 편집 모드 화면도 같이 맞춘다
         if (dateStr === format(getLogicalDate(), 'yyyy-MM-dd')) {
             setContent(newContent);
+            setBaseline(nextBaseline);
         }
 
         if (!user) return;
         try {
             const [year, month, day] = dateStr.split('-').map(Number);
-            await saveTodo(user.uid, new Date(year, month - 1, day), newContent, collectionName);
+            await saveTodo(user.uid, new Date(year, month - 1, day), newContent, collectionName, nextBaseline);
         } catch (error) {
             console.error('Failed to save history todo:', error);
         }
@@ -1591,7 +1630,8 @@ const TodoTab: React.FC<TodoTabProps> = ({
                     <div className="app-container pt-4">
                         {Object.entries(groupedTodos).map(([date, todo]) => {
                             const historyItems = parseTodos(todo.content);
-                            const historySummary = calculateWeightedSummary(historyItems);
+                            const historySummary = calculateWeightedSummary(historyItems, todo.baseline);
+                            const historyBonus = getTodoBonus(historyItems, todo.baseline);
                             const historyHasDuration = historyItems.some(t => t.duration);
                             const historyTimeLabel = historyHasDuration
                                 ? `${formatDuration(Math.round(historySummary.completedWeight))} / ${formatDuration(Math.round(historySummary.totalWeight))}`
@@ -1610,6 +1650,9 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                             {historyItems.length > 0 && (
                                                 <span className="text-xs text-text-tertiary">
                                                     {historySummary.percentage}% ({historyTimeLabel})
+                                                    {historyBonus.count > 0 && (
+                                                        <span className="text-amber-400/80"> +{historyBonus.count}</span>
+                                                    )}
                                                 </span>
                                             )}
                                             <button
@@ -1928,8 +1971,9 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                 {isToday && todos.length > 0 && (() => {
                                     const completed = todos.filter(t => t.checked).length;
                                     const total = todos.length;
-                                    const summary = calculateWeightedSummary(todos);
+                                    const summary = calculateWeightedSummary(todos, baseline);
                                     const percentage = summary.percentage;
+                                    const bonus = getTodoBonus(todos, baseline);
 
                                     // Stats - using memoized values
                                     const realLevel = getRealLevel(totalCompleted);
@@ -1947,6 +1991,12 @@ const TodoTab: React.FC<TodoTabProps> = ({
 
                                     // 오늘 스트릭 기준 충족 여부 (색·문구 대신 불꽃 밝기로만 표현)
                                     const streakSafe = percentage >= STREAK_THRESHOLD;
+
+                                    // 초과분을 기준 분모에 견준 비율 (막대 위에 덧그릴 길이).
+                                    // 기준 항목을 도로 체크 해제해 100% 아래로 내려간 날에는 덧칠하지 않는다.
+                                    const bonusRatio = baseline && baseline.weight > 0 && percentage >= 100
+                                        ? Math.min(100, Math.round((bonus.minutes / baseline.weight) * 100))
+                                        : 0;
 
                                     return (
                                         <div className="mb-6 px-4 py-3.5 bg-bg-secondary rounded-xl">
@@ -1991,14 +2041,33 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                                     <span className="text-xs text-text-secondary">오늘</span>
                                                     <span className="text-xs text-text-secondary tabular-nums">
                                                         {percentage}%
+                                                        {/* 다 끝낸 뒤 더 해낸 몫 (달성률에는 안 들어가고 따로 쌓인다) */}
+                                                        {bonus.count > 0 && (
+                                                            <span
+                                                                className="text-amber-400"
+                                                                title={`다 끝낸 뒤 더 해낸 ${bonus.count}개 · ${formatDuration(bonus.minutes)}. 달성률은 100%에서 멈추고 이 몫은 따로 쌓인다.`}
+                                                            >
+                                                                {' '}+{bonus.count}
+                                                            </span>
+                                                        )}
                                                         <span className="text-text-tertiary"> · {timeLabel}</span>
+                                                        {bonus.minutes > 0 && (
+                                                            <span className="text-amber-400/70"> +{formatDuration(bonus.minutes)}</span>
+                                                        )}
                                                     </span>
                                                 </div>
-                                                <div className="relative h-1 bg-bg-tertiary rounded-full">
+                                                <div className="relative h-1 bg-bg-tertiary rounded-full overflow-hidden">
                                                     <div
                                                         className="absolute inset-y-0 left-0 bg-accent rounded-full transition-all duration-500 ease-out"
                                                         style={{ width: `${percentage}%` }}
                                                     />
+                                                    {/* 초과분은 꽉 찬 막대의 끝에서부터 금색으로 물든다 */}
+                                                    {bonusRatio > 0 && (
+                                                        <div
+                                                            className="absolute inset-y-0 right-0 bg-amber-400 rounded-full transition-all duration-500 ease-out"
+                                                            style={{ width: `${bonusRatio}%` }}
+                                                        />
+                                                    )}
                                                     {/* 연속 유지선 */}
                                                     <div
                                                         className="absolute inset-y-0 w-px bg-text-tertiary"
@@ -2015,6 +2084,14 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                                     <span className="text-xs text-text-secondary tabular-nums">
                                                         {thisWeekAvg}%
                                                         <span className="text-text-tertiary"> · 지난주 {lastWeekAvg}% · 목표 {weeklyTarget}%</span>
+                                                        {weeklyStats.thisWeek.bonusCount > 0 && (
+                                                            <span
+                                                                className="text-amber-400/80"
+                                                                title={`이번 주에 계획을 다 끝낸 뒤 더 해낸 몫 (${formatDuration(weeklyStats.thisWeek.bonusMinutes)})`}
+                                                            >
+                                                                {' '}· 초과 {weeklyStats.thisWeek.bonusCount}개
+                                                            </span>
+                                                        )}
                                                     </span>
                                                 </div>
                                                 <div className="relative h-1 bg-bg-tertiary rounded-full">

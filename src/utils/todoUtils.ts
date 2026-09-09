@@ -1,4 +1,5 @@
 // TodoTab utility functions for stats, levels, and todo parsing
+import type { TodoBaseline } from '../types/types';
 
 export interface TodoItem {
     checked: boolean;
@@ -86,7 +87,11 @@ const calculateWeightedCompletion = (node: TodoNode, parentWeight: number): { we
 };
 
 // Calculate weighted summary (raw values + percentage)
-export const calculateWeightedSummary = (items: TodoItem[]): { totalWeight: number; completedWeight: number; percentage: number } => {
+export const calculateWeightedSummary = (
+    items: TodoItem[],
+    /** 있으면 분모를 그 시점으로 고정하고 100%를 넘기지 않는다 */
+    baseline?: TodoBaseline,
+): { totalWeight: number; completedWeight: number; percentage: number } => {
     if (items.length === 0) return { totalWeight: 0, completedWeight: 0, percentage: 0 };
 
     const rootNodes = buildTaskTree(items);
@@ -99,6 +104,17 @@ export const calculateWeightedSummary = (items: TodoItem[]): { totalWeight: numb
         totalCompletedWeight += result.completedWeight;
     });
 
+    // 기준점이 있으면 그때의 분모를 쓴다. 그 뒤에 추가한 항목은 달성률을 깎지 않고,
+    // 넘어선 몫은 여기서 잘라 낸 뒤 getTodoBonus가 따로 센다.
+    if (baseline && baseline.weight > 0) {
+        const completed = Math.min(totalCompletedWeight, baseline.weight);
+        return {
+            totalWeight: baseline.weight,
+            completedWeight: completed,
+            percentage: Math.round((completed / baseline.weight) * 100),
+        };
+    }
+
     return {
         totalWeight,
         completedWeight: totalCompletedWeight,
@@ -107,8 +123,54 @@ export const calculateWeightedSummary = (items: TodoItem[]): { totalWeight: numb
 };
 
 // Calculate total weighted completion rate
-export const calculateTotalWeightedRate = (items: TodoItem[]): number => {
-    return calculateWeightedSummary(items).percentage;
+export const calculateTotalWeightedRate = (items: TodoItem[], baseline?: TodoBaseline): number => {
+    return calculateWeightedSummary(items, baseline).percentage;
+};
+
+// ===== 초과 달성 (다 끝낸 뒤 더 해낸 몫) =====
+
+/** 소요시간이 적힌 완료 항목만 추린 집계 */
+const summarizeTimedCompleted = (items: TodoItem[]): { count: number; minutes: number } => {
+    let count = 0;
+    let minutes = 0;
+    for (const item of items) {
+        if (!item.checked || item.duration === undefined) continue;
+        count++;
+        minutes += item.duration;
+    }
+    return { count, minutes };
+};
+
+/** 지금 상태를 기준점으로 굳힌다 (그날 처음 100%를 채운 순간에 부른다) */
+export const makeTodoBaseline = (items: TodoItem[]): TodoBaseline => {
+    const timed = summarizeTimedCompleted(items);
+    return {
+        weight: calculateWeightedSummary(items).totalWeight,
+        timedCount: timed.count,
+        timedMinutes: timed.minutes,
+    };
+};
+
+/** 기준점 이후에 더 해낸 몫 */
+export interface TodoBonus {
+    count: number;
+    minutes: number;
+}
+
+/**
+ * 기준점 이후 더 해낸 몫.
+ *
+ * 소요시간이 적힌 항목만 센다. 5분짜리 항목을 여러 개 적어 넣는 것만으로
+ * 기록이 부풀지 않게 하려는 제한이다. 완료할 때 소요시간을 묻는 창이 뜨므로,
+ * 실제로 한 일이라면 시간이 남는다.
+ */
+export const getTodoBonus = (items: TodoItem[], baseline?: TodoBaseline): TodoBonus => {
+    if (!baseline) return { count: 0, minutes: 0 };
+    const now = summarizeTimedCompleted(items);
+    return {
+        count: Math.max(0, now.count - baseline.timedCount),
+        minutes: Math.max(0, now.minutes - baseline.timedMinutes),
+    };
 };
 
 // Level system (cute lion theme)

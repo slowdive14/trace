@@ -17,7 +17,7 @@ import {
 import { db } from './firebase';
 import { startOfDay, format as formatDateFns } from 'date-fns';
 import { getDueRules, getEffectivePostDate } from '../utils/expenseUtils';
-import type { Expense, ExpenseCategory, RecurringExpense, SleepCoaching, SleepCoachingRecord, Todo, Worry, WorryEntry, BrainDump, BrainDumpStatus, BrainDumpInsight, DailyReflection, MonthlyReview, MonthlyInsight, EntryPhoto } from '../types/types';
+import type { Expense, ExpenseCategory, RecurringExpense, SleepCoaching, SleepCoachingRecord, Todo, TodoBaseline, Worry, WorryEntry, BrainDump, BrainDumpStatus, BrainDumpInsight, DailyReflection, MonthlyReview, MonthlyInsight, EntryPhoto } from '../types/types';
 
 const EXPENSES_COLLECTION = 'expenses';
 
@@ -267,7 +267,14 @@ export const updateEntry = async (userId: string, entryId: string, content: stri
 };
 
 // Todo functions
-export const saveTodo = async (userId: string, date: Date, content: string, collectionName: string = 'todos') => {
+export const saveTodo = async (
+    userId: string,
+    date: Date,
+    content: string,
+    collectionName: string = 'todos',
+    /** 처음 100%를 채운 순간의 기준점. 넘기지 않으면 이미 저장된 값이 그대로 남는다 */
+    baseline?: TodoBaseline,
+) => {
     try {
         // Normalize to start of day to ensure consistent date storage
         const normalizedDate = startOfDay(date);
@@ -279,11 +286,14 @@ export const saveTodo = async (userId: string, date: Date, content: string, coll
         const dateStr = `${year}-${month}-${day}`; // YYYY-MM-DD
         const docRef = doc(db, `users/${userId}/${collectionName}`, dateStr);
 
-        await setDoc(docRef, {
+        const payload: Record<string, unknown> = {
             content,
             date: Timestamp.fromDate(normalizedDate),
             updatedAt: Timestamp.now()
-        }, { merge: true });
+        };
+        if (baseline) payload.baseline = baseline;
+
+        await setDoc(docRef, payload, { merge: true });
     } catch (e) {
         console.error("Error saving todo: ", e);
         throw e;
