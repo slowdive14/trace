@@ -9,7 +9,48 @@ export interface TodoItem {
     quadrant: 'q1' | 'q2' | 'q3' | 'q4' | 'inbox';
     weight: number;
     duration?: number;  // 분 단위 (UI 표시용)
+    /** 계획에 없던 '추가 항목' (줄 앞의 + 표시). 달성률 분모에서 빠지고 초과분으로 센다 */
+    isExtra?: boolean;
 }
+
+/** 추가 항목임을 나타내는 줄머리 표시 */
+export const EXTRA_PREFIX = '+';
+const EXTRA_RE = /^\+\s*/;
+
+/**
+ * 추가 항목(+)과 그 하위를 체크박스가 아닌 목록으로 바꾼다 (외부로 내보낼 때).
+ *
+ * 옵시디언 일간노트의 달성률 계산은 노트 안의 체크박스를 전부 분모에 넣는다.
+ * 추가 항목을 체크박스 그대로 내보내면, 앱에서는 분모 밖인 것이 옵시디언에서는
+ * 분모에 들어가 두 숫자가 갈린다. 완료 여부는 ✅/⬜로 남겨 읽을 때 알아볼 수 있게 한다.
+ */
+export const stripExtraCheckboxes = (content: string): string => {
+    let skipDeeperThan: number | null = null;
+
+    return content.split('\n').map(line => {
+        const match = line.match(/^([\t ]*)- \[([ xX])\] (.*)$/);
+        if (!match) {
+            // 체크박스가 아닌 내용이 나오면 추가 항목 구간이 끝난 것으로 본다
+            if (line.trim().length > 0) skipDeeperThan = null;
+            return line;
+        }
+
+        const [, indentStr, mark, rest] = match;
+        const indent = (indentStr.match(/\t/g) || []).length + Math.floor((indentStr.match(/ /g) || []).length / 2);
+        const bullet = mark.toLowerCase() === 'x' ? '✅' : '⬜';
+
+        if (skipDeeperThan !== null) {
+            if (indent > skipDeeperThan) return `${indentStr}- ${bullet} ${rest}`;
+            skipDeeperThan = null;
+        }
+
+        if (EXTRA_RE.test(rest)) {
+            skipDeeperThan = indent;
+            return `${indentStr}- ${bullet} ${rest.replace(EXTRA_RE, '')}`;
+        }
+        return line;
+    }).join('\n');
+};
 
 const DEFAULT_DURATION = 5;
 
@@ -86,12 +127,36 @@ const calculateWeightedCompletion = (node: TodoNode, parentWeight: number): { we
     };
 };
 
+/**
+ * 추가 항목과 그 하위를 걷어낸 목록.
+ * 계획 외로 더 한 일은 달성률의 분모에 넣지 않는다. 넣으면 더 한 일을 적을수록
+ * 달성률이 내려가서, 기록하지 않는 편이 유리해진다.
+ */
+export const excludeExtras = (items: TodoItem[]): TodoItem[] => {
+    const out: TodoItem[] = [];
+    let skipDeeperThan: number | null = null;
+
+    for (const item of items) {
+        if (skipDeeperThan !== null) {
+            if (item.indent > skipDeeperThan) continue;   // 추가 항목의 하위
+            skipDeeperThan = null;
+        }
+        if (item.isExtra) {
+            skipDeeperThan = item.indent;
+            continue;
+        }
+        out.push(item);
+    }
+    return out;
+};
+
 // Calculate weighted summary (raw values + percentage)
 export const calculateWeightedSummary = (
-    items: TodoItem[],
+    allItems: TodoItem[],
     /** 있으면 분모를 그 시점으로 고정하고 100%를 넘기지 않는다 */
     baseline?: TodoBaseline,
 ): { totalWeight: number; completedWeight: number; percentage: number } => {
+    const items = excludeExtras(allItems);
     if (items.length === 0) return { totalWeight: 0, completedWeight: 0, percentage: 0 };
 
     const rootNodes = buildTaskTree(items);
@@ -129,11 +194,14 @@ export const calculateTotalWeightedRate = (items: TodoItem[], baseline?: TodoBas
 
 // ===== 초과 달성 (다 끝낸 뒤 더 해낸 몫) =====
 
-/** 소요시간이 적힌 완료 항목만 추린 집계 */
+/**
+ * 소요시간이 적힌 완료 항목만 추린 집계 (추가 항목은 뺀다).
+ * 추가 항목은 표시 자체가 근거라서 따로 세므로, 여기서 함께 세면 두 번 계산된다.
+ */
 const summarizeTimedCompleted = (items: TodoItem[]): { count: number; minutes: number } => {
     let count = 0;
     let minutes = 0;
-    for (const item of items) {
+    for (const item of excludeExtras(items)) {
         if (!item.checked || item.duration === undefined) continue;
         count++;
         minutes += item.duration;
@@ -158,19 +226,31 @@ export interface TodoBonus {
 }
 
 /**
- * 기준점 이후 더 해낸 몫.
+ * 계획을 넘어서 더 해낸 몫. 두 갈래를 합친다.
  *
- * 소요시간이 적힌 항목만 센다. 5분짜리 항목을 여러 개 적어 넣는 것만으로
- * 기록이 부풀지 않게 하려는 제한이다. 완료할 때 소요시간을 묻는 창이 뜨므로,
- * 실제로 한 일이라면 시간이 남는다.
+ * 1. 추가 항목(+)으로 적어 완료한 것: 본인이 계획 외라고 표시했으므로 그대로 센다.
+ *    분모에서 이미 빠져 있어 달성률을 올리지도 않는다.
+ * 2. 표시 없이 100%를 채운 뒤 덧붙여 완료한 것: 기준점과의 차이로 가늠한다.
+ *    이쪽은 앱의 추측이라 근거가 약하므로, 소요시간이 적힌 항목만 인정한다.
+ *    (5분짜리를 여러 개 적어 넣는 것만으로 기록이 부풀지 않게 하려는 제한이다)
  */
 export const getTodoBonus = (items: TodoItem[], baseline?: TodoBaseline): TodoBonus => {
-    if (!baseline) return { count: 0, minutes: 0 };
-    const now = summarizeTimedCompleted(items);
-    return {
-        count: Math.max(0, now.count - baseline.timedCount),
-        minutes: Math.max(0, now.minutes - baseline.timedMinutes),
-    };
+    let count = 0;
+    let minutes = 0;
+
+    for (const item of items) {
+        if (!item.isExtra || !item.checked) continue;
+        count++;
+        minutes += item.duration ?? 0;
+    }
+
+    if (baseline) {
+        const now = summarizeTimedCompleted(items);
+        count += Math.max(0, now.count - baseline.timedCount);
+        minutes += Math.max(0, now.minutes - baseline.timedMinutes);
+    }
+
+    return { count, minutes };
 };
 
 // Level system (cute lion theme)
@@ -537,6 +617,10 @@ export const parseTodos = (content: string): TodoItem[] => {
             // Remove {eid:...} markers from display
             cleanText = cleanText.replace(/\s*\{eid:[^}]+\}/g, '');
 
+            // 계획 외로 더 한 일은 줄머리 +로 구분한다
+            const isExtra = EXTRA_RE.test(cleanText);
+            if (isExtra) cleanText = cleanText.replace(EXTRA_RE, '');
+
             const qMatch = rawText.match(/#(q[1-4])\b/);
             if (qMatch) {
                 quadrant = qMatch[1] as 'q1' | 'q2' | 'q3' | 'q4';
@@ -553,7 +637,8 @@ export const parseTodos = (content: string): TodoItem[] => {
                 lineIndex: index,
                 quadrant,
                 weight: duration ? duration.minutes : (isHighlighted(rawText) ? 2 : 1),
-                duration: duration?.minutes
+                duration: duration?.minutes,
+                isExtra,
             });
         }
     });

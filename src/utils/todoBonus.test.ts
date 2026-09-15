@@ -5,6 +5,7 @@ import {
     calculateTotalWeightedRate,
     makeTodoBaseline,
     getTodoBonus,
+    stripExtraCheckboxes,
 } from './todoUtils';
 
 /** 소요시간이 적힌 항목만으로 이루어진 하루 (30분 + 60분) */
@@ -97,5 +98,107 @@ describe('기준점을 굳히는 시점', () => {
         // 부모 60분이 분모이고 하위는 그 안에서 나눠 갖는다
         expect(makeTodoBaseline(items).weight).toBe(60);
         expect(calculateWeightedSummary(items).percentage).toBe(100);
+    });
+});
+
+describe('추가 항목(+)을 처음부터 따로 넣은 경우', () => {
+    it('+ 표시를 읽어내고 본문에서는 떼어 낸다', () => {
+        const [item] = parseTodos('- [x] +갑자기 온 상담 (60m)');
+        expect(item.isExtra).toBe(true);
+        expect(item.text).toBe('갑자기 온 상담 (60m)');
+        expect(item.duration).toBe(60);
+    });
+
+    it('기준점이 없어도 분모에 들어가지 않는다', () => {
+        const planOnly = parseTodos(DONE_DAY);
+        const withExtra = parseTodos(`${DONE_DAY}\n- [ ] +갑자기 온 상담 (60m)`);
+
+        // 90분 계획 그대로. 추가 항목을 적어도 분모가 커지지 않는다
+        expect(calculateWeightedSummary(planOnly).totalWeight).toBe(90);
+        expect(calculateWeightedSummary(withExtra).totalWeight).toBe(90);
+        expect(calculateTotalWeightedRate(withExtra)).toBe(100);
+    });
+
+    it('아직 100%가 아닌 날에도 달성률을 깎지 않는다', () => {
+        const midday = parseTodos(`- [x] 달리기 (30m)
+- [ ] 보고서 (60m)
+- [x] +갑자기 온 상담 (60m)`);
+        expect(calculateTotalWeightedRate(midday)).toBe(33);   // 30/90, 추가 항목과 무관
+    });
+
+    it('완료하면 기준점 없이도 초과분으로 센다', () => {
+        const items = parseTodos(`${DONE_DAY}\n- [x] +갑자기 온 상담 (60m)`);
+        expect(getTodoBonus(items, undefined)).toEqual({ count: 1, minutes: 60 });
+    });
+
+    it('적어만 두고 완료하지 않으면 세지 않는다', () => {
+        const items = parseTodos(`${DONE_DAY}\n- [ ] +갑자기 온 상담 (60m)`);
+        expect(getTodoBonus(items, undefined)).toEqual({ count: 0, minutes: 0 });
+    });
+
+    it('소요시간을 안 적어도 개수는 센다 (직접 표시한 것이므로)', () => {
+        const items = parseTodos(`${DONE_DAY}\n- [x] +동료 부탁 들어주기`);
+        expect(getTodoBonus(items, undefined)).toEqual({ count: 1, minutes: 0 });
+    });
+
+    it('추가 항목의 하위 항목도 분모에서 함께 빠진다', () => {
+        const items = parseTodos(`${DONE_DAY}
+- [x] +갑자기 온 상담 (60m)
+  - [x] 기록 정리
+  - [x] 다음 회기 준비`);
+        expect(calculateWeightedSummary(items).totalWeight).toBe(90);
+        expect(calculateTotalWeightedRate(items)).toBe(100);
+    });
+});
+
+describe('두 경로가 겹쳐도 한 번만 센다', () => {
+    it('기준점이 있는 날에 추가 항목을 넣어도 이중으로 세지 않는다', () => {
+        const baseline = makeTodoBaseline(parseTodos(DONE_DAY));
+        const items = parseTodos(`${DONE_DAY}\n- [x] +갑자기 온 상담 (60m)`);
+
+        // 표시가 있으므로 표시 쪽으로만 센다 (기준점 차이로 또 세면 2개가 된다)
+        expect(getTodoBonus(items, baseline)).toEqual({ count: 1, minutes: 60 });
+    });
+
+    it('표시한 것과 표시 없이 덧붙인 것이 함께 있으면 둘 다 센다', () => {
+        const baseline = makeTodoBaseline(parseTodos(DONE_DAY));
+        const items = parseTodos(`${DONE_DAY}
+- [x] +갑자기 온 상담 (60m)
+- [x] 장보기 (20m)`);
+        expect(getTodoBonus(items, baseline)).toEqual({ count: 2, minutes: 80 });
+    });
+
+    it('추가 항목은 기준점을 굳힐 때도 분모에 넣지 않는다', () => {
+        const items = parseTodos(`${DONE_DAY}\n- [x] +갑자기 온 상담 (60m)`);
+        expect(makeTodoBaseline(items)).toEqual({ weight: 90, timedCount: 2, timedMinutes: 90 });
+    });
+});
+
+describe('옵시디언으로 내보낼 때', () => {
+    it('추가 항목은 체크박스를 떼어 옵시디언 분모에 안 들어가게 한다', () => {
+        const out = stripExtraCheckboxes(`- [x] 달리기 (30m)
+- [x] +갑자기 온 상담 (60m)
+- [ ] +장보기`);
+        expect(out).toBe(`- [x] 달리기 (30m)
+- ✅ 갑자기 온 상담 (60m)
+- ⬜ 장보기`);
+    });
+
+    it('추가 항목의 하위도 함께 체크박스를 뗀다', () => {
+        const out = stripExtraCheckboxes(`- [x] +갑자기 온 상담 (60m)
+  - [x] 기록 정리
+- [x] 보고서 (60m)
+  - [x] 초안`);
+        expect(out).toBe(`- ✅ 갑자기 온 상담 (60m)
+  - ✅ 기록 정리
+- [x] 보고서 (60m)
+  - [x] 초안`);
+    });
+
+    it('추가 항목이 없으면 원문 그대로 둔다', () => {
+        const plan = `## 💻 매일 습관
+- [x] 달리기 (30m)
+  - [ ] 스트레칭`;
+        expect(stripExtraCheckboxes(plan)).toBe(plan);
     });
 });

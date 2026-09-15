@@ -2,6 +2,7 @@ import { format } from 'date-fns';
 import type { Entry, Expense, Todo, Worry, WorryEntry } from '../types/types';
 import { EXPENSE_CATEGORY_EMOJI } from '../types/types';
 import { getLogicalDate } from './dateUtils';
+import { stripExtraCheckboxes } from './todoUtils';
 
 export const generateMarkdown = (entries: Entry[], date: Date, reflection?: string): string => {
     const dateStr = format(date, 'yyyy-MM-dd');
@@ -68,7 +69,9 @@ export function exportDailyMarkdown(
     // Todo Section (Top)
     if (todo && todo.content.trim()) {
         // markdown += '## 🎯 오늘의 목표\n'; // Header removed as per request
-        const cleanTodo = todo.content.replace(/\s*\{eid:[^}]+\}/g, '');
+        // 추가 항목은 체크박스를 떼서 내보낸다. 옵시디언의 달성률 계산은 노트 안의
+        // 체크박스를 전부 분모에 넣기 때문에, 그대로 두면 앱과 숫자가 갈린다.
+        const cleanTodo = stripExtraCheckboxes(todo.content.replace(/\s*\{eid:[^}]+\}/g, ''));
         markdown += cleanTodo.trim() + '\n\n';
     }
 

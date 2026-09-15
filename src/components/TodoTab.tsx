@@ -23,6 +23,7 @@ import {
     getWeeklyTarget,
     makeTodoBaseline,
     getTodoBonus,
+    EXTRA_PREFIX,
     STREAK_THRESHOLD,
     STREAK_REPAIR_RATE,
     MAX_STREAK_REPAIRS
@@ -240,6 +241,15 @@ const SortableTodoGroup: React.FC<SortableTodoGroupProps> = ({
                                     className={`flex-1 leading-relaxed cursor-text ${item.checked ? 'line-through text-text-secondary' : 'text-text-primary'}`}
                                     onClick={() => startInlineEdit(item.lineIndex)}
                                 >
+                                    {/* 계획 외 항목임을 알린다. 취소선이 지나가지 않게 atomic inline으로 둔다 */}
+                                    {item.isExtra && (
+                                        <span
+                                            className="mr-1.5 inline-flex items-center px-1 py-px text-[9px] font-medium rounded bg-amber-400/15 text-amber-400 align-middle"
+                                            title="계획에 없던 추가 항목 — 달성률 분모에서 빠지고 초과분으로 센다"
+                                        >
+                                            추가
+                                        </span>
+                                    )}
                                     {renderText(item.text)}
                                     {collapsed && <ChildProgress done={childDone} total={childTotal} />}
                                 </span>
@@ -364,6 +374,8 @@ const TodoTab: React.FC<TodoTabProps> = ({
     const [recordToAction, setRecordToAction] = useState<boolean>(true);
     const [deletingLineIndex, setDeletingLineIndex] = useState<number | null>(null);
     const [quickAddText, setQuickAddText] = useState('');
+    // 빠른 추가를 '계획 외 추가 항목'으로 넣을지. 켜 두면 연달아 적을 수 있다.
+    const [quickAddExtra, setQuickAddExtra] = useState(false);
     const [subAddingIndex, setSubAddingIndex] = useState<number | null>(null);
     const [subAddText, setSubAddText] = useState('');
     const [confirmClearIntro, setConfirmClearIntro] = useState(false);
@@ -741,6 +753,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
     const extractEntryContent = (lineText: string): string => {
         return lineText
             .replace(/^[\t ]*- \[[ x]\] /, '')  // Remove checkbox syntax
+            .replace(/^\+\s*/, '')  // 추가 항목 표시는 일상 기록에 남기지 않는다
             .replace(/\s*\(\d+h?\s*\d*m?\)\s*/, ' ')  // Remove duration like (96m), (2h), (1h30m)
             .replace(/\s*\{eid:[^}]+\}\s*/g, '')  // Remove existing eid marker
             .replace(/\s*#q[1-4]\b/g, '')  // Remove quadrant tags
@@ -970,7 +983,8 @@ const TodoTab: React.FC<TodoTabProps> = ({
     const handleQuickAdd = () => {
         const text = quickAddText.trim();
         if (!text) return;
-        const newLine = `- [ ] ${text}`;
+        // 추가 항목은 줄머리 +로 남긴다 (달성률 분모에서 빠지고 초과분으로 센다)
+        const newLine = `- [ ] ${quickAddExtra ? EXTRA_PREFIX : ''}${text}`;
         const newContent = content ? (content.endsWith('\n') ? content + newLine : content + '\n' + newLine) : newLine;
         setContent(newContent);
         handleSave(newContent);
@@ -1706,6 +1720,11 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                                         className={`flex-1 leading-relaxed cursor-text ${item.checked ? 'line-through text-text-secondary' : 'text-text-primary'}`}
                                                         onClick={() => startHistoryEdit(date, item.lineIndex)}
                                                     >
+                                                        {item.isExtra && (
+                                                            <span className="mr-1.5 inline-flex items-center px-1 py-px text-[9px] font-medium rounded bg-amber-400/15 text-amber-400 align-middle">
+                                                                추가
+                                                            </span>
+                                                        )}
                                                         {renderText(item.text)}
                                                     </span>
                                                     <div className="flex items-center gap-0.5 shrink-0">
@@ -2175,15 +2194,27 @@ const TodoTab: React.FC<TodoTabProps> = ({
 
                                 {/* Quick Add Input */}
                                 <div className="flex items-center gap-2 mt-4 pt-3 border-t border-bg-tertiary">
-                                    <Plus size={16} className="text-text-tertiary shrink-0" />
+                                    <Plus size={16} className={`shrink-0 ${quickAddExtra ? 'text-amber-400' : 'text-text-tertiary'}`} />
                                     <input
                                         type="text"
                                         value={quickAddText}
                                         onChange={e => setQuickAddText(e.target.value)}
                                         onKeyDown={e => e.key === 'Enter' && handleQuickAdd()}
-                                        placeholder="할 일 추가..."
+                                        placeholder={quickAddExtra ? '계획에 없던 일 추가...' : '할 일 추가...'}
                                         className="flex-1 bg-transparent text-text-primary text-sm outline-none placeholder:text-text-tertiary"
                                     />
+                                    {/* 계획 외로 더 한 일은 처음부터 따로 넣는다 */}
+                                    <button
+                                        onClick={() => setQuickAddExtra(v => !v)}
+                                        className={`shrink-0 px-2 py-1 text-[11px] rounded-md transition-colors ${quickAddExtra
+                                            ? 'bg-amber-400/15 text-amber-400'
+                                            : 'text-text-tertiary hover:text-text-secondary hover:bg-bg-secondary'
+                                            }`}
+                                        title="계획에 없던 일로 넣기 — 달성률 분모에서 빠지고 초과분으로 쌓인다"
+                                        aria-pressed={quickAddExtra}
+                                    >
+                                        추가 항목
+                                    </button>
                                 </div>
                             </div>
                         </>
