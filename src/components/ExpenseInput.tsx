@@ -18,6 +18,9 @@ const ExpenseInput: React.FC<ExpenseInputProps> = ({ externalDate }) => {
     const [category, setCategory] = useState<ExpenseCategory>('기타');
     const [selectedDate, setSelectedDate] = useState<Date>(new Date());
     const [showDatePicker, setShowDatePicker] = useState(false);
+    // 금액을 못 읽었거나 저장이 실패했을 때 알린다.
+    // 전에는 둘 다 조용히 넘어가서(콘솔에만 기록) 사용자는 왜 안 되는지 알 길이 없었다.
+    const [saveError, setSaveError] = useState<string | null>(null);
     const [batchParsed, setBatchParsed] = useState<Array<{
         description: string;
         amount: number;
@@ -88,30 +91,73 @@ const ExpenseInput: React.FC<ExpenseInputProps> = ({ externalDate }) => {
     const handleSubmit = async () => {
         if (!user) return;
 
-        try {
-            // 배치 모드인 경우
-            if (batchParsed.length > 0) {
-                await addBatchExpenses(user.uid, batchParsed, selectedDate);
-            }
-            // 단일 모드인 경우
-            else if (typeof amount === 'number' && amount !== 0 && description) {
-                await addExpense(user.uid, description, Number(amount), category, selectedDate);
-            } else {
-                return; // 유효하지 않은 입력
-            }
+        const raw = input;
+        if (!raw.trim()) return;
 
-            // Reset form
-            setInput('');
-            setAmount('');
-            setDescription('');
-            setCategory('기타');
-            setBatchParsed([]);
-            // externalDate가 있으면 유지, 없으면 오늘로 리셋
-            if (!externalDate) {
-                setSelectedDate(new Date());
+        // 무엇을 저장할지 화면을 비우기 전에 확정한다.
+        // 디바운스(800ms)가 아직 안 돌아 미리보기가 비어 있어도, 제출 시점에
+        // 입력을 다시 읽어 엔터가 헛돌지 않게 한다.
+        const isBatch = raw.includes('\n');
+        let single: { description: string; amount: number } | null = null;
+
+        if (isBatch) {
+            if (batchParsed.length === 0 && parseBatchExpenses(raw).length === 0) {
+                setSaveError('금액을 읽지 못했습니다. 줄마다 "커피 1500"처럼 적어 주세요.');
+                return;
+            }
+        } else {
+            if (typeof amount === 'number' && amount !== 0 && description) {
+                single = { description, amount };
+            } else {
+                const parsed = extractAmountFromDescription(raw);
+                if (parsed.description && parsed.amount !== null && parsed.amount !== 0) {
+                    single = { description: parsed.description, amount: parsed.amount };
+                }
+            }
+            if (!single) {
+                setSaveError('금액을 읽지 못했습니다. "커피 1500"처럼 적어 주세요.');
+                return;
+            }
+        }
+
+        const pendingBatch = batchParsed;
+        const pendingCategory = category;
+        const pendingDate = selectedDate;
+
+        // 저장을 기다리기 전에 화면부터 비운다.
+        // Firestore 쓰기는 서버 확인까지 기다리므로, 통신이 느리면 이미 목록에
+        // 올라간 뒤에도 입력창에 글자가 몇 초씩 남아 입력이 안 된 것처럼 보인다.
+        setInput('');
+        setAmount('');
+        setDescription('');
+        setCategory('기타');
+        setBatchParsed([]);
+        setSaveError(null);
+        if (!externalDate) {
+            setSelectedDate(new Date());
+        }
+
+        try {
+            if (isBatch) {
+                const items = pendingBatch.length > 0
+                    ? pendingBatch
+                    : await Promise.all(parseBatchExpenses(raw).map(async item => ({
+                        ...item,
+                        category: await classifyExpenseWithAI(item.description),
+                    })));
+                await addBatchExpenses(user.uid, items, pendingDate);
+            } else if (single) {
+                // 분류가 아직 안 끝났으면 여기서 마저 한다 (화면은 이미 비워 기다려도 티가 안 난다)
+                const cat = pendingCategory !== '기타'
+                    ? pendingCategory
+                    : await classifyExpenseWithAI(single.description);
+                await addExpense(user.uid, single.description, single.amount, cat, pendingDate);
             }
         } catch (error) {
             console.error("Failed to add expense:", error);
+            // 그 사이 새로 적지 않았다면 입력을 되돌려 다시 시도할 수 있게 한다
+            setInput(prev => (prev === '' ? raw : prev));
+            setSaveError('저장하지 못했습니다. 다시 시도해 주세요.');
         }
     };
 
@@ -132,6 +178,10 @@ const ExpenseInput: React.FC<ExpenseInputProps> = ({ externalDate }) => {
                         <div className="text-xs text-accent text-center">
                             📅 {format(selectedDate, 'yyyy년 M월 d일')} 지출 기록
                         </div>
+                    )}
+
+                    {saveError && (
+                        <div className="text-xs text-red-400 text-center">{saveError}</div>
                     )}
 
                     {/* Preview & Manual Override Section */}
@@ -179,7 +229,10 @@ const ExpenseInput: React.FC<ExpenseInputProps> = ({ externalDate }) => {
                     <div className="flex items-center gap-2">
                         <textarea
                             value={input}
-                            onChange={(e) => setInput(e.target.value)}
+                            onChange={(e) => {
+                                setInput(e.target.value);
+                                if (saveError) setSaveError(null);
+                            }}
                             onKeyDown={handleKeyDown}
                             placeholder="예: 커피 1500 (한 줄로 입력)&#10;또는 여러 줄로 입력:&#10;커피 5500&#10;택시 8000&#10;점심 -12000"
                             className="flex-1 bg-bg-tertiary text-text-primary rounded-lg p-3 focus:outline-none focus:ring-1 focus:ring-accent resize-none"
@@ -195,7 +248,9 @@ const ExpenseInput: React.FC<ExpenseInputProps> = ({ externalDate }) => {
                         </button>
                         <button
                             onClick={handleSubmit}
-                            disabled={(batchParsed.length === 0) && (typeof amount !== 'number' || amount === 0)}
+                            /* 디바운스가 돌기 전에도 누를 수 있어야 한다 (엔터와 같은 기준).
+                               금액을 못 읽으면 handleSubmit이 이유를 알려 준다 */
+                            disabled={!input.trim()}
                             className="p-2 bg-accent text-white rounded-full hover:bg-opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                         >
                             <Send size={20} />
