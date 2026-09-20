@@ -1,5 +1,63 @@
 // 이미지 리사이즈/압축 — Firebase 의존 없음(순수 계산은 단위테스트 가능)
 
+/** 파일 앞부분으로 알아낸 실제 형식 */
+export interface SniffedFormat {
+    /** 사람이 읽을 이름 ('JPEG', 'HEIC' 등). 모르면 'unknown' */
+    label: string;
+    /** 브라우저 캔버스가 그릴 수 있다고 알려진 형식인가 */
+    drawable: boolean;
+    /** 업로드할 때 쓸 MIME 타입 (모르면 undefined) */
+    mime?: string;
+    /** 파일 이름에 붙일 확장자 */
+    ext: string;
+}
+
+const ascii = (head: Uint8Array, from: number, to: number) =>
+    String.fromCharCode(...head.subarray(from, to));
+
+/**
+ * 파일 앞부분 바이트로 실제 형식을 알아낸다.
+ *
+ * 확장자와 file.type은 믿을 수 없다. 아이폰이 HEIC로 찍은 사진이 전송 과정에서
+ * 이름만 .jpg로 바뀌는 일이 흔하고, 그러면 크롬 계열 브라우저는 디코딩하지 못한다.
+ * 실패했을 때 "형식이 원인인지"를 추측이 아니라 파일로 확인하려고 둔다.
+ */
+export function sniffImageFormat(head: Uint8Array): SniffedFormat {
+    if (head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff) {
+        return { label: 'JPEG', drawable: true, mime: 'image/jpeg', ext: 'jpg' };
+    }
+    if (head[0] === 0x89 && ascii(head, 1, 4) === 'PNG') {
+        return { label: 'PNG', drawable: true, mime: 'image/png', ext: 'png' };
+    }
+    if (ascii(head, 0, 3) === 'GIF') {
+        return { label: 'GIF', drawable: true, mime: 'image/gif', ext: 'gif' };
+    }
+    if (ascii(head, 0, 4) === 'RIFF' && ascii(head, 8, 12) === 'WEBP') {
+        return { label: 'WebP', drawable: true, mime: 'image/webp', ext: 'webp' };
+    }
+    // ISO 베이스 미디어 컨테이너 (HEIC·AVIF 계열): 4~8바이트가 'ftyp'
+    if (ascii(head, 4, 8) === 'ftyp') {
+        const brand = ascii(head, 8, 12);
+        if (brand.startsWith('avif') || brand.startsWith('avis')) {
+            // AVIF는 요즘 브라우저 대부분이 그린다
+            return { label: 'AVIF', drawable: true, mime: 'image/avif', ext: 'avif' };
+        }
+        // heic·heix·hevc·mif1·msf1 등 — 크롬 계열은 그리지 못한다
+        return { label: 'HEIC', drawable: false, mime: 'image/heic', ext: 'heic' };
+    }
+    return { label: 'unknown', drawable: false, ext: 'bin' };
+}
+
+/** 파일 앞 16바이트를 읽어 형식을 알아낸다 */
+export async function sniffImageFile(file: Blob): Promise<SniffedFormat> {
+    try {
+        const head = new Uint8Array(await file.slice(0, 16).arrayBuffer());
+        return sniffImageFormat(head);
+    } catch {
+        return { label: 'unknown', drawable: false, ext: 'bin' };
+    }
+}
+
 // 긴 변을 maxEdge로 맞춘 목표 크기. 확대는 하지 않고, 잘못된 입력은 0으로 방어.
 export function computeTargetSize(
     width: number,

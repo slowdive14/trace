@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { runWithStallGuard, retryAsync, firstSuccess, type ProgressTask } from './imageResize';
+import { runWithStallGuard, retryAsync, firstSuccess, sniffImageFormat, type ProgressTask } from './imageResize';
 
 /** 제어 가능한 가짜 업로드 작업 */
 function fakeTask() {
@@ -181,5 +181,55 @@ describe('firstSuccess — 디코딩 경로 경쟁', () => {
                 '이미지를 디코딩하지 못했습니다',
             )
         ).rejects.toThrow(/이미지를 디코딩하지 못했습니다.*bitmap 실패.*img 실패/);
+    });
+});
+
+describe('sniffImageFormat — 확장자 말고 파일로 형식 판별', () => {
+    const bytes = (...parts: Array<number | string>) => {
+        const out: number[] = [];
+        for (const p of parts) {
+            if (typeof p === 'number') out.push(p);
+            else for (const ch of p) out.push(ch.charCodeAt(0));
+        }
+        return new Uint8Array(out);
+    };
+
+    it('JPEG', () => {
+        const f = sniffImageFormat(bytes(0xff, 0xd8, 0xff, 0xe0, 0, 0x10, 'JFIF'));
+        expect(f).toMatchObject({ label: 'JPEG', drawable: true, ext: 'jpg' });
+    });
+
+    it('PNG', () => {
+        const f = sniffImageFormat(bytes(0x89, 'PNG', 0x0d, 0x0a, 0x1a, 0x0a));
+        expect(f).toMatchObject({ label: 'PNG', drawable: true, ext: 'png' });
+    });
+
+    it('WebP', () => {
+        const f = sniffImageFormat(bytes('RIFF', 0, 0, 0, 0, 'WEBPVP8 '));
+        expect(f).toMatchObject({ label: 'WebP', drawable: true, ext: 'webp' });
+    });
+
+    it('HEIC는 그릴 수 없는 형식으로 잡는다 (이름이 .jpg여도)', () => {
+        // 아이폰 HEIC의 실제 머리: 크기 4바이트 + 'ftypheic'
+        const f = sniffImageFormat(bytes(0, 0, 0, 0x18, 'ftypheic', 0, 0, 0, 0));
+        expect(f).toMatchObject({ label: 'HEIC', drawable: false, ext: 'heic' });
+    });
+
+    it('HEIC의 다른 브랜드(mif1)도 같이 잡는다', () => {
+        const f = sniffImageFormat(bytes(0, 0, 0, 0x18, 'ftypmif1', 0, 0, 0, 0));
+        expect(f.label).toBe('HEIC');
+    });
+
+    it('AVIF는 그릴 수 있는 쪽으로 구분한다', () => {
+        const f = sniffImageFormat(bytes(0, 0, 0, 0x1c, 'ftypavif', 0, 0, 0, 0));
+        expect(f).toMatchObject({ label: 'AVIF', drawable: true, ext: 'avif' });
+    });
+
+    it('알 수 없는 내용은 unknown', () => {
+        expect(sniffImageFormat(bytes(1, 2, 3, 4, 5, 6, 7, 8)).label).toBe('unknown');
+    });
+
+    it('내용이 너무 짧아도 터지지 않는다', () => {
+        expect(() => sniffImageFormat(bytes(0xff))).not.toThrow();
     });
 });

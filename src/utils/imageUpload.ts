@@ -1,7 +1,7 @@
 // Firebase Storage 업로드/삭제 (사진 메타데이터 반환)
 import { ref, uploadBytes, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
 import { storage } from '../services/firebase';
-import { compressImage, withTimeout, runWithStallGuard, retryAsync } from './imageResize';
+import { compressImage, withTimeout, runWithStallGuard, retryAsync, sniffImageFile, type SniffedFormat } from './imageResize';
 import type { EntryPhoto } from '../types/types';
 
 /**
@@ -28,8 +28,13 @@ const UPLOAD_ATTEMPTS = 2;
  * 진행률·중단이 실제로 의미 있는 큰 파일만 재개 가능 업로드로 보낸다.
  */
 const SIMPLE_UPLOAD_MAX_BYTES = 1024 * 1024;
-/** Storage 보안 규칙 상한 */
-const MAX_BYTES = 5 * 1024 * 1024;
+/**
+ * Storage 보안 규칙 상한.
+ * 압축이 실패하면 원본을 그대로 올려야 사진이 유실되지 않는데, 폰 사진 원본은
+ * 5~8MB가 흔해 예전 5MB 상한에서는 그 폴백이 번번이 막혔다.
+ * (콘솔의 Storage 규칙도 같은 값으로 맞춰 두어야 한다)
+ */
+const MAX_BYTES = 10 * 1024 * 1024;
 
 // 파일을 압축해 users/{uid}/photos 에 업로드하고 메타데이터 반환.
 // 일부 HDR/특수 JPEG은 브라우저 캔버스 디코딩이 실패하므로, 그 경우 원본을 그대로 업로드해 사진 유실을 막는다.
@@ -62,11 +67,30 @@ export async function uploadEntryPhoto(
         console.warn('compressImage 실패 — 원본 업로드로 폴백:', e);
     }
 
-    // 압축이 실패한 원본은 수 MB일 수 있다. 규칙에 걸려 어차피 거부되므로
+    // 압축이 실패했다면 원본이 무엇인지 파일로 확인한다.
+    // 확장자와 file.type은 믿을 수 없다 — 아이폰이 HEIC로 찍은 사진이 전송 과정에서
+    // 이름만 .jpg로 바뀌는 일이 흔하고, 그러면 크롬 계열은 아예 디코딩하지 못한다.
+    let sniffed: SniffedFormat | undefined;
+    if (compressError) {
+        sniffed = await sniffImageFile(file);
+        console.warn(`압축 실패 — 실제 형식: ${sniffed.label} (이름 ${file.name}, type ${file.type || '없음'})`);
+
+        // 브라우저가 그리지 못하는 형식은 올려 봐야 화면에서 열리지 않는다.
+        // 원인을 정확히 짚고 멈추는 편이 낫다.
+        if (!sniffed.drawable) {
+            throw new Error(
+                sniffed.label === 'HEIC'
+                    ? '이 사진은 이름만 .jpg일 뿐 실제로는 HEIC 형식이라 앱에서 열 수 없습니다. ' +
+                      "아이폰이라면 설정 → 카메라 → 포맷에서 '호환성 우선'으로 바꿔 주세요. " +
+                      "이미 찍어 둔 사진은 공유할 때 '자동' 대신 JPEG으로 변환해 올리면 됩니다."
+                    : `사진을 열지 못했습니다 (실제 형식: ${sniffed.label}). 파일이 손상됐을 수 있습니다.`
+            );
+        }
+        if (sniffed.mime) contentType = sniffed.mime;
+    }
+
+    // 여기까지 왔는데 원본이 상한을 넘으면 규칙에 걸려 어차피 거부된다.
     // 오래 올리다 실패하는 대신 미리 알려준다.
-    // 원인을 형식 탓으로 단정하지 않는다. 실제로는 디코딩이 멈추거나 메모리가
-    // 모자라 실패하는 경우가 대부분이고, 그때 '다른 형식으로 저장하라'는 안내는
-    // 해봐야 소용이 없는데다 사용자를 엉뚱한 곳으로 보낸다.
     if (blob.size > MAX_BYTES) {
         const why = compressError instanceof Error ? compressError.message : '알 수 없는 이유';
         throw new Error(
@@ -75,7 +99,9 @@ export async function uploadEntryPhoto(
         );
     }
 
-    const path = `users/${uid}/photos/${crypto.randomUUID()}.jpg`;
+    // 원본을 그대로 올릴 때는 실제 형식에 맞는 확장자를 쓴다.
+    // 예전에는 무조건 .jpg여서 PNG 원본이 .jpg라는 이름으로 올라갔다.
+    const path = `users/${uid}/photos/${crypto.randomUUID()}.${sniffed?.ext ?? 'jpg'}`;
     const objectRef = ref(storage, path);
 
     if (blob.size <= SIMPLE_UPLOAD_MAX_BYTES) {
