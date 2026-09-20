@@ -10,6 +10,8 @@ export interface SniffedFormat {
     mime?: string;
     /** 파일 이름에 붙일 확장자 */
     ext: string;
+    /** 형식이 낯선 게 아니라 내용 자체를 못 읽은 경우 */
+    unreadable?: boolean;
 }
 
 const ascii = (head: Uint8Array, from: number, to: number) =>
@@ -48,14 +50,36 @@ export function sniffImageFormat(head: Uint8Array): SniffedFormat {
     return { label: 'unknown', drawable: false, ext: 'bin' };
 }
 
-/** 파일 앞 16바이트를 읽어 형식을 알아낸다 */
+/**
+ * 파일 앞 16바이트를 읽어 형식을 알아낸다.
+ *
+ * '내용을 못 읽는 것'과 '형식이 낯선 것'을 반드시 구분한다. 둘을 뭉뚱그리면
+ * 폰이 파일 접근 권한을 거둬 간 상황(고른 뒤 시간이 지나면 흔하다)을
+ * 형식 문제로 오해하게 되고, 해봐야 소용없는 안내를 하게 된다.
+ */
 export async function sniffImageFile(file: Blob): Promise<SniffedFormat> {
-    try {
-        const head = new Uint8Array(await file.slice(0, 16).arrayBuffer());
-        return sniffImageFormat(head);
-    } catch {
-        return { label: 'unknown', drawable: false, ext: 'bin' };
+    if (file.size === 0) {
+        return { label: '빈 파일', drawable: false, ext: 'bin', unreadable: true };
     }
+    let head: Uint8Array;
+    try {
+        head = new Uint8Array(await file.slice(0, 16).arrayBuffer());
+    } catch (e) {
+        const why = e instanceof Error ? e.message : String(e);
+        return { label: `내용을 읽지 못함 (${why})`, drawable: false, ext: 'bin', unreadable: true };
+    }
+    if (head.length === 0) {
+        return { label: '내용이 비어 있음', drawable: false, ext: 'bin', unreadable: true };
+    }
+
+    const format = sniffImageFormat(head);
+    if (format.label !== 'unknown') return format;
+
+    // 낯선 형식이면 앞부분을 그대로 보여 준다. 추측 대신 근거를 남긴다.
+    const hex = Array.from(head.subarray(0, 8))
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join(' ');
+    return { ...format, label: `알 수 없는 형식 (앞부분 ${hex})` };
 }
 
 // 긴 변을 maxEdge로 맞춘 목표 크기. 확대는 하지 않고, 잘못된 입력은 0으로 방어.

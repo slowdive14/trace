@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { runWithStallGuard, retryAsync, firstSuccess, sniffImageFormat, type ProgressTask } from './imageResize';
+import { runWithStallGuard, retryAsync, firstSuccess, sniffImageFormat, sniffImageFile, type ProgressTask } from './imageResize';
 
 /** 제어 가능한 가짜 업로드 작업 */
 function fakeTask() {
@@ -231,5 +231,46 @@ describe('sniffImageFormat — 확장자 말고 파일로 형식 판별', () => 
 
     it('내용이 너무 짧아도 터지지 않는다', () => {
         expect(() => sniffImageFormat(bytes(0xff))).not.toThrow();
+    });
+});
+
+describe('sniffImageFile — 못 읽는 것과 낯선 형식을 구분한다', () => {
+    const jpegHead = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 0x10, 0x4a, 0x46]);
+
+    it('정상 파일은 형식을 알려준다', async () => {
+        const got = await sniffImageFile(new Blob([jpegHead], { type: 'image/jpeg' }));
+        expect(got.label).toBe('JPEG');
+        expect(got.unreadable).toBeUndefined();
+    });
+
+    it('빈 파일은 읽기 문제로 분류한다', async () => {
+        expect(await sniffImageFile(new Blob([]))).toMatchObject({
+            label: '빈 파일',
+            unreadable: true,
+        });
+    });
+
+    it('내용을 못 읽으면 형식 문제로 오해하지 않는다', async () => {
+        // 폰이 파일 접근 권한을 거둬 간 상황: 크기는 남아 있는데 읽기가 실패한다
+        const revoked = {
+            size: 5_600_000,
+            slice: () => ({
+                arrayBuffer: () => Promise.reject(new DOMException('The requested file could not be read', 'NotReadableError')),
+            }),
+        } as unknown as Blob;
+
+        const got = await sniffImageFile(revoked);
+        expect(got.unreadable).toBe(true);
+        expect(got.label).toContain('내용을 읽지 못함');
+        expect(got.label).toContain('could not be read');
+    });
+
+    it('낯선 형식이면 앞부분 바이트를 근거로 남긴다', async () => {
+        const weird = new Blob([new Uint8Array([0x00, 0x01, 0x02, 0x03, 0xaa, 0xbb, 0xcc, 0xdd])]);
+        const got = await sniffImageFile(weird);
+
+        expect(got.unreadable).toBeUndefined();   // 읽기는 됐다
+        expect(got.label).toContain('알 수 없는 형식');
+        expect(got.label).toContain('00 01 02 03 aa bb cc dd');
     });
 });

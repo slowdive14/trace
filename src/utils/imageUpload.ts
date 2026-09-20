@@ -36,13 +36,26 @@ const SIMPLE_UPLOAD_MAX_BYTES = 1024 * 1024;
  */
 const MAX_BYTES = 10 * 1024 * 1024;
 
-// 파일을 압축해 users/{uid}/photos 에 업로드하고 메타데이터 반환.
-// 일부 HDR/특수 JPEG은 브라우저 캔버스 디코딩이 실패하므로, 그 경우 원본을 그대로 업로드해 사진 유실을 막는다.
-export async function uploadEntryPhoto(
-    uid: string,
-    file: File,
-    onProgress?: (fraction: number) => void,
-): Promise<EntryPhoto> {
+/** 업로드 직전까지 준비된 사진 (내용이 메모리에 확보돼 있다) */
+export interface PreparedPhoto {
+    blob: Blob;
+    contentType: string;
+    ext: string;
+    w?: number;
+    h?: number;
+}
+
+/**
+ * 파일을 압축해 업로드할 수 있는 상태로 만든다.
+ *
+ * 고르는 즉시 불러야 한다. 파일을 고른 뒤 저장까지 시간이 흐르면 폰이 그 파일의
+ * 접근 권한을 거둬 가는 일이 있는데(특히 여러 장을 고른 뒤 한참 글을 쓸 때),
+ * 그러면 크기 같은 정보는 남아 있는데 내용만 읽히지 않는다. 저장을 누른 뒤에야
+ * 그 사실을 알면 사용자는 글까지 다시 써야 한다.
+ *
+ * 일부 HDR/특수 JPEG은 캔버스 디코딩이 실패하므로, 그 경우 원본을 그대로 쓴다.
+ */
+export async function prepareEntryPhoto(file: File): Promise<PreparedPhoto> {
     let blob: Blob = file;
     let contentType = file.type || 'image/jpeg';
     let w: number | undefined;
@@ -75,6 +88,16 @@ export async function uploadEntryPhoto(
         sniffed = await sniffImageFile(file);
         console.warn(`압축 실패 — 실제 형식: ${sniffed.label} (이름 ${file.name}, type ${file.type || '없음'})`);
 
+        // 내용 자체를 못 읽은 것이면 형식 이야기는 의미가 없다.
+        // 폰이 파일 접근 권한을 거둬 간 경우가 대부분이고, 다시 고르면 풀린다.
+        if (sniffed.unreadable) {
+            throw new Error(
+                `사진 파일을 읽지 못했습니다 (${sniffed.label}). ` +
+                '갤러리에서 사진을 다시 선택해 주세요. ' +
+                '고른 뒤 시간이 지나면 폰이 파일 접근 권한을 거둬 가는 경우가 있습니다.'
+            );
+        }
+
         // 브라우저가 그리지 못하는 형식은 올려 봐야 화면에서 열리지 않는다.
         // 원인을 정확히 짚고 멈추는 편이 낫다.
         if (!sniffed.drawable) {
@@ -83,7 +106,7 @@ export async function uploadEntryPhoto(
                     ? '이 사진은 이름만 .jpg일 뿐 실제로는 HEIC 형식이라 앱에서 열 수 없습니다. ' +
                       "아이폰이라면 설정 → 카메라 → 포맷에서 '호환성 우선'으로 바꿔 주세요. " +
                       "이미 찍어 둔 사진은 공유할 때 '자동' 대신 JPEG으로 변환해 올리면 됩니다."
-                    : `사진을 열지 못했습니다 (실제 형식: ${sniffed.label}). 파일이 손상됐을 수 있습니다.`
+                    : `사진을 열지 못했습니다 (${sniffed.label}). 파일이 손상됐을 수 있습니다.`
             );
         }
         if (sniffed.mime) contentType = sniffed.mime;
@@ -101,7 +124,17 @@ export async function uploadEntryPhoto(
 
     // 원본을 그대로 올릴 때는 실제 형식에 맞는 확장자를 쓴다.
     // 예전에는 무조건 .jpg여서 PNG 원본이 .jpg라는 이름으로 올라갔다.
-    const path = `users/${uid}/photos/${crypto.randomUUID()}.${sniffed?.ext ?? 'jpg'}`;
+    return { blob, contentType, ext: sniffed?.ext ?? 'jpg', w, h };
+}
+
+/** 준비된 사진을 users/{uid}/photos 에 올리고 메타데이터를 돌려준다 */
+export async function uploadPreparedPhoto(
+    uid: string,
+    prepared: PreparedPhoto,
+    onProgress?: (fraction: number) => void,
+): Promise<EntryPhoto> {
+    const { blob, contentType, ext, w, h } = prepared;
+    const path = `users/${uid}/photos/${crypto.randomUUID()}.${ext}`;
     const objectRef = ref(storage, path);
 
     if (blob.size <= SIMPLE_UPLOAD_MAX_BYTES) {
@@ -137,6 +170,15 @@ export async function uploadEntryPhoto(
 
     // w·h가 없으면 필드를 생략(Firestore는 undefined 값을 거부)
     return { url, path, ...(w ? { w } : {}), ...(h ? { h } : {}) };
+}
+
+/** 준비와 업로드를 한 번에 (미리 준비해 두지 않은 경로용) */
+export async function uploadEntryPhoto(
+    uid: string,
+    file: File,
+    onProgress?: (fraction: number) => void,
+): Promise<EntryPhoto> {
+    return uploadPreparedPhoto(uid, await prepareEntryPhoto(file), onProgress);
 }
 
 // 스토리지 사진 삭제 (best-effort — 실패해도 흐름을 막지 않음)

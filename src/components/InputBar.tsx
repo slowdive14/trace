@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Send, Maximize2, Minimize2, Calendar, Smile, Moon, Sun, CloudMoon, ImagePlus, Loader2, X, Microscope } from 'lucide-react';
 import { extractTags } from '../utils/tagUtils';
 import { addEntry } from '../services/firestore';
-import { uploadEntryPhoto } from '../utils/imageUpload';
+import { uploadEntryPhoto, prepareEntryPhoto, uploadPreparedPhoto, type PreparedPhoto } from '../utils/imageUpload';
 import { withTimeout } from '../utils/imageResize';
 import { useAuth } from './AuthContext';
 import { format, isSameDay } from 'date-fns';
@@ -45,7 +45,16 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
     const [autocompletePosition, setAutocompletePosition] = useState({ start: 0, end: 0 });
 
     // 사진 첨부
-    const [pendingPhotos, setPendingPhotos] = useState<{ file: File; preview: string }[]>([]);
+    // 고르는 즉시 압축해 ready에 담아 둔다. 저장할 때는 올리기만 한다.
+    // 저장 시점까지 File 참조만 들고 있으면, 그 사이 폰이 파일 접근 권한을 거둬 가서
+    // 크기 같은 정보는 남아 있는데 내용만 읽히지 않는 일이 생긴다. 그때 실패하면
+    // 사용자는 써 둔 글까지 잃는다.
+    const [pendingPhotos, setPendingPhotos] = useState<{
+        file: File;
+        preview: string;
+        ready?: PreparedPhoto;
+        error?: string;
+    }[]>([]);
     const [uploading, setUploading] = useState(false);
     const [uploadError, setUploadError] = useState<string | null>(null);
     const [uploadProgress, setUploadProgress] = useState<{ done: number; total: number; fraction: number } | null>(null);
@@ -254,6 +263,21 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
         if (imgs.length === 0) return;
         setUploadError(null);
         setPendingPhotos((prev) => [...prev, ...imgs.map((file) => ({ file, preview: URL.createObjectURL(file) }))]);
+
+        // 고른 그 자리에서 압축해 둔다. 실패해도 지금 알 수 있어 바로 다시 고르면 되고,
+        // 저장할 때는 올리기만 하므로 빨라진다.
+        for (const file of imgs) {
+            prepareEntryPhoto(file).then(
+                ready => setPendingPhotos(prev =>
+                    prev.map(p => (p.file === file ? { ...p, ready, error: undefined } : p))),
+                (e: unknown) => {
+                    const message = e instanceof Error ? e.message : String(e);
+                    console.warn('사진 준비 실패:', file.name, e);
+                    setPendingPhotos(prev =>
+                        prev.map(p => (p.file === file ? { ...p, error: message } : p)));
+                },
+            );
+        }
     };
 
     const removePendingPhoto = (index: number) => {
@@ -322,6 +346,11 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
                     throw new Error('로그인 정보를 갱신하지 못했습니다. 네트워크를 확인하거나 다시 로그인해 주세요.');
                 }
 
+                // 준비 단계에서 걸러진 사진이 있으면 올리기 전에 알린다.
+                // 이미 사용자에게 붉게 표시돼 있으므로, 여기서는 지우거나 다시 고르라고만 한다.
+                const broken = pendingPhotos.find(p => p.error);
+                if (broken) throw new Error(broken.error);
+
                 const total = pendingPhotos.length;
                 for (let i = 0; i < total; i++) {
                     const p = pendingPhotos[i];
@@ -334,9 +363,12 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
                     }
 
                     setUploadProgress({ done: i, total, fraction: 0 });
-                    const uploaded = await uploadEntryPhoto(user.uid, p.file, (fraction) =>
-                        setUploadProgress({ done: i, total, fraction })
-                    );
+                    // 고를 때 준비해 둔 것이 있으면 그것을 쓴다 (파일을 다시 읽지 않는다)
+                    const uploaded = p.ready
+                        ? await uploadPreparedPhoto(user.uid, p.ready, (fraction) =>
+                            setUploadProgress({ done: i, total, fraction }))
+                        : await uploadEntryPhoto(user.uid, p.file, (fraction) =>
+                            setUploadProgress({ done: i, total, fraction }));
                     uploadedRef.current.set(p.file, uploaded);   // 재시도 시 다시 안 올리도록 기억
                     photos.push(uploaded);
                 }
@@ -632,8 +664,23 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
                     {pendingPhotos.length > 0 && (
                         <div className="flex gap-2 flex-wrap">
                             {pendingPhotos.map((p, i) => (
-                                <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden border border-bg-tertiary shrink-0">
-                                    <img src={p.preview} alt="" className="w-full h-full object-cover" />
+                                <div
+                                    key={i}
+                                    className={`relative w-16 h-16 rounded-lg overflow-hidden border shrink-0 ${p.error ? 'border-red-500' : 'border-bg-tertiary'}`}
+                                    title={p.error}
+                                >
+                                    <img src={p.preview} alt="" className={`w-full h-full object-cover ${p.ready ? '' : 'opacity-50'}`} />
+                                    {/* 준비 중·실패를 그 자리에서 보여 준다. 저장을 누른 뒤에 알면 늦다 */}
+                                    {!p.ready && !p.error && (
+                                        <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                                            <Loader2 size={16} className="animate-spin text-white" />
+                                        </div>
+                                    )}
+                                    {p.error && (
+                                        <div className="absolute inset-0 flex items-center justify-center bg-black/60">
+                                            <span className="text-[9px] text-red-300 font-medium">실패</span>
+                                        </div>
+                                    )}
                                     <button
                                         type="button"
                                         onClick={() => removePendingPhoto(i)}
@@ -644,6 +691,12 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
                                     </button>
                                 </div>
                             ))}
+                        </div>
+                    )}
+                    {/* 실패한 사진의 이유는 목록 아래에 펼쳐 둔다 (작은 칸에는 안 들어간다) */}
+                    {pendingPhotos.some(p => p.error) && (
+                        <div className="text-[11px] text-red-400 leading-relaxed">
+                            {pendingPhotos.find(p => p.error)?.error}
                         </div>
                     )}
                     {/* 업로드 진행 상황 — 멈춘 것처럼 보이지 않게 장수와 진척을 보여준다 */}
@@ -723,7 +776,13 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
                         </button>
                         <button
                             onClick={handleSubmit}
-                            disabled={(!content.trim() && pendingPhotos.length === 0) || uploading}
+                            /* 준비가 끝나기 전에 보내면 파일을 다시 읽어야 해서,
+                               그 사이 접근 권한이 풀린 경우 또 실패한다 */
+                            disabled={
+                                (!content.trim() && pendingPhotos.length === 0)
+                                || uploading
+                                || pendingPhotos.some(p => !p.ready && !p.error)
+                            }
                             className={`p-2 text-white rounded-full hover:bg-opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all ${activeCategory === 'thought' ? 'bg-purple-500' :
                                 activeCategory === 'chore' ? 'bg-orange-500' :
                                     activeCategory === 'book' ? 'bg-amber-700' :
