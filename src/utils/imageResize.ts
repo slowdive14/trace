@@ -134,52 +134,162 @@ export async function retryAsync<T>(
  */
 const DECODE_TIMEOUT_MS = 25000;
 
-// 파일 → 디코딩된 이미지 (ImageBitmap 우선, 실패/지연 시 <img> 폴백). 각 단계에 타임아웃.
-async function decodeImage(file: File): Promise<ImageBitmap | HTMLImageElement> {
-    if (typeof createImageBitmap === 'function') {
-        try {
-            // 주의: resize 옵션은 일부 모바일 브라우저에서 특정 HDR JPEG에 대해 hang하므로 쓰지 않는다.
-            return await withTimeout(createImageBitmap(file), DECODE_TIMEOUT_MS, '이미지 디코딩');
-        } catch {
-            // HEIC/HDR 등 일부 포맷·환경에서 실패하거나 지연 → <img>로 폴백
-        }
-    }
-    return await new Promise((resolve, reject) => {
+/**
+ * 압축 결과가 이보다 작으면 실패로 본다.
+ * 모바일에서 메모리가 모자라면 캔버스가 통째로 비어 흰 이미지가 나오는데,
+ * 오류 없이 성공한 것처럼 돌아오므로 크기로 걸러야 알아챌 수 있다.
+ */
+const MIN_PLAUSIBLE_BYTES = 1024;
+
+/** 디코딩된 이미지와 그 정리 방법 */
+interface Decoded {
+    source: CanvasImageSource;
+    width: number;
+    height: number;
+    close: () => void;
+}
+
+function decodeViaBitmap(file: File): Promise<Decoded> {
+    // 주의: resize 옵션은 일부 모바일 브라우저에서 특정 HDR JPEG에 대해 멈추므로 쓰지 않는다.
+    return createImageBitmap(file).then(bitmap => ({
+        source: bitmap,
+        width: bitmap.width,
+        height: bitmap.height,
+        close: () => bitmap.close(),
+    }));
+}
+
+function decodeViaImgElement(file: File): Promise<Decoded> {
+    return new Promise<Decoded>((resolve, reject) => {
         const img = new Image();
         const url = URL.createObjectURL(file);
-        const cleanup = () => URL.revokeObjectURL(url);
-        const timer = setTimeout(() => { cleanup(); reject(new Error('이미지 디코딩 시간 초과')); }, DECODE_TIMEOUT_MS);
-        img.onload = () => { clearTimeout(timer); cleanup(); resolve(img); };
-        img.onerror = () => { clearTimeout(timer); cleanup(); reject(new Error('이미지를 디코딩할 수 없습니다 (지원되지 않는 형식일 수 있어요)')); };
+        img.onload = () => resolve({
+            source: img,
+            width: img.naturalWidth,
+            height: img.naturalHeight,
+            // 그리기가 끝난 뒤 정리한다. 로드가 끝났어도 URL을 먼저 거두면
+            // 일부 브라우저에서 drawImage가 빈 결과를 낸다.
+            close: () => URL.revokeObjectURL(url),
+        });
+        img.onerror = () => {
+            URL.revokeObjectURL(url);
+            reject(new Error('이미지를 열지 못했습니다'));
+        };
         img.src = url;
     });
 }
 
-// 업로드 전 리사이즈 + JPEG 압축
-export async function compressImage(
-    file: File,
-    maxEdge = 1600,
-    quality = 0.82,
+/**
+ * 여러 경로를 함께 시작해 먼저 되는 쪽을 쓰고, 늦게 도착한 쪽은 거둔다.
+ *
+ * 순서대로 시도하면 앞의 것이 멈췄을 때 제한 시간을 통째로 버리고 다음을 시작한다.
+ * 그동안 멈춘 작업이 메모리를 붙잡고 있어 뒤 작업까지 연달아 실패한다.
+ * 모두 실패하면 이유를 모아 알린다 (한 가지 원인으로 단정하지 않는다).
+ */
+export async function firstSuccess<T extends { close: () => void }>(
+    candidates: Promise<T>[],
+    label: string,
+): Promise<T> {
+    let announce!: (winner: T | undefined) => void;
+    const decided = new Promise<T | undefined>(resolve => { announce = resolve; });
+
+    // 후보마다 한 번씩만 판단한다. 승자가 정해질 때까지 기다렸다가,
+    // 자기가 승자가 아니면 그 자리에서 거둔다 (승자는 호출자가 거둔다).
+    for (const p of candidates) {
+        p.then(
+            async value => {
+                if (value !== await decided) value.close();
+            },
+            () => { /* 실패한 쪽은 스스로 정리한다 */ },
+        );
+    }
+
+    try {
+        const winner = await Promise.any(candidates);
+        announce(winner);
+        return winner;
+    } catch (e) {
+        announce(undefined);
+        const reasons = e instanceof AggregateError
+            ? e.errors.map(err => (err instanceof Error ? err.message : String(err))).join(', ')
+            : String(e);
+        throw new Error(`${label} (${reasons})`);
+    }
+}
+
+/**
+ * 파일 → 디코딩된 이미지.
+ *
+ * 두 경로(ImageBitmap, <img>)를 함께 시작한다. 예전에는 ImageBitmap을 먼저
+ * 기다렸다가 실패하면 <img>로 넘어갔는데, 멈춘 경우 제한 시간(25초)을 버리고
+ * 다시 25초를 기다려야 했다. 한 장에 50초가 걸리고, 그동안 멈춘 디코딩이
+ * 메모리를 쥐고 있어 다음 사진까지 연달아 실패했다.
+ */
+async function decodeImage(file: File): Promise<Decoded> {
+    const candidates: Promise<Decoded>[] = [];
+    if (typeof createImageBitmap === 'function') candidates.push(decodeViaBitmap(file));
+    candidates.push(decodeViaImgElement(file));
+
+    return await withTimeout(
+        firstSuccess(candidates, '이미지를 디코딩하지 못했습니다'),
+        DECODE_TIMEOUT_MS,
+        '이미지 디코딩',
+    );
+}
+
+/** 디코딩된 이미지를 주어진 크기·품질의 JPEG으로 만든다 */
+async function drawToJpeg(
+    decoded: Decoded,
+    maxEdge: number,
+    quality: number,
 ): Promise<{ blob: Blob; w: number; h: number }> {
-    const source = await decodeImage(file);
-    const sw = (source as HTMLImageElement).naturalWidth || source.width;
-    const sh = (source as HTMLImageElement).naturalHeight || source.height;
-    const { w, h } = computeTargetSize(sw, sh, maxEdge);
+    const { w, h } = computeTargetSize(decoded.width, decoded.height, maxEdge);
 
     const canvas = document.createElement('canvas');
-    canvas.width = w || sw;
-    canvas.height = h || sh;
+    canvas.width = w || decoded.width;
+    canvas.height = h || decoded.height;
     const ctx = canvas.getContext('2d');
-    if (!ctx) throw new Error('canvas 2D 컨텍스트를 사용할 수 없습니다');
-    ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
-    if ('close' in source && typeof source.close === 'function') source.close(); // ImageBitmap 메모리 정리
+    if (!ctx) throw new Error('canvas 2D 컨텍스트를 쓸 수 없습니다');
+    ctx.drawImage(decoded.source, 0, 0, canvas.width, canvas.height);
 
     const blob = await new Promise<Blob>((resolve, reject) => {
         canvas.toBlob(
-            (b) => (b ? resolve(b) : reject(new Error('이미지 인코딩 실패'))),
+            b => (b ? resolve(b) : reject(new Error('이미지 인코딩 실패'))),
             'image/jpeg',
             quality,
         );
     });
+
+    if (blob.size < MIN_PLAUSIBLE_BYTES) {
+        throw new Error(`압축 결과가 비어 있습니다 (${blob.size}바이트, 메모리 부족일 수 있음)`);
+    }
     return { blob, w: canvas.width, h: canvas.height };
+}
+
+/**
+ * 업로드 전 리사이즈 + JPEG 압축.
+ *
+ * 디코딩은 한 번만 하고, 캔버스·인코딩만 설정을 낮춰 가며 다시 시도한다.
+ * 예전에는 설정마다 파일을 처음부터 다시 디코딩해서, 디코딩이 문제일 때는
+ * 두 번째 시도도 똑같이 실패하면서 시간만 두 배로 썼다.
+ */
+export async function compressImage(
+    file: File,
+    attempts: Array<{ maxEdge: number; quality: number }> = [{ maxEdge: 1600, quality: 0.82 }],
+): Promise<{ blob: Blob; w: number; h: number }> {
+    const decoded = await decodeImage(file);
+    try {
+        let lastError: unknown;
+        for (const { maxEdge, quality } of attempts) {
+            try {
+                return await drawToJpeg(decoded, maxEdge, quality);
+            } catch (e) {
+                lastError = e;
+                console.warn(`압축 실패 (${maxEdge}px) — 더 작게 재시도:`, e);
+            }
+        }
+        throw lastError instanceof Error ? lastError : new Error('이미지를 압축하지 못했습니다');
+    } finally {
+        decoded.close();
+    }
 }

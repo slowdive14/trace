@@ -43,34 +43,35 @@ export async function uploadEntryPhoto(
     let w: number | undefined;
     let h: number | undefined;
 
-    // 1차: 기본 설정으로 압축.
-    // 2차: 실패하면 해상도·품질을 낮춰 한 번 더. 큰 사진을 여러 장 연달아 처리하면
-    //      메모리 압박으로 캔버스 작업이 실패할 수 있는데, 작게 잡으면 성공하는 경우가 많다.
-    //      여기서 포기하면 원본(수 MB)이 그대로 올라가 5MB 규칙에 걸린다.
-    const attempts: Array<{ maxEdge: number; quality: number }> = [
-        { maxEdge: 1600, quality: 0.82 },
-        { maxEdge: 1024, quality: 0.72 },
-    ];
-    for (const [i, opt] of attempts.entries()) {
-        try {
-            const r = await compressImage(file, opt.maxEdge, opt.quality);
-            blob = r.blob;
-            contentType = 'image/jpeg';
-            w = r.w;
-            h = r.h;
-            break;
-        } catch (e) {
-            const last = i === attempts.length - 1;
-            console.warn(`compressImage 실패 (${opt.maxEdge}px)${last ? ' — 원본 업로드로 폴백' : ' — 더 작게 재시도'}:`, e);
-        }
+    // 해상도·품질을 낮춰 가며 시도한다. 큰 사진을 여러 장 연달아 처리하면
+    // 메모리 압박으로 캔버스 작업이 실패할 수 있는데, 작게 잡으면 성공하는 경우가 많다.
+    // 디코딩은 안에서 한 번만 하므로 단계를 늘려도 시간이 그만큼 늘지는 않는다.
+    let compressError: unknown;
+    try {
+        const r = await compressImage(file, [
+            { maxEdge: 1600, quality: 0.82 },
+            { maxEdge: 1024, quality: 0.72 },
+            { maxEdge: 720, quality: 0.6 },
+        ]);
+        blob = r.blob;
+        contentType = 'image/jpeg';
+        w = r.w;
+        h = r.h;
+    } catch (e) {
+        compressError = e;
+        console.warn('compressImage 실패 — 원본 업로드로 폴백:', e);
     }
 
     // 압축이 실패한 원본은 수 MB일 수 있다. 규칙에 걸려 어차피 거부되므로
     // 오래 올리다 실패하는 대신 미리 알려준다.
+    // 원인을 형식 탓으로 단정하지 않는다. 실제로는 디코딩이 멈추거나 메모리가
+    // 모자라 실패하는 경우가 대부분이고, 그때 '다른 형식으로 저장하라'는 안내는
+    // 해봐야 소용이 없는데다 사용자를 엉뚱한 곳으로 보낸다.
     if (blob.size > MAX_BYTES) {
+        const why = compressError instanceof Error ? compressError.message : '알 수 없는 이유';
         throw new Error(
-            `사진이 너무 큽니다 (${(blob.size / 1024 / 1024).toFixed(1)}MB). ` +
-            `이 형식은 앱에서 줄일 수 없어요 — 다른 형식으로 저장한 뒤 올려주세요.`
+            `사진(${(blob.size / 1024 / 1024).toFixed(1)}MB)을 앱에서 줄이지 못했습니다: ${why}. ` +
+            `다시 시도해 보시고, 계속 실패하면 사진을 편집 앱에서 한 번 줄여서 올려주세요.`
         );
     }
 

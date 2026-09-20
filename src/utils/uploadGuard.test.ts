@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { runWithStallGuard, retryAsync, type ProgressTask } from './imageResize';
+import { runWithStallGuard, retryAsync, firstSuccess, type ProgressTask } from './imageResize';
 
 /** 제어 가능한 가짜 업로드 작업 */
 function fakeTask() {
@@ -131,5 +131,55 @@ describe('retryAsync', () => {
             throw Object.assign(new Error('권한 없음'), { code: 'storage/unauthorized' });
         }, 3, '업로드', async () => {}).catch(() => {});
         expect(calls).toBe(1);
+    });
+});
+
+describe('firstSuccess — 디코딩 경로 경쟁', () => {
+    const decoded = (name: string) => ({ name, close: vi.fn() });
+    const later = <T,>(ms: number, value: T) =>
+        new Promise<T>(resolve => setTimeout(() => resolve(value), ms));
+    const failLater = (ms: number, message: string) =>
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error(message)), ms));
+
+    it('먼저 끝난 쪽을 쓴다', async () => {
+        const fast = decoded('fast');
+        const slow = decoded('slow');
+        const got = await firstSuccess([later(50, slow), later(5, fast)], '실패');
+        expect(got).toBe(fast);
+    });
+
+    it('한쪽이 멈춰 있어도 다른 쪽이 끝나면 곧바로 진행한다', async () => {
+        const ok = decoded('ok');
+        const stuck = new Promise<typeof ok>(() => { });   // 영영 안 끝나는 경로
+        const started = Date.now();
+        const got = await firstSuccess([stuck, later(5, ok)], '실패');
+
+        expect(got).toBe(ok);
+        expect(Date.now() - started).toBeLessThan(500);
+    });
+
+    it('늦게 도착한 쪽은 거둬서 메모리를 놓아준다', async () => {
+        const fast = decoded('fast');
+        const slow = decoded('slow');
+        await firstSuccess([later(30, slow), later(5, fast)], '실패');
+
+        await new Promise(r => setTimeout(r, 60));
+        expect(slow.close).toHaveBeenCalledTimes(1);
+        expect(fast.close).not.toHaveBeenCalled();   // 쓰이는 쪽은 호출자가 거둔다
+    });
+
+    it('한쪽이 실패해도 다른 쪽이 성공하면 넘어간다', async () => {
+        const ok = decoded('ok');
+        const got = await firstSuccess([failLater(5, '디코딩 불가'), later(20, ok)], '실패');
+        expect(got).toBe(ok);
+    });
+
+    it('모두 실패하면 이유를 모아 알린다 (한 원인으로 단정하지 않는다)', async () => {
+        await expect(
+            firstSuccess<{ close: () => void }>(
+                [failLater(5, 'bitmap 실패'), failLater(10, 'img 실패')],
+                '이미지를 디코딩하지 못했습니다',
+            )
+        ).rejects.toThrow(/이미지를 디코딩하지 못했습니다.*bitmap 실패.*img 실패/);
     });
 });
