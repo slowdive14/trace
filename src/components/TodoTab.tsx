@@ -6,7 +6,9 @@ import {
 } from '../services/firestore';
 import {
     getDueRepeats, appendTodoLine, appendTodoLines,
-    parseBacklog, formatBacklog, removeBacklogItem,
+    parseBacklog, formatBacklog, removeBacklogItem, setBacklogDue,
+    sortBacklog, describeDue, daysUntil, countDueSoon,
+    type BacklogItem,
 } from '../utils/todoRepeat';
 import { extractTags } from '../utils/tagUtils';
 import { CheckSquare, Square, Bold, Highlighter, ArrowRight, ArrowLeft, Edit3, Check, X, ChevronLeft, ChevronRight, ChevronDown, Clock, Trash2, Plus, ArrowUpDown, ArrowUp, ArrowDown, GripVertical, Eraser, Calendar, CalendarClock } from 'lucide-react';
@@ -392,10 +394,12 @@ const TodoTab: React.FC<TodoTabProps> = ({
     // 선택한 날짜의 기준점. 처음 100%를 채우면 굳어지고, 그 뒤 추가한 항목은 달성률을 깎지 않는다.
     const [baseline, setBaseline] = useState<TodoBaseline | undefined>(undefined);
     // 날짜 없는 할 일. 언제 할지 정하기 전에 일단 적어 두는 자리다.
-    const [backlog, setBacklog] = useState<string[]>([]);
+    const [backlog, setBacklog] = useState<BacklogItem[]>([]);
     const [backlogInput, setBacklogInput] = useState('');
+    const [backlogDueInput, setBacklogDueInput] = useState('');
     const [backlogOpen, setBacklogOpen] = useState(() => localStorage.getItem('todoBacklogOpen') === '1');
-    const [backlogSendIndex, setBacklogSendIndex] = useState<number | null>(null);
+    /** 예정일을 고치는 중인 항목 */
+    const [backlogDueIndex, setBacklogDueIndex] = useState<number | null>(null);
     // 요일·주기가 정해진 일 (매일 반복은 템플릿이 맡는다)
     const [repeats, setRepeats] = useState<RecurringTodo[]>([]);
     const [showRepeatModal, setShowRepeatModal] = useState(false);
@@ -1032,7 +1036,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
 
     // ===== 대기 목록 =====
 
-    const persistBacklog = useCallback(async (items: string[]) => {
+    const persistBacklog = useCallback(async (items: BacklogItem[]) => {
         setBacklog(items);
         if (!user) return;
         try {
@@ -1045,16 +1049,19 @@ const TodoTab: React.FC<TodoTabProps> = ({
     const handleBacklogAdd = () => {
         const text = backlogInput.trim();
         if (!text) return;
+        const due = /^\d{4}-\d{2}-\d{2}$/.test(backlogDueInput) ? backlogDueInput : undefined;
         setBacklogInput('');
-        persistBacklog([...backlog, text]);
+        // 예정일은 남겨 둔다. 같은 시기에 할 일을 여러 개 적는 일이 잦다.
+        persistBacklog([...backlog, { text, ...(due ? { due } : {}) }]);
     };
 
     /** 대기 항목을 특정 날짜 목록으로 옮긴다 (대기에서는 뺀다) */
     const sendBacklogTo = useCallback(async (index: number, target: Date) => {
-        const text = backlog[index];
-        if (!text || !user) return;
+        const item = backlog[index];
+        if (!item || !user) return;
+        const text = item.text;
 
-        setBacklogSendIndex(null);
+        setBacklogDueIndex(null);
         const targetStr = format(target, 'yyyy-MM-dd');
 
         try {
@@ -2340,6 +2347,13 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                         {backlog.length > 0 && (
                                             <span className="tabular-nums text-text-secondary">{backlog.length}</span>
                                         )}
+                                        {/* 접어 둔 채로도 오늘까지 온 게 있는지 보이게 한다 */}
+                                        {(() => {
+                                            const soon = countDueSoon(backlog, format(getLogicalDate(), 'yyyy-MM-dd'));
+                                            return soon > 0 ? (
+                                                <span className="text-accent tabular-nums">· 오늘까지 {soon}</span>
+                                            ) : null;
+                                        })()}
                                     </button>
 
                                     {backlogOpen && (
@@ -2350,60 +2364,93 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                                 </p>
                                             )}
 
-                                            {backlog.map((text, i) => (
-                                                <div key={i}>
-                                                    <div className="group flex items-center gap-1 py-1">
-                                                        <span className="flex-1 text-sm text-text-secondary leading-relaxed break-words">
-                                                            {renderText(text)}
-                                                        </span>
-                                                        <button
-                                                            onClick={() => sendBacklogTo(i, selectedDate)}
-                                                            className="shrink-0 text-[11px] text-text-tertiary hover:text-accent px-2 py-1 rounded transition-colors"
-                                                            title={`${format(selectedDate, 'M월 d일')} 목록으로 옮기기`}
-                                                        >
-                                                            {isToday ? '오늘로' : `${format(selectedDate, 'M/d')}로`}
-                                                        </button>
-                                                        <button
-                                                            onClick={() => setBacklogSendIndex(backlogSendIndex === i ? null : i)}
-                                                            className="shrink-0 text-text-tertiary hover:text-accent p-1.5 transition-colors"
-                                                            title="날짜 정해서 옮기기"
-                                                            aria-label="날짜 정해서 옮기기"
-                                                        >
-                                                            <Calendar size={14} />
-                                                        </button>
-                                                        <button
-                                                            onClick={() => persistBacklog(removeBacklogItem(backlog, i))}
-                                                            className="shrink-0 text-text-tertiary hover:text-red-400 p-1.5 transition-colors"
-                                                            title="지우기"
-                                                            aria-label="지우기"
-                                                        >
-                                                            <X size={14} />
-                                                        </button>
-                                                    </div>
-                                                    {backlogSendIndex === i && (
-                                                        <div className="flex items-center gap-2 pb-2 pl-1">
-                                                            <input
-                                                                type="date"
-                                                                min={format(getLogicalDate(), 'yyyy-MM-dd')}
-                                                                onChange={e => {
-                                                                    const value = e.target.value;
-                                                                    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return;
-                                                                    const picked = new Date(`${value}T12:00:00`);
-                                                                    if (isNaN(picked.getTime())) return;
-                                                                    sendBacklogTo(i, picked);
-                                                                }}
-                                                                className="bg-bg-tertiary text-text-primary text-xs rounded-md px-2 py-1.5 outline-none focus:ring-1 focus:ring-accent"
-                                                            />
-                                                            <button
-                                                                onClick={() => setBacklogSendIndex(null)}
-                                                                className="text-[11px] text-text-tertiary hover:text-text-primary px-2 py-1"
-                                                            >
-                                                                취소
-                                                            </button>
+                                            {(() => {
+                                                const todayStr = format(getLogicalDate(), 'yyyy-MM-dd');
+                                                // 정렬된 순서로 보여 주되, 고치고 지우는 건 원래 자리를 가리켜야 한다
+                                                return sortBacklog(backlog).map(item => {
+                                                    const i = backlog.indexOf(item);
+                                                    const left = item.due ? daysUntil(item.due, todayStr) : null;
+                                                    const dueColor = left === null ? ''
+                                                        : left < 0 ? 'text-red-400'
+                                                            : left === 0 ? 'text-accent'
+                                                                : 'text-text-tertiary';
+                                                    // 예정일이 아직 안 지났으면 그날로, 지났거나 없으면 보고 있는 날짜로.
+                                                    // 지난 예정일을 그대로 쓰면 이미 끝난 날짜 문서에 들어간다.
+                                                    const target = item.due && left !== null && left >= 0
+                                                        ? new Date(`${item.due}T12:00:00`)
+                                                        : selectedDate;
+                                                    const targetLabel = format(target, 'M/d');
+                                                    return (
+                                                        <div key={`${item.text}-${i}`}>
+                                                            <div className="group flex items-center gap-1 py-1">
+                                                                <span className="flex-1 text-sm text-text-secondary leading-relaxed break-words">
+                                                                    {renderText(item.text)}
+                                                                </span>
+                                                                {/* 예정일 배지 — 누르면 고친다 */}
+                                                                <button
+                                                                    onClick={() => {
+                                                                        setBacklogDueIndex(backlogDueIndex === i ? null : i);
+                                                                    }}
+                                                                    className={`shrink-0 flex items-center gap-1 text-[11px] px-1.5 py-1 rounded transition-colors hover:text-accent ${dueColor || 'text-text-tertiary'}`}
+                                                                    title={item.due ? `${item.due} 예정 — 눌러서 바꾸기` : '대략 언제 할지 정하기'}
+                                                                >
+                                                                    <Calendar size={13} />
+                                                                    {item.due && (
+                                                                        <span className="tabular-nums">{describeDue(item.due, todayStr)}</span>
+                                                                    )}
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => sendBacklogTo(i, target)}
+                                                                    className="shrink-0 text-[11px] text-text-tertiary hover:text-accent px-2 py-1 rounded transition-colors"
+                                                                    title={`${format(target, 'M월 d일')} 목록으로 옮기기`}
+                                                                >
+                                                                    {isSameDay(target, getLogicalDate()) ? '오늘로' : `${targetLabel}로`}
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => persistBacklog(removeBacklogItem(backlog, i))}
+                                                                    className="shrink-0 text-text-tertiary hover:text-red-400 p-1.5 transition-colors"
+                                                                    title="지우기"
+                                                                    aria-label="지우기"
+                                                                >
+                                                                    <X size={14} />
+                                                                </button>
+                                                            </div>
+                                                            {backlogDueIndex === i && (
+                                                                <div className="flex items-center gap-2 pb-2 pl-1">
+                                                                    <input
+                                                                        type="date"
+                                                                        value={item.due ?? ''}
+                                                                        onChange={e => {
+                                                                            const value = e.target.value;
+                                                                            if (value && !/^\d{4}-\d{2}-\d{2}$/.test(value)) return;
+                                                                            persistBacklog(setBacklogDue(backlog, i, value || undefined));
+                                                                            setBacklogDueIndex(null);
+                                                                        }}
+                                                                        className="bg-bg-tertiary text-text-primary text-xs rounded-md px-2 py-1.5 outline-none focus:ring-1 focus:ring-accent"
+                                                                    />
+                                                                    {item.due && (
+                                                                        <button
+                                                                            onClick={() => {
+                                                                                persistBacklog(setBacklogDue(backlog, i, undefined));
+                                                                                setBacklogDueIndex(null);
+                                                                            }}
+                                                                            className="text-[11px] text-text-tertiary hover:text-red-400 px-2 py-1"
+                                                                        >
+                                                                            날짜 지우기
+                                                                        </button>
+                                                                    )}
+                                                                    <button
+                                                                        onClick={() => setBacklogDueIndex(null)}
+                                                                        className="text-[11px] text-text-tertiary hover:text-text-primary px-2 py-1"
+                                                                    >
+                                                                        닫기
+                                                                    </button>
+                                                                </div>
+                                                            )}
                                                         </div>
-                                                    )}
-                                                </div>
-                                            ))}
+                                                    );
+                                                });
+                                            })()}
 
                                             <div className="flex items-center gap-2 pt-1">
                                                 <Plus size={14} className="text-text-tertiary shrink-0" />
@@ -2415,6 +2462,14 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                                     enterKeyHint="done"
                                                     placeholder="언젠가 할 일 추가..."
                                                     className="flex-1 min-w-0 bg-transparent text-text-primary text-sm outline-none placeholder:text-text-tertiary"
+                                                />
+                                                {/* 적으면서 대략의 시기도 같이 정할 수 있게 */}
+                                                <input
+                                                    type="date"
+                                                    value={backlogDueInput}
+                                                    onChange={e => setBacklogDueInput(e.target.value)}
+                                                    className="shrink-0 bg-transparent text-text-tertiary text-[11px] outline-none focus:text-text-primary"
+                                                    title="대략 언제 할지 (선택)"
                                                 />
                                             </div>
                                         </div>

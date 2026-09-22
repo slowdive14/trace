@@ -11,6 +11,12 @@ import {
     parseBacklog,
     formatBacklog,
     removeBacklogItem,
+    parseBacklogLine,
+    setBacklogDue,
+    sortBacklog,
+    daysUntil,
+    describeDue,
+    countDueSoon,
 } from './todoRepeat';
 
 const rule = (over: Partial<RecurringTodo> = {}): RecurringTodo => ({
@@ -144,19 +150,81 @@ describe('목록에 줄 넣기', () => {
 
 describe('대기 목록', () => {
     it('저장 형식과 목록을 오간다', () => {
-        const items = ['팟캐스트 대본 초안', '이산수학 8강 복습'];
+        const items = [{ text: '팟캐스트 대본 초안' }, { text: '이산수학 8강 복습' }];
         expect(parseBacklog(formatBacklog(items))).toEqual(items);
     });
 
     it('빈 줄은 버린다', () => {
-        expect(parseBacklog('- [ ] A\n\n- [ ] B\n')).toEqual(['A', 'B']);
+        expect(parseBacklog('- [ ] A\n\n- [ ] B\n')).toEqual([{ text: 'A' }, { text: 'B' }]);
     });
 
     it('체크 표시가 있어도 문구만 남긴다', () => {
-        expect(parseBacklog('- [x] 이미 한 일')).toEqual(['이미 한 일']);
+        expect(parseBacklog('- [x] 이미 한 일')).toEqual([{ text: '이미 한 일' }]);
     });
 
     it('한 줄 빼기', () => {
-        expect(removeBacklogItem(['A', 'B', 'C'], 1)).toEqual(['A', 'C']);
+        const items = [{ text: 'A' }, { text: 'B' }, { text: 'C' }];
+        expect(removeBacklogItem(items, 1)).toEqual([{ text: 'A' }, { text: 'C' }]);
+    });
+});
+
+describe('대기 항목의 예정일', () => {
+    it('본문 끝의 ~날짜를 떼어 낸다', () => {
+        expect(parseBacklogLine('- [ ] 팟캐스트 대본 (120m) ~2026-09-25'))
+            .toEqual({ text: '팟캐스트 대본 (120m)', due: '2026-09-25' });
+    });
+
+    it('예정일이 없으면 본문만', () => {
+        expect(parseBacklogLine('- [ ] 그냥 할 일')).toEqual({ text: '그냥 할 일' });
+    });
+
+    it('저장 형식과 왕복해도 그대로다', () => {
+        const items = [{ text: 'A', due: '2026-09-25' }, { text: 'B' }];
+        expect(parseBacklog(formatBacklog(items))).toEqual(items);
+    });
+
+    it('본문 가운데의 ~숫자는 예정일로 보지 않는다', () => {
+        expect(parseBacklogLine('- [ ] 3~4장 읽기')).toEqual({ text: '3~4장 읽기' });
+    });
+
+    it('예정일을 붙이고 지운다', () => {
+        const items = [{ text: 'A' }, { text: 'B', due: '2026-09-30' }];
+        expect(setBacklogDue(items, 0, '2026-09-25')[0]).toEqual({ text: 'A', due: '2026-09-25' });
+        expect(setBacklogDue(items, 1, undefined)[1]).toEqual({ text: 'B' });
+    });
+
+    it('빠른 날짜부터, 안 정한 것은 뒤로 보낸다', () => {
+        const items = [
+            { text: '나중' },
+            { text: '10월', due: '2026-10-01' },
+            { text: '내일', due: '2026-09-23' },
+            { text: '아직' },
+        ];
+        expect(sortBacklog(items).map(i => i.text)).toEqual(['내일', '10월', '나중', '아직']);
+    });
+
+    it('남은 날짜를 센다', () => {
+        expect(daysUntil('2026-09-25', '2026-09-22')).toBe(3);
+        expect(daysUntil('2026-09-20', '2026-09-22')).toBe(-2);
+        expect(daysUntil('2026-10-01', '2026-09-30')).toBe(1);   // 월 경계
+    });
+
+    it('사람이 읽을 문구로 바꾼다', () => {
+        expect(describeDue('2026-09-22', '2026-09-22')).toBe('오늘');
+        expect(describeDue('2026-09-23', '2026-09-22')).toBe('내일');
+        expect(describeDue('2026-09-24', '2026-09-22')).toBe('모레');
+        expect(describeDue('2026-09-27', '2026-09-22')).toBe('5일 뒤');
+        expect(describeDue('2026-09-21', '2026-09-22')).toBe('어제');
+        expect(describeDue('2026-09-19', '2026-09-22')).toBe('3일 지남');
+    });
+
+    it('오늘까지 온 것만 센다 (접어 둔 채로도 보이게)', () => {
+        const items = [
+            { text: '지남', due: '2026-09-20' },
+            { text: '오늘', due: '2026-09-22' },
+            { text: '내일', due: '2026-09-23' },
+            { text: '미정' },
+        ];
+        expect(countDueSoon(items, '2026-09-22')).toBe(2);
     });
 });

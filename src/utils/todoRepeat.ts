@@ -91,19 +91,80 @@ export const appendTodoLines = (content: string, texts: string[]): string =>
 
 // ===== 대기 목록 =====
 
+/** 대기 항목. due는 '대략 언제 할지'이고, 확정된 배치가 아니다 */
+export interface BacklogItem {
+    text: string;
+    /** 예정일 (yyyy-MM-dd). 아직 안 정했으면 없다 */
+    due?: string;
+}
+
+/**
+ * 예정일 표기.
+ * 소요시간 '(90m)'처럼 본문에 적어 둔다. 저장은 연도까지 남기고
+ * 화면에는 짧게 줄여 보여 준다. 연도가 없으면 내년 계획과 뒤섞인다.
+ */
+const DUE_RE = /\s*~(\d{4}-\d{2}-\d{2})\s*$/;
+
+export const parseBacklogLine = (line: string): BacklogItem => {
+    const bare = line.replace(/^\s*-\s*\[[ xX]\]\s*/, '').trim();
+    const match = bare.match(DUE_RE);
+    if (!match) return { text: bare };
+    return { text: bare.replace(DUE_RE, '').trim(), due: match[1] };
+};
+
+export const formatBacklogLine = (item: BacklogItem): string =>
+    `- [ ] ${item.text}${item.due ? ` ~${item.due}` : ''}`;
+
 /**
  * 대기 목록은 날짜가 없는 투두 문서 하나에 같은 마크다운으로 담는다.
  * 저장 형식을 맞춰 두면 파싱·렌더 코드를 그대로 쓸 수 있다.
  */
-export const parseBacklog = (content: string): string[] =>
+export const parseBacklog = (content: string): BacklogItem[] =>
     content
         .split('\n')
-        .map(line => line.replace(/^\s*-\s*\[[ xX]\]\s*/, '').trim())
-        .filter(line => line.length > 0);
+        .map(parseBacklogLine)
+        .filter(item => item.text.length > 0);
 
-export const formatBacklog = (items: string[]): string =>
-    items.map(text => `- [ ] ${text}`).join('\n');
+export const formatBacklog = (items: BacklogItem[]): string =>
+    items.map(formatBacklogLine).join('\n');
 
 /** 대기 목록에서 한 줄 빼기 */
-export const removeBacklogItem = (items: string[], index: number): string[] =>
+export const removeBacklogItem = (items: BacklogItem[], index: number): BacklogItem[] =>
     items.filter((_, i) => i !== index);
+
+/** 한 항목의 예정일만 바꾼다 (빈 값이면 지운다) */
+export const setBacklogDue = (items: BacklogItem[], index: number, due?: string): BacklogItem[] =>
+    items.map((item, i) => (i === index ? { text: item.text, ...(due ? { due } : {}) } : item));
+
+/** 예정일이 빠른 것부터. 아직 안 정한 것은 뒤로 (순서는 그대로 유지) */
+export const sortBacklog = (items: BacklogItem[]): BacklogItem[] =>
+    items
+        .map((item, i) => ({ item, i }))
+        .sort((a, b) => {
+            if (a.item.due && b.item.due) return a.item.due.localeCompare(b.item.due) || a.i - b.i;
+            if (a.item.due) return -1;
+            if (b.item.due) return 1;
+            return a.i - b.i;
+        })
+        .map(({ item }) => item);
+
+/** 오늘로부터 며칠 뒤인지 (지났으면 음수) */
+export const daysUntil = (due: string, todayStr: string): number => {
+    const day = 24 * 60 * 60 * 1000;
+    return Math.round((parseDateStr(due).getTime() - parseDateStr(todayStr).getTime()) / day);
+};
+
+/** 예정일을 사람이 읽을 문구로 (예: '오늘', '3일 뒤', '2일 지남') */
+export const describeDue = (due: string, todayStr: string): string => {
+    const diff = daysUntil(due, todayStr);
+    if (diff === 0) return '오늘';
+    if (diff === 1) return '내일';
+    if (diff === 2) return '모레';
+    if (diff > 0) return `${diff}일 뒤`;
+    if (diff === -1) return '어제';
+    return `${-diff}일 지남`;
+};
+
+/** 오늘까지 온 항목 수 (지난 것 포함) — 접어 둔 채로도 알 수 있게 */
+export const countDueSoon = (items: BacklogItem[], todayStr: string): number =>
+    items.filter(item => item.due && daysUntil(item.due, todayStr) <= 0).length;
