@@ -588,6 +588,31 @@ export const getVisibleRows = (group: TodoItem[], collapsedKeys: Set<string>): T
     return out;
 };
 
+/**
+ * 그날 목록에 매일 루틴(템플릿)을 채워 넣는다.
+ *
+ * 미리 적어 둔 계획을 지우지 않고, 템플릿을 앞에 두어 원래 구조(헤딩 순서)를 살린다.
+ * 이미 있는 항목은 다시 넣지 않는다.
+ */
+export const mergeTemplateInto = (content: string, template: string): string => {
+    if (!template.trim()) return content;
+    if (!content.trim()) return template;
+
+    const templateLines = new Set(template.split('\n').map(l => l.trim()));
+    const templateTexts = new Set(parseTodos(template).map(t => t.text));
+
+    // 템플릿에 없는 줄만 뒤에 남긴다 (템플릿 마지막이 '추가 할 일' 섹션이면 그 아래가 된다)
+    const extras = content.split('\n').filter(line => {
+        const trimmed = line.trim();
+        if (!trimmed) return false;
+        if (templateLines.has(trimmed)) return false;
+        const items = parseTodos(line);
+        return !(items.length > 0 && templateTexts.has(items[0].text));
+    });
+
+    return extras.length > 0 ? `${template}\n${extras.join('\n')}` : template;
+};
+
 // Parse todo content string into TodoItem array
 export const parseTodos = (content: string): TodoItem[] => {
     const lines = content.split('\n');

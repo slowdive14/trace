@@ -32,6 +32,7 @@ import {
     countTodoIntroLines,
     stripTodoIntro,
     getWeeklyTarget,
+    mergeTemplateInto,
     makeTodoBaseline,
     getTodoBonus,
     EXTRA_PREFIX,
@@ -404,11 +405,16 @@ const TodoTab: React.FC<TodoTabProps> = ({
     // 요일·주기가 정해진 일 (매일 반복은 템플릿이 맡는다)
     const [repeats, setRepeats] = useState<RecurringTodo[]>([]);
     const [showRepeatModal, setShowRepeatModal] = useState(false);
-    // 규칙을 다 읽기 전에 내용을 불러오면, 규칙이 도착한 뒤 한 번 더 불러오면서
-    // 그 사이 입력한 것을 덮어쓴다. 준비가 끝난 뒤에 불러온다.
+    // 대기 목록·반복 일정을 다 읽기 전에 내용을 불러오면, 그것들이 도착한 뒤 한 번 더
+    // 불러오면서 그 사이 입력한 것을 덮어쓴다. 준비가 끝난 뒤에 불러온다.
     const [repeatsReady, setRepeatsReady] = useState(false);
+    const [backlogReady, setBacklogReady] = useState(false);
     const repeatsRef = useRef<RecurringTodo[]>([]);
     repeatsRef.current = repeats;
+    const backlogRef = useRef<BacklogItem[]>([]);
+    backlogRef.current = backlog;
+    /** 자동으로 들어온 항목을 알린다 (목록이 갑자기 늘어난 이유가 보이게) */
+    const [autoAdded, setAutoAdded] = useState<string | null>(null);
     const [historyEditKey, setHistoryEditKey] = useState<{ dateStr: string; lineIndex: number } | null>(null);
     const [historyEditText, setHistoryEditText] = useState('');
     const [historyDeletingKey, setHistoryDeletingKey] = useState<{ dateStr: string; lineIndex: number } | null>(null);
@@ -491,7 +497,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
     // Load content based on view mode
     useEffect(() => {
         const loadContent = async () => {
-            if (!user || !repeatsReady) return;
+            if (!user || !repeatsReady || !backlogReady) return;
 
             try {
                 if (viewMode === 'edit' || viewMode === 'matrix') {
@@ -499,33 +505,71 @@ const TodoTab: React.FC<TodoTabProps> = ({
                     const todo = await getTodo(user.uid, selectedDate, collectionName);
                     setBaseline(todo?.baseline);
 
-                    let loaded: string;
-                    if (todo) {
-                        loaded = todo.content;
-                        setLastSaved(todo.updatedAt || new Date());
-                    } else if (isToday) {
-                        // Only load template when editing today and no existing todo
-                        loaded = (await getTemplate(user.uid, collectionName)) || '';
-                    } else {
-                        loaded = '';
+                    let loaded = todo?.content ?? '';
+                    if (todo) setLastSaved(todo.updatedAt || new Date());
+
+                    const todayStr = format(getLogicalDate(), 'yyyy-MM-dd');
+                    const dateStr = format(selectedDate, 'yyyy-MM-dd');
+                    const notes: string[] = [];
+
+                    // 매일 루틴은 그날이 됐을 때 한 번 채운다.
+                    // 예전에는 '문서가 없을 때'만 넣어서, 미리 계획을 적어 둔 날은
+                    // 문서가 먼저 생기는 바람에 그날이 와도 습관이 통째로 빠졌다.
+                    let templateFilled = todo?.templateFilled ?? false;
+                    if (isToday && !templateFilled) {
+                        const template = (await getTemplate(user.uid, collectionName)) || '';
+                        const templateTexts = new Set(parseTodos(template).map(t => t.text));
+                        // 이 표시가 없던 예전 문서는 이미 템플릿이 들어와 있다.
+                        // 겹치는 항목이 있으면 채운 것으로 보고 건너뛴다 —
+                        // 그러지 않으면 오늘 일부러 지운 습관이 한 번 되살아난다.
+                        const already = parseTodos(loaded).some(t => templateTexts.has(t.text));
+
+                        if (!already) {
+                            const before = parseTodos(loaded).length;
+                            loaded = mergeTemplateInto(loaded, template);
+                            const added = parseTodos(loaded).length - before;
+                            if (added > 0) notes.push(`매일 루틴 ${added}개`);
+                        }
+                        templateFilled = true;   // 어느 쪽이든 다음부터는 건드리지 않는다
                     }
 
                     // 요일·주기가 맞는 반복 일정을 넣는다.
                     // 지난 날짜에는 넣지 않는다 — 이미 끝난 하루의 기록이 바뀌면 달성률이 흔들린다.
-                    const dateStr = format(selectedDate, 'yyyy-MM-dd');
                     const applied = todo?.appliedRepeats ?? [];
-                    const due = dateStr >= format(getLogicalDate(), 'yyyy-MM-dd')
+                    const due = dateStr >= todayStr
                         ? getDueRepeats(repeatsRef.current, dateStr, applied)
                         : [];
-
                     if (due.length > 0) {
                         loaded = appendTodoLines(loaded, due.map(r => r.text));
-                        const nextApplied = [...applied, ...due.map(r => r.id)];
-                        setContent(loaded);
-                        // 넣었다는 사실을 날짜 문서에 남긴다. 지워도 다시 들어오지 않게 한다.
-                        await saveTodo(user.uid, selectedDate, loaded, collectionName, undefined, nextApplied);
-                    } else {
-                        setContent(loaded);
+                        notes.push(`반복 일정 ${due.length}개`);
+                    }
+
+                    // 예정일이 오늘까지 온 대기 항목을 데려온다 (대기에서는 뺀다)
+                    const moved = isToday
+                        ? backlogRef.current.filter(item => item.due && daysUntil(item.due, todayStr) <= 0)
+                        : [];
+                    if (moved.length > 0) {
+                        loaded = appendTodoLines(loaded, moved.map(item => item.text));
+                        notes.push(`대기 목록 ${moved.length}개`);
+                    }
+
+                    setContent(loaded);
+
+                    // 넣었다는 사실을 날짜 문서에 남긴다. 지워도 다시 들어오지 않게 한다.
+                    const markChanged = templateFilled !== (todo?.templateFilled ?? false);
+                    if (notes.length > 0 || markChanged) {
+                        await saveTodo(
+                            user.uid, selectedDate, loaded, collectionName,
+                            undefined,
+                            due.length > 0 ? [...applied, ...due.map(r => r.id)] : undefined,
+                            templateFilled,
+                        );
+                    }
+                    if (moved.length > 0) {
+                        await persistBacklog(backlogRef.current.filter(item => !moved.includes(item)));
+                    }
+                    if (notes.length > 0) {
+                        setAutoAdded(`${notes.join(' · ')}를 가져왔습니다`);
                     }
                 } else if (viewMode === 'template') {
                     // Load template
@@ -537,7 +581,14 @@ const TodoTab: React.FC<TodoTabProps> = ({
             }
         };
         loadContent();
-    }, [user, collectionName, viewMode, currentLogicalDay, selectedDate, repeatsReady]);
+    }, [user, collectionName, viewMode, currentLogicalDay, selectedDate, repeatsReady, backlogReady]);
+
+    // 안내는 잠깐만 띄운다
+    useEffect(() => {
+        if (!autoAdded) return;
+        const timer = setTimeout(() => setAutoAdded(null), 6000);
+        return () => clearTimeout(timer);
+    }, [autoAdded]);
 
     // 대기 목록과 반복 일정 규칙 (투두 탭에서 한 번만 읽는다)
     useEffect(() => {
@@ -545,7 +596,8 @@ const TodoTab: React.FC<TodoTabProps> = ({
         let cancelled = false;
         getBacklog(user.uid, collectionName)
             .then(text => { if (!cancelled) setBacklog(parseBacklog(text)); })
-            .catch(e => console.error('대기 목록을 불러오지 못했습니다:', e));
+            .catch(e => console.error('대기 목록을 불러오지 못했습니다:', e))
+            .finally(() => { if (!cancelled) setBacklogReady(true); });
         getRecurringTodos(user.uid)
             .then(rules => { if (!cancelled) setRepeats(rules); })
             .catch(e => console.error('반복 일정을 불러오지 못했습니다:', e))
@@ -2101,6 +2153,20 @@ const TodoTab: React.FC<TodoTabProps> = ({
                         <>
                             {/* Reading Mode (Only for Edit Mode) */}
                             <div className="flex-1 overflow-y-auto p-4 pt-16 pb-20 w-full">
+                                {/* 자동으로 들어온 항목 안내 — 목록이 갑자기 늘어난 이유가 보이게 */}
+                                {autoAdded && (
+                                    <div className="mb-3 flex items-center gap-2 px-3 py-2 bg-accent/10 border border-accent/20 rounded-lg">
+                                        <CalendarClock size={13} className="text-accent shrink-0" />
+                                        <span className="flex-1 text-[11px] text-text-secondary">{autoAdded}</span>
+                                        <button
+                                            onClick={() => setAutoAdded(null)}
+                                            className="text-text-tertiary hover:text-text-primary p-0.5"
+                                            aria-label="닫기"
+                                        >
+                                            <X size={12} />
+                                        </button>
+                                    </div>
+                                )}
                                 {/* Progress Bar (today only) */}
                                 {isToday && todos.length > 0 && (() => {
                                     const completed = todos.filter(t => t.checked).length;

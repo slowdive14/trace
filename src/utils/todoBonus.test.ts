@@ -6,6 +6,7 @@ import {
     makeTodoBaseline,
     getTodoBonus,
     stripExtraCheckboxes,
+    mergeTemplateInto,
 } from './todoUtils';
 
 /** 소요시간이 적힌 항목만으로 이루어진 하루 (30분 + 60분) */
@@ -200,5 +201,48 @@ describe('옵시디언으로 내보낼 때', () => {
 - [x] 달리기 (30m)
   - [ ] 스트레칭`;
         expect(stripExtraCheckboxes(plan)).toBe(plan);
+    });
+});
+
+describe('매일 루틴 채워 넣기', () => {
+    const TEMPLATE = `## 💻 매일 습관
+- [ ] 달리기 (30m)
+- [ ] 미니닌 영어
+
+## 🎯 추가 할 일`;
+
+    it('미리 적어 둔 계획을 지우지 않고 루틴을 앞에 둔다', () => {
+        const merged = mergeTemplateInto('- [ ] 김동은 보고서 작성', TEMPLATE);
+        expect(merged).toBe(`${TEMPLATE}\n- [ ] 김동은 보고서 작성`);
+    });
+
+    it('빈 날에는 템플릿만 들어간다', () => {
+        expect(mergeTemplateInto('', TEMPLATE)).toBe(TEMPLATE);
+    });
+
+    it('템플릿이 없으면 그대로 둔다', () => {
+        expect(mergeTemplateInto('- [ ] 보고서', '')).toBe('- [ ] 보고서');
+    });
+
+    it('이미 있는 항목은 두 번 넣지 않는다', () => {
+        const merged = mergeTemplateInto('- [x] 달리기 (30m)\n- [ ] 보고서', TEMPLATE);
+        expect(parseTodos(merged).filter(t => t.text === '달리기 (30m)')).toHaveLength(1);
+        expect(merged).toContain('- [ ] 보고서');
+    });
+
+    it('중복된 헤딩을 다시 넣지 않는다', () => {
+        const merged = mergeTemplateInto('## 🎯 추가 할 일\n- [ ] 보고서', TEMPLATE);
+        expect(merged.split('## 🎯 추가 할 일')).toHaveLength(2);
+    });
+
+    it('루틴이 들어와도 계획한 항목 수가 줄지 않는다', () => {
+        const planned = '- [ ] 보고서\n- [ ] 회의 준비 (40m)';
+        const merged = mergeTemplateInto(planned, TEMPLATE);
+        const texts = parseTodos(merged).map(t => t.text);
+
+        expect(texts).toContain('보고서');
+        expect(texts).toContain('회의 준비 (40m)');
+        expect(texts).toContain('달리기 (30m)');
+        expect(texts).toHaveLength(4);
     });
 });

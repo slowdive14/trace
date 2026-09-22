@@ -276,6 +276,8 @@ export const saveTodo = async (
     baseline?: TodoBaseline,
     /** 이 날짜에 넣은 반복 일정 id 목록. 넘기지 않으면 기존 값이 유지된다 */
     appliedRepeats?: string[],
+    /** 매일 루틴을 채워 넣었는지. 넘기지 않으면 기존 값이 유지된다 */
+    templateFilled?: boolean,
 ) => {
     try {
         // Normalize to start of day to ensure consistent date storage
@@ -295,6 +297,7 @@ export const saveTodo = async (
         };
         if (baseline) payload.baseline = baseline;
         if (appliedRepeats) payload.appliedRepeats = appliedRepeats;
+        if (templateFilled !== undefined) payload.templateFilled = templateFilled;
 
         await setDoc(docRef, payload, { merge: true });
     } catch (e) {
