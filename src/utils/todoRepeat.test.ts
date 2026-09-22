@@ -17,6 +17,7 @@ import {
     daysUntil,
     describeDue,
     countDueSoon,
+    formatDayLabel,
 } from './todoRepeat';
 
 const rule = (over: Partial<RecurringTodo> = {}): RecurringTodo => ({
@@ -226,5 +227,23 @@ describe('대기 항목의 예정일', () => {
             { text: '미정' },
         ];
         expect(countDueSoon(items, '2026-09-22')).toBe(2);
+    });
+});
+
+describe('formatDayLabel — 날짜에 요일을 함께', () => {
+    it('M/d(요일) 로 적는다', () => {
+        // 2026-09-24는 목요일
+        expect(formatDayLabel(new Date(2026, 8, 24, 12))).toBe('9/24(목)');
+        expect(formatDayLabel(new Date(2026, 8, 26, 12))).toBe('9/26(토)');
+        expect(formatDayLabel(new Date(2026, 8, 27, 12))).toBe('9/27(일)');
+    });
+
+    it('한 자리 월·일도 그대로 쓴다 (0을 붙이지 않는다)', () => {
+        expect(formatDayLabel(new Date(2026, 0, 5, 12))).toBe('1/5(월)');
+    });
+
+    it('일곱 요일이 한 바퀴 돈다', () => {
+        const labels = Array.from({ length: 7 }, (_, i) => formatDayLabel(new Date(2026, 8, 21 + i, 12)));
+        expect(labels.map(l => l.slice(-2, -1))).toEqual(['월', '화', '수', '목', '금', '토', '일']);
     });
 });

@@ -7,7 +7,7 @@ import {
 import {
     getDueRepeats, appendTodoLine, appendTodoLines,
     parseBacklog, formatBacklog, removeBacklogItem, setBacklogDue,
-    sortBacklog, describeDue, daysUntil, countDueSoon,
+    sortBacklog, describeDue, daysUntil, countDueSoon, formatDayLabel,
     type BacklogItem,
 } from '../utils/todoRepeat';
 import { extractTags } from '../utils/tagUtils';
@@ -2446,7 +2446,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                                     const target = item.due && left !== null && left >= 0
                                                         ? new Date(`${item.due}T12:00:00`)
                                                         : selectedDate;
-                                                    const targetLabel = format(target, 'M/d');
+                                                    const targetLabel = formatDayLabel(target);
                                                     return (
                                                         <div key={`${item.text}-${i}`}>
                                                             <div className="group flex items-center gap-1 py-1">

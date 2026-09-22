@@ -5,6 +5,8 @@
  */
 import type { RecurringTodo } from '../types/types';
 
+const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
+
 /** 'yyyy-MM-dd' → Date (정오로 잡아 시간대·서머타임 경계를 피한다) */
 const parseDateStr = (dateStr: string): Date => {
     const [y, m, d] = dateStr.split('-').map(Number);
@@ -63,7 +65,7 @@ export const getDueRepeats = (
 
 /** 규칙을 사람이 읽을 문구로 (예: '격주 월요일', '매월 2번째 수요일') */
 export const describeRepeat = (rule: RecurringTodo): string => {
-    const day = ['일', '월', '화', '수', '목', '금', '토'][rule.weekday] ?? '?';
+    const day = WEEKDAYS[rule.weekday] ?? '?';
     switch (rule.kind) {
         case 'weekly':
             return `매주 ${day}요일`;
@@ -153,6 +155,13 @@ export const daysUntil = (due: string, todayStr: string): number => {
     const day = 24 * 60 * 60 * 1000;
     return Math.round((parseDateStr(due).getTime() - parseDateStr(todayStr).getTime()) / day);
 };
+
+/**
+ * 'M/d(요일)' 표기.
+ * 요일이 없으면 '3일 뒤'가 평일인지 주말인지 알 수 없어, 언제 할지 가늠이 안 된다.
+ */
+export const formatDayLabel = (date: Date): string =>
+    `${date.getMonth() + 1}/${date.getDate()}(${WEEKDAYS[date.getDay()]})`;
 
 /** 예정일을 사람이 읽을 문구로 (예: '오늘', '3일 뒤', '2일 지남') */
 export const describeDue = (due: string, todayStr: string): string => {
