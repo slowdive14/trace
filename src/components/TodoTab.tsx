@@ -1,11 +1,19 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useAuth } from './AuthContext';
-import { saveTodo, getTodo, getTodos, getAllTodos, saveTemplate, getTemplate, addEntry, deleteEntry } from '../services/firestore';
+import {
+    saveTodo, getTodo, getTodos, getAllTodos, saveTemplate, getTemplate, addEntry, deleteEntry,
+    getBacklog, saveBacklog, getRecurringTodos,
+} from '../services/firestore';
+import {
+    getDueRepeats, appendTodoLine, appendTodoLines,
+    parseBacklog, formatBacklog, removeBacklogItem,
+} from '../utils/todoRepeat';
 import { extractTags } from '../utils/tagUtils';
-import { CheckSquare, Square, Bold, Highlighter, ArrowRight, ArrowLeft, Edit3, Check, X, ChevronLeft, ChevronRight, ChevronDown, Clock, Trash2, Plus, ArrowUpDown, ArrowUp, ArrowDown, GripVertical, Eraser } from 'lucide-react';
+import { CheckSquare, Square, Bold, Highlighter, ArrowRight, ArrowLeft, Edit3, Check, X, ChevronLeft, ChevronRight, ChevronDown, Clock, Trash2, Plus, ArrowUpDown, ArrowUp, ArrowDown, GripVertical, Eraser, Calendar, CalendarClock } from 'lucide-react';
+import RecurringTodoModal from './RecurringTodoModal';
 import { format, subDays, addDays, startOfDay, endOfDay, startOfWeek, endOfWeek, isSameDay } from 'date-fns';
 import { ko } from 'date-fns/locale';
-import type { Todo, TodoBaseline, NavigationTarget } from '../types/types';
+import type { Todo, TodoBaseline, RecurringTodo, NavigationTarget } from '../types/types';
 import { getLogicalDate } from '../utils/dateUtils';
 import {
     type TodoItem,
@@ -383,6 +391,19 @@ const TodoTab: React.FC<TodoTabProps> = ({
     const [inlineEditText, setInlineEditText] = useState('');
     // 선택한 날짜의 기준점. 처음 100%를 채우면 굳어지고, 그 뒤 추가한 항목은 달성률을 깎지 않는다.
     const [baseline, setBaseline] = useState<TodoBaseline | undefined>(undefined);
+    // 날짜 없는 할 일. 언제 할지 정하기 전에 일단 적어 두는 자리다.
+    const [backlog, setBacklog] = useState<string[]>([]);
+    const [backlogInput, setBacklogInput] = useState('');
+    const [backlogOpen, setBacklogOpen] = useState(() => localStorage.getItem('todoBacklogOpen') === '1');
+    const [backlogSendIndex, setBacklogSendIndex] = useState<number | null>(null);
+    // 요일·주기가 정해진 일 (매일 반복은 템플릿이 맡는다)
+    const [repeats, setRepeats] = useState<RecurringTodo[]>([]);
+    const [showRepeatModal, setShowRepeatModal] = useState(false);
+    // 규칙을 다 읽기 전에 내용을 불러오면, 규칙이 도착한 뒤 한 번 더 불러오면서
+    // 그 사이 입력한 것을 덮어쓴다. 준비가 끝난 뒤에 불러온다.
+    const [repeatsReady, setRepeatsReady] = useState(false);
+    const repeatsRef = useRef<RecurringTodo[]>([]);
+    repeatsRef.current = repeats;
     const [historyEditKey, setHistoryEditKey] = useState<{ dateStr: string; lineIndex: number } | null>(null);
     const [historyEditText, setHistoryEditText] = useState('');
     const [historyDeletingKey, setHistoryDeletingKey] = useState<{ dateStr: string; lineIndex: number } | null>(null);
@@ -465,26 +486,41 @@ const TodoTab: React.FC<TodoTabProps> = ({
     // Load content based on view mode
     useEffect(() => {
         const loadContent = async () => {
-            if (!user) return;
+            if (!user || !repeatsReady) return;
 
             try {
                 if (viewMode === 'edit' || viewMode === 'matrix') {
                     // Load selected date's todo
                     const todo = await getTodo(user.uid, selectedDate, collectionName);
                     setBaseline(todo?.baseline);
+
+                    let loaded: string;
                     if (todo) {
-                        setContent(todo.content);
+                        loaded = todo.content;
                         setLastSaved(todo.updatedAt || new Date());
                     } else if (isToday) {
                         // Only load template when editing today and no existing todo
-                        const template = await getTemplate(user.uid, collectionName);
-                        if (template) {
-                            setContent(template);
-                        } else {
-                            setContent('');
-                        }
+                        loaded = (await getTemplate(user.uid, collectionName)) || '';
                     } else {
-                        setContent('');
+                        loaded = '';
+                    }
+
+                    // 요일·주기가 맞는 반복 일정을 넣는다.
+                    // 지난 날짜에는 넣지 않는다 — 이미 끝난 하루의 기록이 바뀌면 달성률이 흔들린다.
+                    const dateStr = format(selectedDate, 'yyyy-MM-dd');
+                    const applied = todo?.appliedRepeats ?? [];
+                    const due = dateStr >= format(getLogicalDate(), 'yyyy-MM-dd')
+                        ? getDueRepeats(repeatsRef.current, dateStr, applied)
+                        : [];
+
+                    if (due.length > 0) {
+                        loaded = appendTodoLines(loaded, due.map(r => r.text));
+                        const nextApplied = [...applied, ...due.map(r => r.id)];
+                        setContent(loaded);
+                        // 넣었다는 사실을 날짜 문서에 남긴다. 지워도 다시 들어오지 않게 한다.
+                        await saveTodo(user.uid, selectedDate, loaded, collectionName, undefined, nextApplied);
+                    } else {
+                        setContent(loaded);
                     }
                 } else if (viewMode === 'template') {
                     // Load template
@@ -496,7 +532,22 @@ const TodoTab: React.FC<TodoTabProps> = ({
             }
         };
         loadContent();
-    }, [user, collectionName, viewMode, currentLogicalDay, selectedDate]);
+    }, [user, collectionName, viewMode, currentLogicalDay, selectedDate, repeatsReady]);
+
+    // 대기 목록과 반복 일정 규칙 (투두 탭에서 한 번만 읽는다)
+    useEffect(() => {
+        if (!user) return;
+        let cancelled = false;
+        getBacklog(user.uid, collectionName)
+            .then(text => { if (!cancelled) setBacklog(parseBacklog(text)); })
+            .catch(e => console.error('대기 목록을 불러오지 못했습니다:', e));
+        getRecurringTodos(user.uid)
+            .then(rules => { if (!cancelled) setRepeats(rules); })
+            .catch(e => console.error('반복 일정을 불러오지 못했습니다:', e))
+            // 실패해도 내용은 불러와야 한다 (반복 일정만 못 들어갈 뿐)
+            .finally(() => { if (!cancelled) setRepeatsReady(true); });
+        return () => { cancelled = true; };
+    }, [user, collectionName]);
 
     // Load history (last 30 days) - also used for stats in edit mode
     useEffect(() => {
@@ -978,6 +1029,51 @@ const TodoTab: React.FC<TodoTabProps> = ({
         setHistoryEditKey(null);
         await saveHistoryContent(dateStr, lines.join('\n'));
     };
+
+    // ===== 대기 목록 =====
+
+    const persistBacklog = useCallback(async (items: string[]) => {
+        setBacklog(items);
+        if (!user) return;
+        try {
+            await saveBacklog(user.uid, formatBacklog(items), collectionName);
+        } catch (e) {
+            console.error('대기 목록을 저장하지 못했습니다:', e);
+        }
+    }, [user, collectionName]);
+
+    const handleBacklogAdd = () => {
+        const text = backlogInput.trim();
+        if (!text) return;
+        setBacklogInput('');
+        persistBacklog([...backlog, text]);
+    };
+
+    /** 대기 항목을 특정 날짜 목록으로 옮긴다 (대기에서는 뺀다) */
+    const sendBacklogTo = useCallback(async (index: number, target: Date) => {
+        const text = backlog[index];
+        if (!text || !user) return;
+
+        setBacklogSendIndex(null);
+        const targetStr = format(target, 'yyyy-MM-dd');
+
+        try {
+            // 보고 있는 날짜면 화면의 내용을 쓴다 (아직 저장 전일 수 있다)
+            const isOpenDate = targetStr === format(selectedDate, 'yyyy-MM-dd');
+            const base = isOpenDate ? content : ((await getTodo(user.uid, target, collectionName))?.content ?? '');
+            const next = appendTodoLine(base, text);
+
+            if (isOpenDate) {
+                setContent(next);
+                handleSave(next);
+            } else {
+                await saveTodo(user.uid, target, next, collectionName);
+            }
+            await persistBacklog(removeBacklogItem(backlog, index));
+        } catch (e) {
+            console.error('대기 항목을 옮기지 못했습니다:', e);
+        }
+    }, [backlog, user, collectionName, selectedDate, content, handleSave, persistBacklog]);
 
     // Quick-add a todo item (reading mode)
     const handleQuickAdd = () => {
@@ -1908,8 +2004,19 @@ const TodoTab: React.FC<TodoTabProps> = ({
 
                     {/* Template Mode Indicator */}
                     {viewMode === 'template' && (
-                        <div className="absolute top-4 right-4 z-30 px-3 py-1 bg-accent/10 text-accent text-xs font-bold rounded-full border border-accent/20">
-                            매일 반복되는 루틴을 입력하세요
+                        <div className="absolute top-4 right-4 z-30 flex items-center gap-2">
+                            <button
+                                onClick={() => setShowRepeatModal(true)}
+                                className="flex items-center gap-1 px-3 py-1 bg-bg-secondary text-text-secondary hover:text-accent text-xs font-medium rounded-full border border-bg-tertiary transition-colors"
+                                title="요일·주기가 정해진 일 (매주 수요일, 격주 월요일 등)"
+                            >
+                                <CalendarClock size={12} />
+                                반복 일정
+                                {repeats.length > 0 && <span className="tabular-nums">{repeats.filter(r => r.active).length}</span>}
+                            </button>
+                            <div className="px-3 py-1 bg-accent/10 text-accent text-xs font-bold rounded-full border border-accent/20">
+                                매일 반복되는 루틴
+                            </div>
                         </div>
                     )}
 
@@ -2216,6 +2323,103 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                         추가 항목
                                     </button>
                                 </div>
+
+                                {/* 대기 목록 — 언제 할지 정하기 전에 적어 두는 자리 */}
+                                <div className="mt-3 pt-3 border-t border-bg-tertiary">
+                                    <button
+                                        onClick={() => {
+                                            const next = !backlogOpen;
+                                            setBacklogOpen(next);
+                                            localStorage.setItem('todoBacklogOpen', next ? '1' : '0');
+                                        }}
+                                        className="flex items-center gap-1.5 text-xs text-text-tertiary hover:text-text-secondary transition-colors"
+                                        aria-expanded={backlogOpen}
+                                    >
+                                        {backlogOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                                        대기 목록
+                                        {backlog.length > 0 && (
+                                            <span className="tabular-nums text-text-secondary">{backlog.length}</span>
+                                        )}
+                                    </button>
+
+                                    {backlogOpen && (
+                                        <div className="mt-2 space-y-1">
+                                            {backlog.length === 0 && (
+                                                <p className="text-[11px] text-text-tertiary leading-relaxed py-1">
+                                                    언제 할지 아직 모르는 일을 여기에 적어 두고, 날짜가 정해지면 옮기세요.
+                                                </p>
+                                            )}
+
+                                            {backlog.map((text, i) => (
+                                                <div key={i}>
+                                                    <div className="group flex items-center gap-1 py-1">
+                                                        <span className="flex-1 text-sm text-text-secondary leading-relaxed break-words">
+                                                            {renderText(text)}
+                                                        </span>
+                                                        <button
+                                                            onClick={() => sendBacklogTo(i, selectedDate)}
+                                                            className="shrink-0 text-[11px] text-text-tertiary hover:text-accent px-2 py-1 rounded transition-colors"
+                                                            title={`${format(selectedDate, 'M월 d일')} 목록으로 옮기기`}
+                                                        >
+                                                            {isToday ? '오늘로' : `${format(selectedDate, 'M/d')}로`}
+                                                        </button>
+                                                        <button
+                                                            onClick={() => setBacklogSendIndex(backlogSendIndex === i ? null : i)}
+                                                            className="shrink-0 text-text-tertiary hover:text-accent p-1.5 transition-colors"
+                                                            title="날짜 정해서 옮기기"
+                                                            aria-label="날짜 정해서 옮기기"
+                                                        >
+                                                            <Calendar size={14} />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => persistBacklog(removeBacklogItem(backlog, i))}
+                                                            className="shrink-0 text-text-tertiary hover:text-red-400 p-1.5 transition-colors"
+                                                            title="지우기"
+                                                            aria-label="지우기"
+                                                        >
+                                                            <X size={14} />
+                                                        </button>
+                                                    </div>
+                                                    {backlogSendIndex === i && (
+                                                        <div className="flex items-center gap-2 pb-2 pl-1">
+                                                            <input
+                                                                type="date"
+                                                                min={format(getLogicalDate(), 'yyyy-MM-dd')}
+                                                                onChange={e => {
+                                                                    const value = e.target.value;
+                                                                    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return;
+                                                                    const picked = new Date(`${value}T12:00:00`);
+                                                                    if (isNaN(picked.getTime())) return;
+                                                                    sendBacklogTo(i, picked);
+                                                                }}
+                                                                className="bg-bg-tertiary text-text-primary text-xs rounded-md px-2 py-1.5 outline-none focus:ring-1 focus:ring-accent"
+                                                            />
+                                                            <button
+                                                                onClick={() => setBacklogSendIndex(null)}
+                                                                className="text-[11px] text-text-tertiary hover:text-text-primary px-2 py-1"
+                                                            >
+                                                                취소
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
+
+                                            <div className="flex items-center gap-2 pt-1">
+                                                <Plus size={14} className="text-text-tertiary shrink-0" />
+                                                <input
+                                                    type="text"
+                                                    value={backlogInput}
+                                                    onChange={e => setBacklogInput(e.target.value)}
+                                                    onKeyDown={e => { if (e.key === 'Enter') handleBacklogAdd(); }}
+                                                    enterKeyHint="done"
+                                                    placeholder="언젠가 할 일 추가..."
+                                                    className="flex-1 min-w-0 bg-transparent text-text-primary text-sm outline-none placeholder:text-text-tertiary"
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </>
                     )}
@@ -2312,6 +2516,13 @@ const TodoTab: React.FC<TodoTabProps> = ({
                     </div>
                 );
             })()}
+
+            {showRepeatModal && (
+                <RecurringTodoModal
+                    onClose={() => setShowRepeatModal(false)}
+                    onChanged={setRepeats}
+                />
+            )}
         </div>
     );
 };

@@ -69,6 +69,40 @@ export interface Todo {
     updatedAt: Date;
     /** 처음 100%를 채운 순간에 굳어진다. 그 전에는 없다 */
     baseline?: TodoBaseline;
+    /**
+     * 이 날짜에 이미 넣은 반복 일정의 id 목록.
+     * 규칙 쪽에 '마지막으로 넣은 날'만 기억하면, 지운 항목이 다시 들어오거나
+     * 과거 날짜를 열었다 오면 오늘 몫이 빠진다. 날짜별로 기록해야 둘 다 막힌다.
+     */
+    appliedRepeats?: string[];
+}
+
+/** 반복 일정의 주기 */
+export type TodoRepeatKind =
+    | 'weekly'      // 매주 그 요일
+    | 'biweekly'    // 격주 그 요일 (기준 주에서 2주 간격)
+    | 'monthlyNth'; // 매월 N번째 그 요일 (예: 둘째 주 수요일)
+
+/**
+ * 특정 요일·주기마다 그날 투두에 자동으로 들어가는 항목.
+ *
+ * 매일 반복되는 것은 '루틴 설정'의 템플릿이 담당한다. 이쪽은 요일이나
+ * 주기가 정해진 일(격주 뉴스레터, 둘째 주 수요일 팟캐스트)을 맡는다.
+ */
+export interface RecurringTodo {
+    id: string;
+    /** 투두에 넣을 문구. 소요시간 표기 '(90m)'를 포함해도 된다 */
+    text: string;
+    kind: TodoRepeatKind;
+    /** 요일 (0=일 … 6=토) */
+    weekday: number;
+    /** monthlyNth에서 몇 번째 주인지 (1~5) */
+    nth?: number;
+    /** biweekly의 기준 날짜 (yyyy-MM-dd). 이 날이 속한 주부터 2주 간격 */
+    anchorDate?: string;
+    active: boolean;
+    createdAt: Date;
+    updatedAt: Date;
 }
 
 export interface DailyReflection {

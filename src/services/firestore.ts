@@ -17,7 +17,7 @@ import {
 import { db } from './firebase';
 import { startOfDay, format as formatDateFns } from 'date-fns';
 import { getDueRules, getEffectivePostDate } from '../utils/expenseUtils';
-import type { Expense, ExpenseCategory, RecurringExpense, SleepCoaching, SleepCoachingRecord, Todo, TodoBaseline, Worry, WorryEntry, BrainDump, BrainDumpStatus, BrainDumpInsight, DailyReflection, MonthlyReview, MonthlyInsight, EntryPhoto } from '../types/types';
+import type { Expense, ExpenseCategory, RecurringExpense, SleepCoaching, SleepCoachingRecord, Todo, TodoBaseline, RecurringTodo, Worry, WorryEntry, BrainDump, BrainDumpStatus, BrainDumpInsight, DailyReflection, MonthlyReview, MonthlyInsight, EntryPhoto } from '../types/types';
 
 const EXPENSES_COLLECTION = 'expenses';
 
@@ -274,6 +274,8 @@ export const saveTodo = async (
     collectionName: string = 'todos',
     /** 처음 100%를 채운 순간의 기준점. 넘기지 않으면 이미 저장된 값이 그대로 남는다 */
     baseline?: TodoBaseline,
+    /** 이 날짜에 넣은 반복 일정 id 목록. 넘기지 않으면 기존 값이 유지된다 */
+    appliedRepeats?: string[],
 ) => {
     try {
         // Normalize to start of day to ensure consistent date storage
@@ -292,6 +294,7 @@ export const saveTodo = async (
             updatedAt: Timestamp.now()
         };
         if (baseline) payload.baseline = baseline;
+        if (appliedRepeats) payload.appliedRepeats = appliedRepeats;
 
         await setDoc(docRef, payload, { merge: true });
     } catch (e) {
@@ -355,7 +358,8 @@ export const getAllTodos = async (userId: string, collectionName: string = 'todo
 
         const querySnapshot = await getDocs(q);
         return querySnapshot.docs
-            .filter(doc => doc.id !== 'template_default')
+            // 날짜 문서가 아닌 것들 (date 필드가 없어 대개 쿼리에서 빠지지만 명시해 둔다)
+            .filter(doc => doc.id !== 'template_default' && doc.id !== BACKLOG_DOC)
             .map(doc => ({
                 id: doc.id,
                 ...doc.data(),
@@ -378,6 +382,77 @@ export const saveTemplate = async (userId: string, content: string, collectionNa
         console.error("Error saving template: ", e);
         throw e;
     }
+};
+
+// ============ 대기 목록 (날짜 없는 할 일) ============
+// 날짜별 문서와 같은 컬렉션에 두되 date 필드를 넣지 않는다.
+// getTodos·getAllTodos는 date로 조회·정렬하므로 이 문서는 자연히 빠진다.
+const BACKLOG_DOC = 'backlog';
+
+export const getBacklog = async (userId: string, collectionName: string = 'todos'): Promise<string> => {
+    try {
+        const docSnap = await getDoc(doc(db, `users/${userId}/${collectionName}`, BACKLOG_DOC));
+        return docSnap.exists() ? (docSnap.data().content as string) ?? '' : '';
+    } catch (e) {
+        console.error("Error getting backlog: ", e);
+        return '';
+    }
+};
+
+export const saveBacklog = async (userId: string, content: string, collectionName: string = 'todos'): Promise<void> => {
+    try {
+        await setDoc(
+            doc(db, `users/${userId}/${collectionName}`, BACKLOG_DOC),
+            { content, updatedAt: Timestamp.now() },
+            { merge: true },
+        );
+    } catch (e) {
+        console.error("Error saving backlog: ", e);
+        throw e;
+    }
+};
+
+// ============ 반복 일정 ============
+
+const RECURRING_TODOS_COLLECTION = 'recurringTodos';
+
+export const getRecurringTodos = async (userId: string): Promise<RecurringTodo[]> => {
+    const snap = await getDocs(collection(db, `users/${userId}/${RECURRING_TODOS_COLLECTION}`));
+    return snap.docs.map(d => ({
+        id: d.id,
+        ...d.data(),
+        createdAt: d.data().createdAt?.toDate() ?? new Date(),
+        updatedAt: d.data().updatedAt?.toDate() ?? new Date(),
+    }) as RecurringTodo);
+};
+
+export const addRecurringTodo = async (
+    userId: string,
+    rule: Pick<RecurringTodo, 'text' | 'kind' | 'weekday'> & Partial<Pick<RecurringTodo, 'nth' | 'anchorDate'>>,
+): Promise<string> => {
+    const ref = await addDoc(collection(db, `users/${userId}/${RECURRING_TODOS_COLLECTION}`), {
+        ...rule,
+        active: true,
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
+    });
+    return ref.id;
+};
+
+export const updateRecurringTodo = async (
+    userId: string,
+    ruleId: string,
+    data: Partial<Pick<RecurringTodo, 'text' | 'kind' | 'weekday' | 'nth' | 'anchorDate' | 'active'>>,
+): Promise<void> => {
+    await setDoc(
+        doc(db, `users/${userId}/${RECURRING_TODOS_COLLECTION}`, ruleId),
+        { ...data, updatedAt: Timestamp.now() },
+        { merge: true },
+    );
+};
+
+export const deleteRecurringTodo = async (userId: string, ruleId: string): Promise<void> => {
+    await deleteDoc(doc(db, `users/${userId}/${RECURRING_TODOS_COLLECTION}`, ruleId));
 };
 
 export const getTemplate = async (userId: string, collectionName: string = 'todos') => {
