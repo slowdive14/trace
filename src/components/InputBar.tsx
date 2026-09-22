@@ -9,6 +9,7 @@ import { format, isSameDay } from 'date-fns';
 import { searchEmotions, type EmotionTag } from '../utils/emotionTags';
 import { recordEmotionUse } from '../utils/emotionUsage';
 import EmotionPickerModal from './EmotionPickerModal';
+import DateField from './DateField';
 import { extractSleepRecords, getIdealSleepSchedule } from '../utils/sleepUtils';
 import type { Entry, EntryPhoto } from '../types/types';
 
@@ -799,23 +800,21 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
                 <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowDatePicker(false)}>
                     <div className="bg-bg-secondary rounded-2xl p-6 max-w-xs w-full" onClick={(e) => e.stopPropagation()}>
                         <h3 className="text-lg font-bold mb-4 text-center">날짜 선택</h3>
-                        <input
-                            type="date"
+                        <DateField
                             value={format(displayDate, 'yyyy-MM-dd')}
-                            onChange={(e) => {
+                            onChange={(value) => {
                                 // 정오(12:00)로 설정: getLogicalDate가 5AM 이전을 전날로 처리하는 문제 방지
                                 // 값이 비면 Invalid Date가 되고, 그대로 두면 렌더의 format()이 던져
                                 // 입력창이 깨지고 저장 시 Timestamp 변환도 실패한다.
                                 // 부분 입력('2026-05')은 Invalid이 아니라 5월 1일로 조용히 해석되므로
                                 // 형식까지 확인한다.
-                                const value = e.target.value;
                                 if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return;
                                 const picked = new Date(`${value}T12:00:00`);
                                 if (isNaN(picked.getTime())) return;
                                 setSelectedDate(picked);
                                 setShowDatePicker(false);
                             }}
-                            className="w-full bg-bg-tertiary text-text-primary rounded-lg p-3 focus:outline-none focus:ring-1 focus:ring-accent"
+                            className="w-full bg-bg-tertiary text-text-primary rounded-lg p-3 focus:outline-none focus:ring-1 focus:ring-accent cursor-pointer"
                         />
                         <div className="flex gap-2 mt-4">
                             <button
@@ -872,11 +871,15 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
                         </p>
                         <div className="mb-3">
                             <label className="block text-xs text-text-secondary mb-1">날짜</label>
-                            <input
-                                type="date"
+                            <DateField
                                 value={format(sleepDate, 'yyyy-MM-dd')}
-                                onChange={(e) => setSleepDate(new Date(e.target.value + 'T00:00:00'))}
-                                className="w-full bg-bg-tertiary text-text-primary rounded-lg p-3 text-center focus:outline-none focus:ring-1 focus:ring-accent"
+                                onChange={(value) => {
+                                    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return;
+                                    const picked = new Date(`${value}T00:00:00`);
+                                    if (isNaN(picked.getTime())) return;
+                                    setSleepDate(picked);
+                                }}
+                                className="w-full bg-bg-tertiary text-text-primary rounded-lg p-3 text-center focus:outline-none focus:ring-1 focus:ring-accent cursor-pointer"
                             />
                         </div>
                         <div className="mb-4">

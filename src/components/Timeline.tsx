@@ -7,6 +7,7 @@ import { deleteEntry, toggleEntryPin, updateEntry, saveReflection, getReflection
 import { deletePhoto } from '../utils/imageUpload';
 import { useAuth } from './AuthContext';
 import EntryItem from './EntryItem';
+import DateField from './DateField';
 import { onSnapshot, collection, query, orderBy } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { Share, Pin, LayoutGrid, List, ChevronDown, ChevronUp, ChevronRight, Copy, X, Calendar, MessageSquare } from 'lucide-react';
@@ -692,7 +693,8 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
                             <button
                                 onClick={() => {
                                     const input = document.getElementById('timeline-date-picker') as HTMLInputElement;
-                                    input?.showPicker();
+                                    // 지원하지 않는 브라우저에서는 그냥 두면 입력창이 포커스를 받는다
+                                    try { input?.showPicker?.(); } catch { /* 무시 */ }
                                 }}
                                 className={`p-1.5 rounded-lg transition-colors ${dateFilter === 'specific'
                                     ? 'bg-accent text-white'
@@ -702,15 +704,13 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
                             >
                                 <Calendar size={14} />
                             </button>
-                            <input
+                            <DateField
                                 id="timeline-date-picker"
-                                type="date"
                                 value={specificDate}
-                                onChange={(e) => {
-                                    if (e.target.value) {
-                                        setSpecificDate(e.target.value);
-                                        setDateFilter('specific');
-                                    }
+                                onChange={(value) => {
+                                    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return;
+                                    setSpecificDate(value);
+                                    setDateFilter('specific');
                                 }}
                                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                             />

@@ -6,6 +6,7 @@ import type { ExpenseCategory } from '../types/types';
 import { EXPENSE_CATEGORIES, EXPENSE_CATEGORY_EMOJI } from '../types/types';
 import { classifyExpenseWithAI, extractAmountFromDescription, parseBatchExpenses } from '../utils/expenseClassifier';
 import { format } from 'date-fns';
+import DateField from './DateField';
 
 interface ExpenseInputProps {
     externalDate?: Date;
@@ -263,14 +264,17 @@ const ExpenseInput: React.FC<ExpenseInputProps> = ({ externalDate }) => {
                 <div className="fixed inset-0 bg-black/50 z-40 flex items-center justify-center p-4" onClick={() => setShowDatePicker(false)}>
                     <div className="bg-bg-secondary rounded-2xl p-6 max-w-xs w-full" onClick={(e) => e.stopPropagation()}>
                         <h3 className="text-lg font-bold mb-4 text-center">날짜 선택</h3>
-                        <input
-                            type="date"
+                        <DateField
                             value={format(selectedDate, 'yyyy-MM-dd')}
-                            onChange={(e) => {
-                                setSelectedDate(new Date(e.target.value + 'T12:00:00'));
+                            onChange={(value) => {
+                                // 값이 비거나 부분 입력이면 Invalid Date가 되어 저장에서 터진다
+                                if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return;
+                                const picked = new Date(`${value}T12:00:00`);
+                                if (isNaN(picked.getTime())) return;
+                                setSelectedDate(picked);
                                 setShowDatePicker(false);
                             }}
-                            className="w-full bg-bg-tertiary text-text-primary rounded-lg p-3 focus:outline-none focus:ring-1 focus:ring-accent"
+                            className="w-full bg-bg-tertiary text-text-primary rounded-lg p-3 focus:outline-none focus:ring-1 focus:ring-accent cursor-pointer"
                         />
                         <div className="flex gap-2 mt-4">
                             <button

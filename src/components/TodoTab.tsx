@@ -13,6 +13,7 @@ import {
 import { extractTags } from '../utils/tagUtils';
 import { CheckSquare, Square, Bold, Highlighter, ArrowRight, ArrowLeft, Edit3, Check, X, ChevronLeft, ChevronRight, ChevronDown, Clock, Trash2, Plus, ArrowUpDown, ArrowUp, ArrowDown, GripVertical, Eraser, Calendar, CalendarClock } from 'lucide-react';
 import RecurringTodoModal from './RecurringTodoModal';
+import DateField from './DateField';
 import { format, subDays, addDays, startOfDay, endOfDay, startOfWeek, endOfWeek, isSameDay } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import type { Todo, TodoBaseline, RecurringTodo, NavigationTarget } from '../types/types';
@@ -2417,16 +2418,15 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                                             </div>
                                                             {backlogDueIndex === i && (
                                                                 <div className="flex items-center gap-2 pb-2 pl-1">
-                                                                    <input
-                                                                        type="date"
+                                                                    <DateField
                                                                         value={item.due ?? ''}
-                                                                        onChange={e => {
-                                                                            const value = e.target.value;
+                                                                        onChange={value => {
                                                                             if (value && !/^\d{4}-\d{2}-\d{2}$/.test(value)) return;
                                                                             persistBacklog(setBacklogDue(backlog, i, value || undefined));
                                                                             setBacklogDueIndex(null);
                                                                         }}
-                                                                        className="bg-bg-tertiary text-text-primary text-xs rounded-md px-2 py-1.5 outline-none focus:ring-1 focus:ring-accent"
+                                                                        className="bg-bg-tertiary text-text-primary text-sm rounded-md px-3 py-2 outline-none focus:ring-1 focus:ring-accent cursor-pointer"
+                                                                        title="달력에서 고르기"
                                                                     />
                                                                     {item.due && (
                                                                         <button
@@ -2464,12 +2464,14 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                                     className="flex-1 min-w-0 bg-transparent text-text-primary text-sm outline-none placeholder:text-text-tertiary"
                                                 />
                                                 {/* 적으면서 대략의 시기도 같이 정할 수 있게 */}
-                                                <input
-                                                    type="date"
+                                                <DateField
                                                     value={backlogDueInput}
-                                                    onChange={e => setBacklogDueInput(e.target.value)}
-                                                    className="shrink-0 bg-transparent text-text-tertiary text-[11px] outline-none focus:text-text-primary"
-                                                    title="대략 언제 할지 (선택)"
+                                                    onChange={setBacklogDueInput}
+                                                    className={`shrink-0 text-xs rounded-md px-2 py-1 outline-none cursor-pointer transition-colors ${backlogDueInput
+                                                        ? 'bg-bg-tertiary text-text-primary'
+                                                        : 'bg-bg-tertiary/50 text-text-tertiary hover:text-text-secondary'
+                                                        }`}
+                                                    title="대략 언제 할지 달력에서 고르기 (선택)"
                                                 />
                                             </div>
                                         </div>
