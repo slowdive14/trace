@@ -3,7 +3,6 @@ import {
     parseTodos,
     calculateWeightedSummary,
     calculateTotalWeightedRate,
-    makeTodoBaseline,
     getTodoBonus,
     stripExtraCheckboxes,
     mergeTemplateInto,
@@ -31,35 +30,33 @@ describe('기준점이 없을 때 (기존 동작)', () => {
     });
 });
 
-describe('기준점을 굳힌 뒤', () => {
-    const baseline = makeTodoBaseline(parseTodos(DONE_DAY));
-
-    it('기준점은 그 시점의 분모와 완료 항목을 담는다', () => {
-        expect(baseline).toEqual({ weight: 90, timedCount: 2, timedMinutes: 90 });
+describe('다 끝낸 뒤 항목이 늘어난 날', () => {
+    it('추가하고 아직 안 했으면 달성률이 내려간다 (정직하게)', () => {
+        const added = parseTodos(`${DONE_DAY}
+- [ ] 산책 (30m)`);
+        expect(calculateTotalWeightedRate(added)).toBe(75);   // 90/120
     });
 
-    it('항목을 추가해도 달성률이 100%에서 내려가지 않는다', () => {
-        const added = parseTodos(`${DONE_DAY}\n- [ ] 산책 (30m)`);
-        expect(calculateTotalWeightedRate(added, baseline)).toBe(100);
-    });
+    it('그 항목을 완료하면 100%로 돌아오고, 실제로 한 시간이 다 보인다', () => {
+        const items = parseTodos(`${DONE_DAY}
+- [x] 산책 (30m)`);
+        const summary = calculateWeightedSummary(items);
 
-    it('추가한 항목을 완료하면 실제로 한 시간이 그대로 보인다', () => {
-        const items = parseTodos(`${DONE_DAY}\n- [x] 산책 (30m)`);
-        const summary = calculateWeightedSummary(items, baseline);
-
-        expect(summary.percentage).toBe(100);        // 달성률은 100%에서 멈춘다
-        expect(summary.totalWeight).toBe(90);        // 분모는 기준점 그대로
-        expect(summary.completedWeight).toBe(120);   // 실제로 한 시간은 자르지 않는다
+        expect(summary.percentage).toBe(100);
+        expect(summary.totalWeight).toBe(120);
+        expect(summary.completedWeight).toBe(120);
     });
 
     it('표시 없이 늘어난 일은 초과로 세지 않는다 (계획이 바뀐 것뿐이다)', () => {
-        const items = parseTodos(`${DONE_DAY}\n- [x] 산책 (30m)`);
+        const items = parseTodos(`${DONE_DAY}
+- [x] 산책 (30m)`);
         expect(getTodoBonus(items)).toEqual({ count: 0, minutes: 0 });
     });
 
-    it('기준 항목을 체크 해제하면 100% 아래로 정직하게 내려간다', () => {
-        const items = parseTodos(`- [ ] 달리기 (30m)\n- [x] 보고서 (60m)`);
-        expect(calculateWeightedSummary(items, baseline).percentage).toBe(67);   // 60/90
+    it('계획 외로 한 일은 + 표시로 분모에서 빼면 달성률이 흔들리지 않는다', () => {
+        const items = parseTodos(`${DONE_DAY}
+- [ ] +갑자기 온 상담 (60m)`);
+        expect(calculateTotalWeightedRate(items)).toBe(100);
     });
 });
 
@@ -80,27 +77,9 @@ describe('초과는 직접 표시한 것만 센다', () => {
     });
 
     it('표시했어도 완료하지 않으면 초과가 아니다', () => {
-        const items = parseTodos(`${DONE_DAY}\n- [ ] +청소 (20m)`);
+        const items = parseTodos(`${DONE_DAY}
+- [ ] +청소 (20m)`);
         expect(getTodoBonus(items)).toEqual({ count: 0, minutes: 0 });
-    });
-});
-
-describe('기준점을 굳히는 시점', () => {
-    it('100%를 채운 순간의 분모가 잡힌다 (그 전 상태로는 잡지 않는다)', () => {
-        const halfway = parseTodos(`- [x] 달리기 (30m)\n- [ ] 보고서 (60m)`);
-        expect(calculateWeightedSummary(halfway).percentage).toBeLessThan(100);
-
-        // 100%가 된 뒤에 굳힌 기준점만 분모 90을 갖는다
-        expect(makeTodoBaseline(parseTodos(DONE_DAY)).weight).toBe(90);
-    });
-
-    it('하위 항목이 있는 날도 부모 가중치 기준으로 굳는다', () => {
-        const items = parseTodos(`- [x] 보고서 (60m)
-  - [x] 초안
-  - [x] 검토`);
-        // 부모 60분이 분모이고 하위는 그 안에서 나눠 갖는다
-        expect(makeTodoBaseline(items).weight).toBe(60);
-        expect(calculateWeightedSummary(items).percentage).toBe(100);
     });
 });
 
@@ -162,33 +141,31 @@ describe('표시한 것과 표시 없는 것이 섞인 날', () => {
         expect(getTodoBonus(items)).toEqual({ count: 1, minutes: 60 });
     });
 
-    it('추가 항목은 기준점을 굳힐 때도 분모에 넣지 않는다', () => {
+    it('추가 항목은 완료해도 분모를 키우지 않는다', () => {
         const items = parseTodos(`${DONE_DAY}\n- [x] +갑자기 온 상담 (60m)`);
-        expect(makeTodoBaseline(items).weight).toBe(90);
+        expect(calculateWeightedSummary(items).totalWeight).toBe(90);
     });
 });
 
 describe('하루 중에 일이 늘어난 날 (스크린샷 상황)', () => {
-    it('실제로 한 시간이 그대로 보이고, 초과로 부풀지 않는다', () => {
-        // 아침에 두 건 + 시간 없는 항목 하나를 다 끝내 100% → 기준점 255분
-        const morning = parseTodos(`- [x] 김라온 보고서 (140m)
-- [x] 이수연 보고서 (110m)
-- [x] 아침 요통 점수 기록`);
-        const baseline = makeTodoBaseline(morning);
-        expect(baseline.weight).toBe(255);
-
-        // 그 뒤 한 건이 더 생겨 완료했다 (표시는 안 붙였다)
+    it('계획도 완료도 실제 값으로 보인다', () => {
         const now = parseTodos(`- [ ] +달리기 5km
 - [x] 김라온 보고서 (140m)
 - [x] 이수연 보고서 (110m)
-- [x] 이서연 보고서 (120m)
-- [x] 아침 요통 점수 기록`);
-        const summary = calculateWeightedSummary(now, baseline);
+- [x] 이서연 보고서 (120m)`);
+        const summary = calculateWeightedSummary(now);
 
         expect(summary.percentage).toBe(100);
-        expect(summary.totalWeight).toBe(255);        // 계획 4h15m
-        expect(summary.completedWeight).toBe(375);    // 실제로 한 6h15m
+        expect(summary.totalWeight).toBe(370);        // 6h10m
+        expect(summary.completedWeight).toBe(370);    // 6h10m
         expect(getTodoBonus(now)).toEqual({ count: 0, minutes: 0 });
+    });
+
+    it('추가 항목(달리기)을 완료하면 그때 초과로 잡힌다', () => {
+        const now = parseTodos(`- [x] +달리기 5km (40m)
+- [x] 김라온 보고서 (140m)`);
+        expect(calculateWeightedSummary(now).totalWeight).toBe(140);
+        expect(getTodoBonus(now)).toEqual({ count: 1, minutes: 40 });
     });
 });
 

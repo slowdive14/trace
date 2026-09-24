@@ -16,7 +16,7 @@ import RecurringTodoModal from './RecurringTodoModal';
 import DateField from './DateField';
 import { format, subDays, addDays, startOfDay, endOfDay, startOfWeek, endOfWeek, isSameDay } from 'date-fns';
 import { ko } from 'date-fns/locale';
-import type { Todo, TodoBaseline, RecurringTodo, NavigationTarget } from '../types/types';
+import type { Todo, RecurringTodo, NavigationTarget } from '../types/types';
 import { getLogicalDate } from '../utils/dateUtils';
 import {
     type TodoItem,
@@ -33,7 +33,6 @@ import {
     stripTodoIntro,
     getWeeklyTarget,
     mergeTemplateInto,
-    makeTodoBaseline,
     getTodoBonus,
     EXTRA_PREFIX,
     STREAK_THRESHOLD,
@@ -394,7 +393,6 @@ const TodoTab: React.FC<TodoTabProps> = ({
     const [inlineEditIndex, setInlineEditIndex] = useState<number | null>(null);
     const [inlineEditText, setInlineEditText] = useState('');
     // 선택한 날짜의 기준점. 처음 100%를 채우면 굳어지고, 그 뒤 추가한 항목은 달성률을 깎지 않는다.
-    const [baseline, setBaseline] = useState<TodoBaseline | undefined>(undefined);
     // 날짜 없는 할 일. 언제 할지 정하기 전에 일단 적어 두는 자리다.
     const [backlog, setBacklog] = useState<BacklogItem[]>([]);
     const [backlogInput, setBacklogInput] = useState('');
@@ -491,7 +489,6 @@ const TodoTab: React.FC<TodoTabProps> = ({
         setContent('');
         setLastSaved(null);
         setDeletingLineIndex(null);
-        setBaseline(undefined);   // 새 날짜의 기준점은 loadContent가 다시 읽어 온다
     }, []);
 
     // Load content based on view mode
@@ -503,7 +500,6 @@ const TodoTab: React.FC<TodoTabProps> = ({
                 if (viewMode === 'edit' || viewMode === 'matrix') {
                     // Load selected date's todo
                     const todo = await getTodo(user.uid, selectedDate, collectionName);
-                    setBaseline(todo?.baseline);
 
                     let loaded = todo?.content ?? '';
                     if (todo) setLastSaved(todo.updatedAt || new Date());
@@ -560,7 +556,6 @@ const TodoTab: React.FC<TodoTabProps> = ({
                     if (notes.length > 0 || markChanged) {
                         await saveTodo(
                             user.uid, selectedDate, loaded, collectionName,
-                            undefined,
                             due.length > 0 ? [...applied, ...due.map(r => r.id)] : undefined,
                             templateFilled,
                         );
@@ -720,12 +715,11 @@ const TodoTab: React.FC<TodoTabProps> = ({
             todosInRange.forEach(todo => {
                 const todoDateStr = format(new Date(todo.date), 'yyyy-MM-dd');
                 const isEditingDay = todoDateStr === todayStr;
+                // 오늘 몫은 아직 저장 전일 수 있어 화면의 내용을 쓴다
                 const todoContent = isEditingDay ? content : todo.content;
-                // 오늘 몫은 아직 저장 전일 수 있어 화면의 기준점을 쓴다
-                const dayBaseline = isEditingDay ? baseline : todo.baseline;
                 const items = parseTodos(todoContent);
                 if (items.length > 0) {
-                    weightedPercentageSum += calculateTotalWeightedRate(items, dayBaseline);
+                    weightedPercentageSum += calculateTotalWeightedRate(items);
                     dayCount++;
                 }
                 completed += items.filter(item => item.checked).length;
@@ -748,7 +742,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
             thisWeek: calcStats(thisWeekStart, thisWeekEnd, true),
             lastWeek: calcStats(lastWeekStart, lastWeekEnd)
         };
-    }, [historyTodos, content, currentLogicalDay, baseline]);
+    }, [historyTodos, content, currentLogicalDay]);
 
     // Calculate total completed (all time) for real level
     // 과거분과 오늘분을 분리해 메모이즈한다. 예전에는 content(입력 중인 오늘 할 일)가
@@ -785,7 +779,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
             const key = format(new Date(todo.date), 'yyyy-MM-dd');
             if (key === todayStr) return;
             const items = parseTodos(todo.content);
-            if (items.length > 0) map[key] = calculateWeightedSummary(items, todo.baseline).percentage;
+            if (items.length > 0) map[key] = calculateWeightedSummary(items).percentage;
         });
         return map;
     }, [allTodos, currentLogicalDay]);
@@ -798,10 +792,10 @@ const TodoTab: React.FC<TodoTabProps> = ({
         const todayStr = format(getLogicalDate(), 'yyyy-MM-dd');
         const todayItems = parseTodos(content);
         const rates = todayItems.length > 0
-            ? { ...pastRatesByDate, [todayStr]: calculateWeightedSummary(todayItems, baseline).percentage }
+            ? { ...pastRatesByDate, [todayStr]: calculateWeightedSummary(todayItems).percentage }
             : pastRatesByDate;
         return calculateStreak(rates, todayStr);
-    }, [pastRatesByDate, content, currentLogicalDay, baseline]);
+    }, [pastRatesByDate, content, currentLogicalDay]);
 
     const handleSave = useCallback((newContent: string) => {
         if (!user) return;
@@ -814,18 +808,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
         saveTimeoutRef.current = setTimeout(async () => {
             try {
                 if (viewMode === 'edit' || viewMode === 'matrix') {
-                    // 아직 기준점이 없는데 지금 100%라면, 이 순간의 분모를 굳힌다.
-                    // 이후에 추가한 항목은 달성률을 깎지 않고 초과분으로만 쌓인다.
-                    let nextBaseline = baseline;
-                    if (!nextBaseline) {
-                        const items = parseTodos(newContent);
-                        if (items.length > 0 && calculateWeightedSummary(items).percentage >= 100) {
-                            nextBaseline = makeTodoBaseline(items);
-                        }
-                    }
-
-                    await saveTodo(user.uid, selectedDate, newContent, collectionName, nextBaseline);
-                    if (nextBaseline !== baseline) setBaseline(nextBaseline);
+                    await saveTodo(user.uid, selectedDate, newContent, collectionName);
                 } else if (viewMode === 'template') {
                     // Save as template
                     await saveTemplate(user.uid, newContent, collectionName);
@@ -837,7 +820,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
                 setIsSaving(false);
             }
         }, 500);
-    }, [user, collectionName, viewMode, selectedDate, baseline]);
+    }, [user, collectionName, viewMode, selectedDate]);
 
     const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
         const newContent = e.target.value;
@@ -966,19 +949,8 @@ const TodoTab: React.FC<TodoTabProps> = ({
 
     /** 과거 날짜 투두를 화면·최신본 참조·Firestore에 한 번에 반영한다 */
     const saveHistoryContent = useCallback(async (dateStr: string, newContent: string) => {
-        // 편집 모드와 같은 규칙으로 기준점을 굳힌다. 여기서 빠뜨리면 히스토리에서
-        // 100%를 채운 날은 기준점이 없어, 항목을 더 적을 때 달성률이 도로 떨어진다.
-        const prev = historyTodosRef.current.find(t => format(t.date, 'yyyy-MM-dd') === dateStr);
-        let nextBaseline = prev?.baseline;
-        if (!nextBaseline) {
-            const items = parseTodos(newContent);
-            if (items.length > 0 && calculateWeightedSummary(items).percentage >= 100) {
-                nextBaseline = makeTodoBaseline(items);
-            }
-        }
-
         const updated = historyTodosRef.current.map(t =>
-            format(t.date, 'yyyy-MM-dd') === dateStr ? { ...t, content: newContent, baseline: nextBaseline } : t
+            format(t.date, 'yyyy-MM-dd') === dateStr ? { ...t, content: newContent } : t
         );
         historyTodosRef.current = updated;   // 저장을 기다리는 동안에도 최신본을 보게 한다
         setHistoryTodos(updated);
@@ -986,13 +958,12 @@ const TodoTab: React.FC<TodoTabProps> = ({
         // 오늘 것을 히스토리에서 고쳤다면 편집 모드 화면도 같이 맞춘다
         if (dateStr === format(getLogicalDate(), 'yyyy-MM-dd')) {
             setContent(newContent);
-            setBaseline(nextBaseline);
         }
 
         if (!user) return;
         try {
             const [year, month, day] = dateStr.split('-').map(Number);
-            await saveTodo(user.uid, new Date(year, month - 1, day), newContent, collectionName, nextBaseline);
+            await saveTodo(user.uid, new Date(year, month - 1, day), newContent, collectionName);
         } catch (error) {
             console.error('Failed to save history todo:', error);
         }
@@ -1800,7 +1771,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
                     <div className="app-container pt-4">
                         {Object.entries(groupedTodos).map(([date, todo]) => {
                             const historyItems = parseTodos(todo.content);
-                            const historySummary = calculateWeightedSummary(historyItems, todo.baseline);
+                            const historySummary = calculateWeightedSummary(historyItems);
                             const historyBonus = getTodoBonus(historyItems);
                             const historyHasDuration = historyItems.some(t => t.duration);
                             const historyTimeLabel = historyHasDuration
@@ -2171,7 +2142,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                 {isToday && todos.length > 0 && (() => {
                                     const completed = todos.filter(t => t.checked).length;
                                     const total = todos.length;
-                                    const summary = calculateWeightedSummary(todos, baseline);
+                                    const summary = calculateWeightedSummary(todos);
                                     const percentage = summary.percentage;
                                     const bonus = getTodoBonus(todos);
 
@@ -2198,8 +2169,8 @@ const TodoTab: React.FC<TodoTabProps> = ({
 
                                     // 초과분을 기준 분모에 견준 비율 (막대 위에 덧그릴 길이).
                                     // 기준 항목을 도로 체크 해제해 100% 아래로 내려간 날에는 덧칠하지 않는다.
-                                    const bonusRatio = baseline && baseline.weight > 0 && percentage >= 100
-                                        ? Math.min(100, Math.round((bonus.minutes / baseline.weight) * 100))
+                                    const bonusRatio = summary.totalWeight > 0 && percentage >= 100
+                                        ? Math.min(100, Math.round((bonus.minutes / summary.totalWeight) * 100))
                                         : 0;
 
                                     return (

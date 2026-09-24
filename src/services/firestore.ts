@@ -17,7 +17,7 @@ import {
 import { db } from './firebase';
 import { startOfDay, format as formatDateFns } from 'date-fns';
 import { getDueRules, getEffectivePostDate } from '../utils/expenseUtils';
-import type { Expense, ExpenseCategory, RecurringExpense, SleepCoaching, SleepCoachingRecord, Todo, TodoBaseline, RecurringTodo, Worry, WorryEntry, BrainDump, BrainDumpStatus, BrainDumpInsight, DailyReflection, MonthlyReview, MonthlyInsight, EntryPhoto } from '../types/types';
+import type { Expense, ExpenseCategory, RecurringExpense, SleepCoaching, SleepCoachingRecord, Todo, RecurringTodo, Worry, WorryEntry, BrainDump, BrainDumpStatus, BrainDumpInsight, DailyReflection, MonthlyReview, MonthlyInsight, EntryPhoto } from '../types/types';
 
 const EXPENSES_COLLECTION = 'expenses';
 
@@ -272,8 +272,6 @@ export const saveTodo = async (
     date: Date,
     content: string,
     collectionName: string = 'todos',
-    /** 처음 100%를 채운 순간의 기준점. 넘기지 않으면 이미 저장된 값이 그대로 남는다 */
-    baseline?: TodoBaseline,
     /** 이 날짜에 넣은 반복 일정 id 목록. 넘기지 않으면 기존 값이 유지된다 */
     appliedRepeats?: string[],
     /** 매일 루틴을 채워 넣었는지. 넘기지 않으면 기존 값이 유지된다 */
@@ -295,7 +293,6 @@ export const saveTodo = async (
             date: Timestamp.fromDate(normalizedDate),
             updatedAt: Timestamp.now()
         };
-        if (baseline) payload.baseline = baseline;
         if (appliedRepeats) payload.appliedRepeats = appliedRepeats;
         if (templateFilled !== undefined) payload.templateFilled = templateFilled;
 

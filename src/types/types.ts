@@ -45,30 +45,11 @@ export interface RecurringExpense {
     updatedAt: Date;
 }
 
-/**
- * 하루의 달성률 분모를 굳혀 두는 기준점.
- *
- * 분모가 항상 '지금 목록에 있는 전체'라면, 다 끝낸 뒤에 할 일을 적을수록
- * 달성률이 내려간다. 그래서 실제로 더 한 일을 기록하지 않는 편이 유리해진다.
- * 처음 100%를 채운 순간을 기준점으로 저장해 두고, 그 뒤에 추가한 항목은
- * 분모에 넣지 않는다.
- */
-export interface TodoBaseline {
-    /** 기준 시점의 전체 가중치(분). 이 값이 달성률의 분모로 고정된다 */
-    weight: number;
-    /** 기준 시점에 이미 완료돼 있던, 소요시간이 적힌 항목 수 */
-    timedCount: number;
-    /** 그 항목들의 소요시간 합계(분) */
-    timedMinutes: number;
-}
-
 export interface Todo {
     id: string;
     content: string;
     date: Date;
     updatedAt: Date;
-    /** 처음 100%를 채운 순간에 굳어진다. 그 전에는 없다 */
-    baseline?: TodoBaseline;
     /**
      * 이 날짜에 이미 넣은 반복 일정의 id 목록.
      * 규칙 쪽에 '마지막으로 넣은 날'만 기억하면, 지운 항목이 다시 들어오거나
