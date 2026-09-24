@@ -169,14 +169,16 @@ export const calculateWeightedSummary = (
         totalCompletedWeight += result.completedWeight;
     });
 
-    // 기준점이 있으면 그때의 분모를 쓴다. 그 뒤에 추가한 항목은 달성률을 깎지 않고,
-    // 넘어선 몫은 여기서 잘라 낸 뒤 getTodoBonus가 따로 센다.
+    // 기준점이 있으면 그때의 분모를 쓴다. 그 뒤에 추가한 항목은 달성률을 깎지 않는다.
+    //
+    // 완료 시간은 자르지 않는다. 예전에는 분모에 맞춰 잘라내는 바람에, 계획보다
+    // 두 시간을 더 해도 화면에는 계획 시간만 찍혔다. 그날 실제로 몇 시간 했는지가
+    // 보이지 않으면 기록의 쓸모가 크게 줄어든다. 달성률만 100%에서 멈춘다.
     if (baseline && baseline.weight > 0) {
-        const completed = Math.min(totalCompletedWeight, baseline.weight);
         return {
             totalWeight: baseline.weight,
-            completedWeight: completed,
-            percentage: Math.round((completed / baseline.weight) * 100),
+            completedWeight: totalCompletedWeight,
+            percentage: Math.min(100, Math.round((totalCompletedWeight / baseline.weight) * 100)),
         };
     }
 
@@ -226,15 +228,14 @@ export interface TodoBonus {
 }
 
 /**
- * 계획을 넘어서 더 해낸 몫. 두 갈래를 합친다.
+ * 계획을 넘어서 더 해낸 몫 — 추가 항목(+)으로 직접 표시한 것만 센다.
  *
- * 1. 추가 항목(+)으로 적어 완료한 것: 본인이 계획 외라고 표시했으므로 그대로 센다.
- *    분모에서 이미 빠져 있어 달성률을 올리지도 않는다.
- * 2. 표시 없이 100%를 채운 뒤 덧붙여 완료한 것: 기준점과의 차이로 가늠한다.
- *    이쪽은 앱의 추측이라 근거가 약하므로, 소요시간이 적힌 항목만 인정한다.
- *    (5분짜리를 여러 개 적어 넣는 것만으로 기록이 부풀지 않게 하려는 제한이다)
+ * 예전에는 기준점과의 차이로도 초과를 가늠했다. 그런데 하루 중에 할 일이 늘어나는 건
+ * 흔한 일이고, 그건 '더 해낸 것'이 아니라 계획이 바뀐 것이다. 그것까지 초과로 세면
+ * 평범하게 일이 늘어난 날에도 '+2시간 더 함'이라고 적혀 기록이 부풀었다.
+ * 계획 외로 한 일인지 아닌지는 본인만 알 수 있으므로, 표시한 것만 센다.
  */
-export const getTodoBonus = (items: TodoItem[], baseline?: TodoBaseline): TodoBonus => {
+export const getTodoBonus = (items: TodoItem[]): TodoBonus => {
     let count = 0;
     let minutes = 0;
 
@@ -242,12 +243,6 @@ export const getTodoBonus = (items: TodoItem[], baseline?: TodoBaseline): TodoBo
         if (!item.isExtra || !item.checked) continue;
         count++;
         minutes += item.duration ?? 0;
-    }
-
-    if (baseline) {
-        const now = summarizeTimedCompleted(items);
-        count += Math.max(0, now.count - baseline.timedCount);
-        minutes += Math.max(0, now.minutes - baseline.timedMinutes);
     }
 
     return { count, minutes };

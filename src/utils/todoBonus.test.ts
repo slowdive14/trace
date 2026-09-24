@@ -27,7 +27,7 @@ describe('기준점이 없을 때 (기존 동작)', () => {
     });
 
     it('초과분은 세지 않는다', () => {
-        expect(getTodoBonus(parseTodos(DONE_DAY), undefined)).toEqual({ count: 0, minutes: 0 });
+        expect(getTodoBonus(parseTodos(DONE_DAY))).toEqual({ count: 0, minutes: 0 });
     });
 });
 
@@ -43,14 +43,18 @@ describe('기준점을 굳힌 뒤', () => {
         expect(calculateTotalWeightedRate(added, baseline)).toBe(100);
     });
 
-    it('추가한 항목을 완료해도 100%를 넘기지 않고, 초과분으로 쌓인다', () => {
+    it('추가한 항목을 완료하면 실제로 한 시간이 그대로 보인다', () => {
         const items = parseTodos(`${DONE_DAY}\n- [x] 산책 (30m)`);
         const summary = calculateWeightedSummary(items, baseline);
 
-        expect(summary.percentage).toBe(100);
+        expect(summary.percentage).toBe(100);        // 달성률은 100%에서 멈춘다
         expect(summary.totalWeight).toBe(90);        // 분모는 기준점 그대로
-        expect(summary.completedWeight).toBe(90);    // 넘어선 몫은 잘라 낸다
-        expect(getTodoBonus(items, baseline)).toEqual({ count: 1, minutes: 30 });
+        expect(summary.completedWeight).toBe(120);   // 실제로 한 시간은 자르지 않는다
+    });
+
+    it('표시 없이 늘어난 일은 초과로 세지 않는다 (계획이 바뀐 것뿐이다)', () => {
+        const items = parseTodos(`${DONE_DAY}\n- [x] 산책 (30m)`);
+        expect(getTodoBonus(items)).toEqual({ count: 0, minutes: 0 });
     });
 
     it('기준 항목을 체크 해제하면 100% 아래로 정직하게 내려간다', () => {
@@ -59,27 +63,25 @@ describe('기준점을 굳힌 뒤', () => {
     });
 });
 
-describe('완화 장치: 소요시간이 적힌 항목만 초과로 인정한다', () => {
-    const baseline = makeTodoBaseline(parseTodos(DONE_DAY));
-
-    it('시간 없는 항목을 여러 개 추가해 완료해도 초과로 세지 않는다', () => {
+describe('초과는 직접 표시한 것만 센다', () => {
+    it('표시 없이 여러 개를 덧붙여 완료해도 초과가 아니다', () => {
         const items = parseTodos(`${DONE_DAY}
 - [x] 물 마시기
-- [x] 스트레칭
+- [x] 청소 (20m)
 - [x] 창문 열기`);
-        expect(getTodoBonus(items, baseline)).toEqual({ count: 0, minutes: 0 });
+        expect(getTodoBonus(items)).toEqual({ count: 0, minutes: 0 });
     });
 
-    it('시간을 적은 항목만 골라 센다', () => {
+    it('표시한 것만 센다', () => {
         const items = parseTodos(`${DONE_DAY}
-- [x] 물 마시기
-- [x] 청소 (20m)`);
-        expect(getTodoBonus(items, baseline)).toEqual({ count: 1, minutes: 20 });
+- [x] 청소 (20m)
+- [x] +갑자기 온 상담 (60m)`);
+        expect(getTodoBonus(items)).toEqual({ count: 1, minutes: 60 });
     });
 
-    it('추가만 하고 완료하지 않으면 초과가 아니다', () => {
-        const items = parseTodos(`${DONE_DAY}\n- [ ] 청소 (20m)`);
-        expect(getTodoBonus(items, baseline)).toEqual({ count: 0, minutes: 0 });
+    it('표시했어도 완료하지 않으면 초과가 아니다', () => {
+        const items = parseTodos(`${DONE_DAY}\n- [ ] +청소 (20m)`);
+        expect(getTodoBonus(items)).toEqual({ count: 0, minutes: 0 });
     });
 });
 
@@ -129,17 +131,17 @@ describe('추가 항목(+)을 처음부터 따로 넣은 경우', () => {
 
     it('완료하면 기준점 없이도 초과분으로 센다', () => {
         const items = parseTodos(`${DONE_DAY}\n- [x] +갑자기 온 상담 (60m)`);
-        expect(getTodoBonus(items, undefined)).toEqual({ count: 1, minutes: 60 });
+        expect(getTodoBonus(items)).toEqual({ count: 1, minutes: 60 });
     });
 
     it('적어만 두고 완료하지 않으면 세지 않는다', () => {
         const items = parseTodos(`${DONE_DAY}\n- [ ] +갑자기 온 상담 (60m)`);
-        expect(getTodoBonus(items, undefined)).toEqual({ count: 0, minutes: 0 });
+        expect(getTodoBonus(items)).toEqual({ count: 0, minutes: 0 });
     });
 
     it('소요시간을 안 적어도 개수는 센다 (직접 표시한 것이므로)', () => {
         const items = parseTodos(`${DONE_DAY}\n- [x] +동료 부탁 들어주기`);
-        expect(getTodoBonus(items, undefined)).toEqual({ count: 1, minutes: 0 });
+        expect(getTodoBonus(items)).toEqual({ count: 1, minutes: 0 });
     });
 
     it('추가 항목의 하위 항목도 분모에서 함께 빠진다', () => {
@@ -152,26 +154,41 @@ describe('추가 항목(+)을 처음부터 따로 넣은 경우', () => {
     });
 });
 
-describe('두 경로가 겹쳐도 한 번만 센다', () => {
-    it('기준점이 있는 날에 추가 항목을 넣어도 이중으로 세지 않는다', () => {
-        const baseline = makeTodoBaseline(parseTodos(DONE_DAY));
-        const items = parseTodos(`${DONE_DAY}\n- [x] +갑자기 온 상담 (60m)`);
-
-        // 표시가 있으므로 표시 쪽으로만 센다 (기준점 차이로 또 세면 2개가 된다)
-        expect(getTodoBonus(items, baseline)).toEqual({ count: 1, minutes: 60 });
-    });
-
-    it('표시한 것과 표시 없이 덧붙인 것이 함께 있으면 둘 다 센다', () => {
-        const baseline = makeTodoBaseline(parseTodos(DONE_DAY));
+describe('표시한 것과 표시 없는 것이 섞인 날', () => {
+    it('표시한 것만 센다', () => {
         const items = parseTodos(`${DONE_DAY}
 - [x] +갑자기 온 상담 (60m)
 - [x] 장보기 (20m)`);
-        expect(getTodoBonus(items, baseline)).toEqual({ count: 2, minutes: 80 });
+        expect(getTodoBonus(items)).toEqual({ count: 1, minutes: 60 });
     });
 
     it('추가 항목은 기준점을 굳힐 때도 분모에 넣지 않는다', () => {
         const items = parseTodos(`${DONE_DAY}\n- [x] +갑자기 온 상담 (60m)`);
-        expect(makeTodoBaseline(items)).toEqual({ weight: 90, timedCount: 2, timedMinutes: 90 });
+        expect(makeTodoBaseline(items).weight).toBe(90);
+    });
+});
+
+describe('하루 중에 일이 늘어난 날 (스크린샷 상황)', () => {
+    it('실제로 한 시간이 그대로 보이고, 초과로 부풀지 않는다', () => {
+        // 아침에 두 건 + 시간 없는 항목 하나를 다 끝내 100% → 기준점 255분
+        const morning = parseTodos(`- [x] 김라온 보고서 (140m)
+- [x] 이수연 보고서 (110m)
+- [x] 아침 요통 점수 기록`);
+        const baseline = makeTodoBaseline(morning);
+        expect(baseline.weight).toBe(255);
+
+        // 그 뒤 한 건이 더 생겨 완료했다 (표시는 안 붙였다)
+        const now = parseTodos(`- [ ] +달리기 5km
+- [x] 김라온 보고서 (140m)
+- [x] 이수연 보고서 (110m)
+- [x] 이서연 보고서 (120m)
+- [x] 아침 요통 점수 기록`);
+        const summary = calculateWeightedSummary(now, baseline);
+
+        expect(summary.percentage).toBe(100);
+        expect(summary.totalWeight).toBe(255);        // 계획 4h15m
+        expect(summary.completedWeight).toBe(375);    // 실제로 한 6h15m
+        expect(getTodoBonus(now)).toEqual({ count: 0, minutes: 0 });
     });
 });
 

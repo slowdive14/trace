@@ -731,7 +731,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
                 completed += items.filter(item => item.checked).length;
                 total += items.length;
 
-                const bonus = getTodoBonus(items, dayBaseline);
+                const bonus = getTodoBonus(items);
                 bonusCount += bonus.count;
                 bonusMinutes += bonus.minutes;
             });
@@ -1801,7 +1801,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
                         {Object.entries(groupedTodos).map(([date, todo]) => {
                             const historyItems = parseTodos(todo.content);
                             const historySummary = calculateWeightedSummary(historyItems, todo.baseline);
-                            const historyBonus = getTodoBonus(historyItems, todo.baseline);
+                            const historyBonus = getTodoBonus(historyItems);
                             const historyHasDuration = historyItems.some(t => t.duration);
                             const historyTimeLabel = historyHasDuration
                                 ? `${formatDuration(Math.round(historySummary.completedWeight))} / ${formatDuration(Math.round(historySummary.totalWeight))}`
@@ -2173,17 +2173,21 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                     const total = todos.length;
                                     const summary = calculateWeightedSummary(todos, baseline);
                                     const percentage = summary.percentage;
-                                    const bonus = getTodoBonus(todos, baseline);
+                                    const bonus = getTodoBonus(todos);
 
                                     // Stats - using memoized values
                                     const realLevel = getRealLevel(totalCompleted);
 
                                     // Time-based stats (tree-based, only when duration tasks exist)
                                     const hasDurationTasks = todos.some(t => t.duration);
-                                    let timeLabel = `${completed}/${total}`;
-                                    if (hasDurationTasks) {
-                                        timeLabel = `${formatDuration(Math.round(summary.completedWeight))} / ${formatDuration(Math.round(summary.totalWeight))}`;
-                                    }
+                                    const doneLabel = hasDurationTasks
+                                        ? formatDuration(Math.round(summary.completedWeight))
+                                        : `${completed}`;
+                                    const planLabel = hasDurationTasks
+                                        ? formatDuration(Math.round(summary.totalWeight))
+                                        : `${total}`;
+                                    // 계획보다 더 한 날은 완료 쪽을 눈에 띄게 둔다
+                                    const overPlan = summary.completedWeight > summary.totalWeight;
 
                                     const thisWeekAvg = weeklyStats.thisWeek.avgPercentage;
                                     const lastWeekAvg = weeklyStats.lastWeek.avgPercentage;
@@ -2250,7 +2254,11 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                                                 {' '}+{bonus.count}
                                                             </span>
                                                         )}
-                                                        <span className="text-text-tertiary"> · {timeLabel}</span>
+                                                        <span className="text-text-tertiary">
+                                                            {' · '}
+                                                            <span className={overPlan ? 'text-amber-400' : ''}>{doneLabel}</span>
+                                                            {' / '}{planLabel}
+                                                        </span>
                                                         {bonus.minutes > 0 && (
                                                             <span className="text-amber-400/70"> +{formatDuration(bonus.minutes)}</span>
                                                         )}
