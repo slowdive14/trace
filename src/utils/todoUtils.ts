@@ -429,10 +429,75 @@ export const calculateStreak = (
     };
 };
 
-/** 지난주 평균을 기준으로 이번 주 목표치를 정한다 (조금만 더 높게) */
-export const getWeeklyTarget = (lastWeekAvg: number): number => {
-    if (lastWeekAvg <= 0) return 60;
-    return Math.min(95, Math.max(50, Math.round(lastWeekAvg) + 2));
+/** 이번 주 목표를 정할 때 돌아보는 기간 (주) */
+export const TARGET_LOOKBACK_WEEKS = 8;
+/**
+ * 한 주 멀어질 때마다 곱하는 반영 비율.
+ * 0.85면 4주 전 기록은 지난주의 60%쯤, 8주 전은 30%쯤 반영된다.
+ */
+export const TARGET_WEEK_DECAY = 0.85;
+/** 평소 수준보다 이만큼 높게 잡는다 */
+export const TARGET_STEP = 2;
+/** 기록이 하나도 없을 때의 목표 */
+export const TARGET_DEFAULT = 60;
+
+export interface WeeklyTarget {
+    /** 이번 주 목표 (%) */
+    target: number;
+    /** 목표의 바탕이 된 평소 수준 (%) */
+    baseline: number;
+    /** 바탕이 된 기록 일수 */
+    days: number;
+}
+
+/** 'YYYY-MM-DD' → 날짜 번호 (두 날짜의 차이를 일 단위로 셀 때 쓴다) */
+const dayNumber = (dateStr: string): number => {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    return Date.UTC(y, m - 1, d) / 86_400_000;
+};
+
+/**
+ * 이번 주 목표치.
+ *
+ * 예전에는 지난주 평균 하나에 2를 더했다. 그러면 거의 비운 날(4%) 하루가 낀 주
+ * 하나에 목표가 통째로 끌려 내려가고, 유난히 잘된 주 다음에는 확 뛰었다.
+ * 최근 8주 동안 기록한 날 전체를 평균 내되, 가까운 주일수록 더 크게 반영한다.
+ * 한 주가 튀어도 목표는 조금만 움직이고, 몇 주에 걸쳐 오르거나 내리면 따라간다.
+ *
+ * 주별 평균이 아니라 날짜별로 모으므로, 며칠만 기록한 주는 그만큼만 반영된다.
+ *
+ * @param ratesByDate 'YYYY-MM-DD' → 그날의 가중 완료율(%). 이번 주 날짜는 쓰지 않는다
+ * @param weekStart   이번 주 월요일 'YYYY-MM-DD'
+ */
+export const getWeeklyTarget = (
+    ratesByDate: Record<string, number>,
+    weekStart: string,
+): WeeklyTarget => {
+    const start = dayNumber(weekStart);
+    let weighted = 0;
+    let weightSum = 0;
+    let days = 0;
+
+    for (const [date, rate] of Object.entries(ratesByDate)) {
+        const daysBefore = start - dayNumber(date);
+        if (daysBefore <= 0) continue;  // 이번 주 (아직 진행 중)
+        const weeksAgo = Math.ceil(daysBefore / 7);
+        if (weeksAgo > TARGET_LOOKBACK_WEEKS) continue;
+
+        const weight = TARGET_WEEK_DECAY ** (weeksAgo - 1);
+        weighted += rate * weight;
+        weightSum += weight;
+        days++;
+    }
+
+    if (days === 0) return { target: TARGET_DEFAULT, baseline: 0, days: 0 };
+
+    const baseline = Math.round(weighted / weightSum);
+    return {
+        target: Math.min(95, Math.max(50, baseline + TARGET_STEP)),
+        baseline,
+        days,
+    };
 };
 
 // Format minutes as human-readable string (e.g., 90 → "1h30m")

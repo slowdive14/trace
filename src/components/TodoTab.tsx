@@ -37,7 +37,9 @@ import {
     EXTRA_PREFIX,
     STREAK_THRESHOLD,
     STREAK_REPAIR_RATE,
-    MAX_STREAK_REPAIRS
+    MAX_STREAK_REPAIRS,
+    TARGET_LOOKBACK_WEEKS,
+    TARGET_STEP,
 } from '../utils/todoUtils';
 import {
     DndContext,
@@ -376,6 +378,8 @@ const TodoTab: React.FC<TodoTabProps> = ({
     const [viewMode, setViewMode] = useState<ViewMode>('edit');
     const [historyTodos, setHistoryTodos] = useState<Todo[]>([]);
     const [allTodos, setAllTodos] = useState<Todo[]>([]);
+    // 전체 기록이 도착했는지. 빈 배열만으로는 '아직 안 옴'과 '기록 없음'을 가를 수 없다
+    const [allTodosLoaded, setAllTodosLoaded] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [lastSaved, setLastSaved] = useState<Date | null>(null);
     const [currentLogicalDay, setCurrentLogicalDay] = useState(format(getLogicalDate(), 'yyyy-MM-dd'));
@@ -632,7 +636,10 @@ const TodoTab: React.FC<TodoTabProps> = ({
         const loadAllTodos = async () => {
             try {
                 const todos = await getAllTodos(user.uid, collectionName);
-                if (!cancelled) setAllTodos(todos);
+                if (!cancelled) {
+                    setAllTodos(todos);
+                    setAllTodosLoaded(true);
+                }
             } catch (error) {
                 console.error("Failed to load all todos:", error);
             }
@@ -783,6 +790,16 @@ const TodoTab: React.FC<TodoTabProps> = ({
         });
         return map;
     }, [allTodos, currentLogicalDay]);
+
+    // 이번 주 목표는 최근 8주 기록으로 정한다 (30일치 히스토리로는 모자라 전체 기록을 쓴다).
+    // 전체 기록은 늦게 도착하므로 그 전에는 비워 둔다. 임시 값을 보였다가 바꾸면
+    // 목표가 왜 바뀌었는지 헷갈린다.
+    const weeklyTarget = useMemo(() => {
+        if (!allTodosLoaded) return null;
+        const today = new Date(`${currentLogicalDay}T12:00:00`);
+        const weekStart = format(startOfWeek(today, { weekStartsOn: 1 }), 'yyyy-MM-dd');
+        return getWeeklyTarget(pastRatesByDate, weekStart);
+    }, [allTodosLoaded, pastRatesByDate, currentLogicalDay]);
 
     // 매일 템플릿 위쪽에 딸려 오는 리마인드 블록(가치관·목표·원칙).
     // 읽고 나면 손으로 지우던 것을 버튼 한 번으로 대신한다.
@@ -2162,7 +2179,9 @@ const TodoTab: React.FC<TodoTabProps> = ({
 
                                     const thisWeekAvg = weeklyStats.thisWeek.avgPercentage;
                                     const lastWeekAvg = weeklyStats.lastWeek.avgPercentage;
-                                    const weeklyTarget = getWeeklyTarget(lastWeekAvg);
+                                    const targetTitle = weeklyTarget && weeklyTarget.days > 0
+                                        ? `최근 ${TARGET_LOOKBACK_WEEKS}주 기록 ${weeklyTarget.days}일의 평균 ${weeklyTarget.baseline}% (가까운 주일수록 크게 반영) + ${TARGET_STEP}`
+                                        : '아직 기록이 없어 기본 목표를 쓴다';
 
                                     // 오늘 스트릭 기준 충족 여부 (색·문구 대신 불꽃 밝기로만 표현)
                                     const streakSafe = percentage >= STREAK_THRESHOLD;
@@ -2262,7 +2281,12 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                                     <span className="text-xs text-text-secondary">이번 주</span>
                                                     <span className="text-xs text-text-secondary tabular-nums">
                                                         {thisWeekAvg}%
-                                                        <span className="text-text-tertiary"> · 지난주 {lastWeekAvg}% · 목표 {weeklyTarget}%</span>
+                                                        <span className="text-text-tertiary"> · 지난주 {lastWeekAvg}%</span>
+                                                        {weeklyTarget && (
+                                                            <span className="text-text-tertiary" title={targetTitle}>
+                                                                {' · '}목표 {weeklyTarget.target}%
+                                                            </span>
+                                                        )}
                                                         {weeklyStats.thisWeek.bonusCount > 0 && (
                                                             <span
                                                                 className="text-amber-400/80"
@@ -2278,11 +2302,13 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                                         className="absolute inset-y-0 left-0 bg-accent/50 rounded-full transition-all duration-500 ease-out"
                                                         style={{ width: `${Math.min(100, thisWeekAvg)}%` }}
                                                     />
-                                                    <div
-                                                        className="absolute inset-y-0 w-px bg-text-tertiary"
-                                                        style={{ left: `${Math.min(100, weeklyTarget)}%` }}
-                                                        title={`이번 주 목표 ${weeklyTarget}%`}
-                                                    />
+                                                    {weeklyTarget && (
+                                                        <div
+                                                            className="absolute inset-y-0 w-px bg-text-tertiary"
+                                                            style={{ left: `${Math.min(100, weeklyTarget.target)}%` }}
+                                                            title={`이번 주 목표 ${weeklyTarget.target}% · ${targetTitle}`}
+                                                        />
+                                                    )}
                                                 </div>
                                             </div>
 
