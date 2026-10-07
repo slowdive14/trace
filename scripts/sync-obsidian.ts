@@ -27,6 +27,7 @@ import {
     replaceSereinSection, noteRelPath, renderTemplate, findUnresolvedTags,
     DEFAULT_NOTE_PATH, DEFAULT_TEMPLATE_PATH, SECTION_HEADING,
 } from './obsidianNote';
+import { syncToggl } from './sync-toggl';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -47,6 +48,10 @@ interface Config {
     templatePath?: string;
     /** 노트가 없으면 템플릿으로 만들지 여부 (기본 true) */
     createMissingNotes?: boolean;
+    /** (선택) Toggl 2.0 API 키와 조직 ID. 있으면 동기화 끝에 Toggl 요약도 갱신한다 */
+    togglApiToken?: string;
+    togglOrganizationId?: number | string;
+    togglWorkspaceId?: number | string;
 }
 
 function loadConfig(): Config {
@@ -226,9 +231,20 @@ async function main() {
 
     console.log(`\n완료: ${updated}건 갱신${dryRun ? ' (dry-run, 파일 미변경)' : ''}`);
     if (skipped.length) console.log(`건너뜀:\n  - ${skipped.join('\n  - ')}`);
+
+    // 할 일 예상 소요시간에 쓸 Toggl 요약. 매일 도는 이 작업에 얹어 따로 등록할 필요가 없게 한다.
+    // 실패해도 옵시디언 동기화 결과에는 영향을 주지 않는다.
+    if (cfg.togglApiToken) {
+        console.log(await syncToggl(userRef, cfg, { dryRun }));
+    }
 }
 
 // 직접 실행할 때만 동작 (테스트에서 import할 수 있도록)
 if (process.argv[1] && process.argv[1].includes('sync-obsidian')) {
-    main().then(() => process.exit(0)).catch(e => { console.error(e); process.exit(1); });
+    // Toggl을 fetch로 부른 직후 process.exit()를 바로 부르면 Windows에서 소켓이 닫히는
+    // 중에 Node가 'UV_HANDLE_CLOSING' 단언으로 죽는다. 종료 코드만 정하고 잠깐 뒤에 끝낸다.
+    main()
+        .then(() => { process.exitCode = 0; })
+        .catch(e => { console.error(e); process.exitCode = 1; })
+        .finally(() => setTimeout(() => process.exit(), 100));
 }

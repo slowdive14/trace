@@ -10,6 +10,7 @@
     "test": "vitest run",
     "preview": "vite preview",
     "sync:obsidian": "tsx scripts/sync-obsidian.ts",
+    "sync:toggl": "tsx scripts/sync-toggl.ts",
     "cleanup:photos": "tsx scripts/cleanup-orphan-photos.ts"
   },
   "dependencies": {

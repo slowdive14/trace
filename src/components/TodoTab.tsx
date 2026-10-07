@@ -2,8 +2,15 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useAuth } from './AuthContext';
 import {
     saveTodo, getTodo, getTodos, getAllTodos, saveTemplate, getTemplate, addEntry, deleteEntry,
-    getBacklog, saveBacklog, getRecurringTodos,
+    getBacklog, saveBacklog, getRecurringTodos, getTogglSummary,
 } from '../services/firestore';
+import {
+    buildEstimator, collectAppSamples, describeEstimate,
+    type TaskEstimate, type TogglRow,
+} from '../utils/taskEstimate';
+import { getTypicalDay, computeTodayLoad, minutesSinceLogicalMidnight } from '../utils/timeBudget';
+import { extractSleepRecords } from '../utils/sleepUtils';
+import TimeBudgetCard from './TimeBudgetCard';
 import {
     getDueRepeats, appendTodoLine, appendTodoLines,
     parseBacklog, formatBacklog, removeBacklogItem, setBacklogDue,
@@ -16,7 +23,7 @@ import RecurringTodoModal from './RecurringTodoModal';
 import DateField from './DateField';
 import { format, subDays, addDays, startOfDay, endOfDay, startOfWeek, endOfWeek, isSameDay } from 'date-fns';
 import { ko } from 'date-fns/locale';
-import type { Todo, RecurringTodo, NavigationTarget } from '../types/types';
+import type { Todo, RecurringTodo, NavigationTarget, Entry } from '../types/types';
 import { getLogicalDate } from '../utils/dateUtils';
 import {
     type TodoItem,
@@ -71,7 +78,12 @@ interface TodoTabProps {
     };
     navigationTarget?: NavigationTarget | null;
     onNavigationComplete?: () => void;
+    /** 일상 기록 (수면 #sleep/#wake로 오늘 쓸 수 있는 시간을 낸다) */
+    entries?: Entry[];
 }
+
+/** entries가 없을 때의 기본값. 렌더마다 새 배열을 만들면 메모가 매번 깨진다 */
+const NO_ENTRIES: Entry[] = [];
 
 type ViewMode = 'edit' | 'history' | 'template' | 'matrix';
 
@@ -161,6 +173,8 @@ interface SortableTodoGroupProps {
     handleSubAdd: (parentLineIndex: number, parentIndent: number) => void;
     collapsedKeys: Set<string>;
     onToggleCollapse: (key: string) => void;
+    /** 소요시간을 적지 않은 미완료 항목의 예상 시간 (lineIndex → 예상) */
+    estimates: Map<number, TaskEstimate>;
 }
 
 const SortableTodoGroup: React.FC<SortableTodoGroupProps> = ({
@@ -184,6 +198,7 @@ const SortableTodoGroup: React.FC<SortableTodoGroupProps> = ({
     handleSubAdd,
     collapsedKeys,
     onToggleCollapse,
+    estimates,
 }) => {
     const parentId = group[0].lineIndex.toString();
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: parentId });
@@ -264,6 +279,18 @@ const SortableTodoGroup: React.FC<SortableTodoGroupProps> = ({
                                         </span>
                                     )}
                                     {renderText(item.text)}
+                                    {/* 직접 적지 않은 소요시간을 지난 기록으로 짐작해 흐리게 붙인다 */}
+                                    {(() => {
+                                        const est = item.checked ? undefined : estimates.get(item.lineIndex);
+                                        return est ? (
+                                            <span
+                                                className="ml-1.5 inline-flex align-middle text-[11px] text-text-tertiary tabular-nums select-none"
+                                                title={describeEstimate(est)}
+                                            >
+                                                예상 {formatDuration(est.minutes)}
+                                            </span>
+                                        ) : null;
+                                    })()}
                                     {collapsed && <ChildProgress done={childDone} total={childTotal} />}
                                 </span>
                             )}
@@ -372,6 +399,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
     },
     navigationTarget,
     onNavigationComplete,
+    entries = NO_ENTRIES,
 }) => {
     const [content, setContent] = useState('');
     const [isEditing, setIsEditing] = useState(false);
@@ -800,6 +828,43 @@ const TodoTab: React.FC<TodoTabProps> = ({
         const weekStart = format(startOfWeek(today, { weekStartsOn: 1 }), 'yyyy-MM-dd');
         return getWeeklyTarget(pastRatesByDate, weekStart);
     }, [allTodosLoaded, pastRatesByDate, currentLogicalDay]);
+
+    // ===== 예상 소요시간 · 오늘 쓸 수 있는 시간 =====
+
+    // Toggl 요약 (PC의 동기화 스크립트가 하루 한 번 갱신한다). 없으면 앱 기록만으로 예상한다
+    const [togglRows, setTogglRows] = useState<TogglRow[]>([]);
+    const [togglUpdatedAt, setTogglUpdatedAt] = useState<Date | null>(null);
+    useEffect(() => {
+        if (!user) return;
+        let cancelled = false;
+        getTogglSummary(user.uid).then(summary => {
+            if (cancelled || !summary) return;
+            setTogglRows(summary.rows);
+            setTogglUpdatedAt(summary.updatedAt);
+        });
+        return () => { cancelled = true; };
+    }, [user, currentLogicalDay]);
+
+    // 앱에 남긴 '(30m)' 기록. 오늘 적힌 시간은 아직 계획일 수 있어 뺀다
+    const appSamples = useMemo(() => collectAppSamples(
+        allTodos.map(t => ({ date: format(new Date(t.date), 'yyyy-MM-dd'), content: t.content })),
+        currentLogicalDay,
+    ), [allTodos, currentLogicalDay]);
+
+    const estimator = useMemo(() => buildEstimator(appSamples, togglRows), [appSamples, togglRows]);
+
+    // 최근 7일 평균 기상·취침
+    const typicalDay = useMemo(
+        () => getTypicalDay(extractSleepRecords(entries), currentLogicalDay),
+        [entries, currentLogicalDay],
+    );
+
+    // 취침까지 남은 시간이 흐르도록 1분마다 다시 그린다
+    const [nowMs, setNowMs] = useState(() => Date.now());
+    useEffect(() => {
+        const id = setInterval(() => setNowMs(Date.now()), 60_000);
+        return () => clearInterval(id);
+    }, []);
 
     // 매일 템플릿 위쪽에 딸려 오는 리마인드 블록(가치관·목표·원칙).
     // 읽고 나면 손으로 지우던 것을 버튼 한 번으로 대신한다.
@@ -1442,7 +1507,23 @@ const TodoTab: React.FC<TodoTabProps> = ({
     }, {});
 
     const [activeId, setActiveId] = useState<string | null>(null);
-    const todos = parseTodos(content);
+    const todos = useMemo(() => parseTodos(content), [content]);
+
+    // 소요시간을 적지 않은 미완료 항목의 예상 시간 (lineIndex → 예상)
+    const estimates = useMemo(() => {
+        const map = new Map<number, TaskEstimate>();
+        for (const item of todos) {
+            if (item.checked || item.duration !== undefined) continue;
+            const est = estimator(item.text);
+            if (est) map.set(item.lineIndex, est);
+        }
+        return map;
+    }, [todos, estimator]);
+
+    const todayLoad = useMemo(
+        () => computeTodayLoad(todos, item => estimates.get(item.lineIndex)?.minutes),
+        [todos, estimates],
+    );
 
     // 최상위(indent=0) 기준으로 부모+하위항목을 그룹으로 묶고 정렬 (완료 그룹은 하단, duration 정렬 옵션)
     const sortedGroups = useMemo(() => {
@@ -2320,6 +2401,16 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                     );
                                 })()}
 
+                                {/* 오늘 시간: 취침까지 남은 시간 vs 남은 할 일 */}
+                                {isToday && todos.length > 0 && (
+                                    <TimeBudgetCard
+                                        typical={typicalDay}
+                                        load={todayLoad}
+                                        nowMin={minutesSinceLogicalMidnight(new Date(nowMs), currentLogicalDay)}
+                                        togglUpdatedAt={togglUpdatedAt}
+                                    />
+                                )}
+
                                 {/* Sort Toggle */}
                                 {todos.length > 0 && todos.some(t => t.duration) && (
                                     <div className="flex justify-end mb-2">
@@ -2371,6 +2462,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                                         handleSubAdd={handleSubAdd}
                                                         collapsedKeys={collapsedKeys}
                                                         onToggleCollapse={toggleCollapse}
+                                                        estimates={estimates}
                                                     />
                                                 ))}
                                             </div>

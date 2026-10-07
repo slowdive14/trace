@@ -5,5 +5,7 @@
   "notePathTemplate": "일간노트/{yyyy}년/{yyyy}년 {M}월/{yyyyMMdd}{ddd}.md",
   "sectionEndHeading": "## 📊 목표 달성률 계산",
   "templatePath": "Templates/daily.md",
-  "createMissingNotes": true
+  "createMissingNotes": true,
+  "togglApiToken": "(선택) Toggl 2.0 API 키 toggl_sk_...",
+  "togglOrganizationId": 0
 }

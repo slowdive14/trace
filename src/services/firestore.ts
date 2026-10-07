@@ -17,6 +17,7 @@ import {
 import { db } from './firebase';
 import { startOfDay, format as formatDateFns } from 'date-fns';
 import { getDueRules, getEffectivePostDate } from '../utils/expenseUtils';
+import type { TogglRow } from '../utils/taskEstimate';
 import type { Expense, ExpenseCategory, RecurringExpense, SleepCoaching, SleepCoachingRecord, Todo, RecurringTodo, Worry, WorryEntry, BrainDump, BrainDumpStatus, BrainDumpInsight, DailyReflection, MonthlyReview, MonthlyInsight, EntryPhoto } from '../types/types';
 
 const EXPENSES_COLLECTION = 'expenses';
@@ -409,6 +410,30 @@ export const saveBacklog = async (userId: string, content: string, collectionNam
     } catch (e) {
         console.error("Error saving backlog: ", e);
         throw e;
+    }
+};
+
+// ============ Toggl 요약 (예상 소요시간용) ============
+// PC의 동기화 스크립트(scripts/sync-toggl.ts)가 써 둔다. 앱은 읽기만 한다.
+
+export interface TogglSummary {
+    rows: TogglRow[];
+    updatedAt: Date | null;
+}
+
+export const getTogglSummary = async (userId: string): Promise<TogglSummary | null> => {
+    try {
+        const snap = await getDoc(doc(db, `users/${userId}/stats`, 'toggl'));
+        if (!snap.exists()) return null;
+        const data = snap.data();
+        return {
+            rows: Array.isArray(data.rows) ? (data.rows as TogglRow[]) : [],
+            updatedAt: data.updatedAt?.toDate?.() ?? null,
+        };
+    } catch (e) {
+        // 없어도 앱 기록만으로 예상한다
+        console.error("Error getting Toggl summary: ", e);
+        return null;
     }
 };
 

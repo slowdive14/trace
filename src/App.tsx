@@ -297,7 +297,7 @@ const AppContent: React.FC = () => {
               <ExpenseInput externalDate={selectedExpenseDate} />
             </>
           ) : activeTab === 'todo' ? (
-            <TodoTab key="todo-tab" navigationTarget={navigationTarget} onNavigationComplete={handleNavigationComplete} />
+            <TodoTab key="todo-tab" navigationTarget={navigationTarget} onNavigationComplete={handleNavigationComplete} entries={entries} />
           ) : activeTab === 'chore' ? (
             <>
               <Timeline
