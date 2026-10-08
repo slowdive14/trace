@@ -27,7 +27,7 @@ import {
     type BacklogItem,
 } from '../utils/todoRepeat';
 import { extractTags } from '../utils/tagUtils';
-import { CheckSquare, Square, Bold, Highlighter, ArrowRight, ArrowLeft, Edit3, Check, X, ChevronLeft, ChevronRight, ChevronDown, Clock, Trash2, Plus, ArrowUpDown, ArrowUp, ArrowDown, GripVertical, Eraser, Calendar, CalendarClock } from 'lucide-react';
+import { CheckSquare, Square, Bold, Highlighter, ArrowRight, ArrowLeft, Edit3, Check, X, ChevronLeft, ChevronRight, ChevronDown, Clock, Trash2, Plus, ArrowUpDown, ArrowUp, ArrowDown, GripVertical, Eraser, Calendar, CalendarClock, Eye, EyeOff } from 'lucide-react';
 import RecurringTodoModal from './RecurringTodoModal';
 import DateField from './DateField';
 import { format, subDays, addDays, startOfDay, endOfDay, startOfWeek, endOfWeek, isSameDay } from 'date-fns';
@@ -94,6 +94,9 @@ interface TodoTabProps {
 
 /** entries가 없을 때의 기본값. 렌더마다 새 배열을 만들면 메모가 매번 깨진다 */
 const NO_ENTRIES: Entry[] = [];
+/** 예상 시간을 감췄을 때 목록에 넘기는 빈 값 (렌더마다 새로 만들지 않게) */
+const NO_ESTIMATES = new Map<number, TaskEstimate>();
+const NO_FINISH_TIMES = new Map<number, number>();
 
 type ViewMode = 'edit' | 'history' | 'template' | 'matrix';
 
@@ -946,6 +949,16 @@ const TodoTab: React.FC<TodoTabProps> = ({
         saveTodoBedtime(user.uid, selectedDate, bedtime, collectionName)
             .catch(err => console.error('Failed to save bedtime:', err));
     }, [user, selectedDate, collectionName]);
+
+    // 항목 옆의 예상 시간·끝나는 시각을 보일지 (기기마다 기억한다). 감춰도 시간 카드 계산은 그대로다
+    const [showEstimates, setShowEstimates] = useState(() => {
+        try { return localStorage.getItem('todoShowEstimates') !== '0'; } catch { return true; }
+    });
+    const toggleEstimates = () => {
+        const next = !showEstimates;
+        setShowEstimates(next);
+        try { localStorage.setItem('todoShowEstimates', next ? '1' : '0'); } catch { /* 이번 세션만 적용된다 */ }
+    };
 
     // 취침까지 남은 시간이 흐르도록 1분마다 다시 그린다
     const [nowMs, setNowMs] = useState(() => Date.now());
@@ -1928,80 +1941,127 @@ const TodoTab: React.FC<TodoTabProps> = ({
         );
     };
 
+    const modeTabs: { mode: ViewMode; label: string }[] = [
+        { mode: 'edit', label: '편집 모드' },
+        { mode: 'history', label: '히스토리' },
+        { mode: 'matrix', label: '매트릭스' },
+        { mode: 'template', label: '루틴 설정' },
+    ];
+    const showDateNav = viewMode === 'edit' || viewMode === 'matrix';
+
+    // 날짜 이동 (좁은 화면은 따로 한 줄, 넓은 화면은 도구 막대 가운데)
+    const renderDateNav = () => (
+        <>
+            <button
+                onClick={() => handleDateChange('prev')}
+                className="p-1.5 text-text-secondary hover:text-text-primary transition-colors rounded-md hover:bg-bg-secondary"
+                aria-label="전날"
+            >
+                <ChevronLeft size={20} />
+            </button>
+            <button
+                onClick={() => handleDateChange('today')}
+                className="flex items-center gap-2 px-3 py-1 rounded-md transition-colors hover:bg-bg-secondary"
+            >
+                <span className={`text-sm font-medium ${isToday ? 'text-text-primary' : 'text-accent'}`}>
+                    {format(selectedDate, 'M월 d일 (EEE)', { locale: ko })}
+                </span>
+                {isToday ? (
+                    <span className="text-[10px] bg-accent/15 text-accent px-1.5 py-0.5 rounded-full font-bold">오늘</span>
+                ) : (
+                    <span className="text-[10px] text-text-tertiary">← 오늘로</span>
+                )}
+            </button>
+            <button
+                onClick={() => handleDateChange('next')}
+                className="p-1.5 text-text-secondary hover:text-text-primary transition-colors rounded-md hover:bg-bg-secondary"
+                aria-label="다음날"
+            >
+                <ChevronRight size={20} />
+            </button>
+        </>
+    );
+
+    // 저장 상태 글자
+    const renderSaveStatus = () => (
+        isSaving
+            ? <span className="text-xs font-medium text-accent">저장 중...</span>
+            : lastSaved ? <span className="text-xs text-text-tertiary">저장됨</span> : null
+    );
+
+    // 루틴 설정 화면의 반복 일정 버튼과 표시
+    const renderTemplateBadges = () => (
+        <>
+            <button
+                onClick={() => setShowRepeatModal(true)}
+                className="flex items-center gap-1 px-3 py-1 bg-bg-secondary text-text-secondary hover:text-accent text-xs font-medium rounded-full border border-bg-tertiary transition-colors"
+                title="요일·주기가 정해진 일 (매주 수요일, 격주 월요일 등)"
+            >
+                <CalendarClock size={12} />
+                반복 일정
+                {repeats.length > 0 && <span className="tabular-nums">{repeats.filter(r => r.active).length}</span>}
+            </button>
+            <div className="px-3 py-1 bg-accent/10 text-accent text-xs font-bold rounded-full border border-accent/20">
+                매일 반복되는 루틴
+            </div>
+        </>
+    );
+
     return (
         // 좁은 화면은 위쪽 헤더·아래쪽 탭(각 80px)을, 넓은 화면은 본문 위아래 여백(각 24px)만 뺀다
         <div className="flex flex-col relative h-[calc(100vh-160px)] lg:h-[calc(100vh-48px)]">
-            {/* Mode Tabs */}
+            {/* 상단 도구 막대.
+                좁은 화면: 예전처럼 모드 탭 한 줄 + 날짜 한 줄, 저장 표시·편집 버튼은 본문 위에 떠 있다.
+                넓은 화면: 모드 탭(작게) · 날짜 · 저장 표시·편집 버튼을 한 줄에 모은다 */}
             <div className="flex-shrink-0 bg-bg-primary/95 backdrop-blur border-b border-bg-tertiary z-20 px-4">
-                <div className="app-wide flex gap-2 py-2">
-                    <button
-                        onClick={() => setViewMode('edit')}
-                        className={`flex-1 py-2 px-4 text-sm font-medium rounded-md transition-colors ${viewMode === 'edit'
-                            ? 'bg-accent text-white'
-                            : 'bg-bg-secondary text-text-secondary hover:bg-bg-tertiary'
-                            }`}
-                    >
-                        편집 모드
-                    </button>
-                    <button
-                        onClick={() => setViewMode('history')}
-                        className={`flex-1 py-2 px-4 text-sm font-medium rounded-md transition-colors ${viewMode === 'history'
-                            ? 'bg-accent text-white'
-                            : 'bg-bg-secondary text-text-secondary hover:bg-bg-tertiary'
-                            }`}
-                    >
-                        히스토리
-                    </button>
-                    <button
-                        onClick={() => setViewMode('matrix')}
-                        className={`flex-1 py-2 px-4 text-sm font-medium rounded-md transition-colors ${viewMode === 'matrix'
-                            ? 'bg-accent text-white'
-                            : 'bg-bg-secondary text-text-secondary hover:bg-bg-tertiary'
-                            }`}
-                    >
-                        매트릭스
-                    </button>
-                    <button
-                        onClick={() => setViewMode('template')}
-                        className={`flex-1 py-2 px-4 text-sm font-medium rounded-md transition-colors ${viewMode === 'template'
-                            ? 'bg-accent text-white'
-                            : 'bg-bg-secondary text-text-secondary hover:bg-bg-tertiary'
-                            }`}
-                    >
-                        루틴 설정
-                    </button>
+                <div className="app-wide flex items-center gap-2 py-2 lg:gap-6">
+                    <div className="flex-1 flex gap-2 lg:flex-none lg:gap-0.5 lg:p-1 lg:bg-bg-secondary lg:rounded-lg">
+                        {modeTabs.map(({ mode, label }) => (
+                            <button
+                                key={mode}
+                                onClick={() => setViewMode(mode)}
+                                // 좁은 화면에서 '편집 모드'·'루틴 설정'이 두 줄로 꺾이지 않게 좌우 여백을 줄인다
+                                className={`flex-1 py-2 px-2 text-sm font-medium rounded-md whitespace-nowrap transition-colors lg:flex-none lg:py-1.5 lg:px-3 ${viewMode === mode
+                                    ? 'bg-accent text-white'
+                                    : 'bg-bg-secondary text-text-secondary hover:bg-bg-tertiary lg:bg-transparent'
+                                    }`}
+                            >
+                                {label}
+                            </button>
+                        ))}
+                    </div>
+
+                    {showDateNav && (
+                        <div className="hidden lg:flex flex-1 items-center justify-center gap-1">
+                            {renderDateNav()}
+                        </div>
+                    )}
+
+                    <div className="hidden lg:flex items-center gap-2 ml-auto shrink-0">
+                        {(viewMode === 'edit' || viewMode === 'template') && renderSaveStatus()}
+                        {viewMode === 'template' && renderTemplateBadges()}
+                        {viewMode === 'edit' && (
+                            <button
+                                onClick={() => setIsEditing(!isEditing)}
+                                className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors ${isEditing
+                                    ? 'bg-accent text-white hover:bg-accent/90'
+                                    : 'text-text-secondary hover:text-accent hover:bg-bg-secondary'
+                                    }`}
+                                title={isEditing ? '편집 마치기' : '글로 편집'}
+                            >
+                                {isEditing ? <Check size={14} /> : <Edit3 size={14} />}
+                                {isEditing ? '완료' : '글로 편집'}
+                            </button>
+                        )}
+                    </div>
                 </div>
             </div>
 
-            {/* Date Navigation (edit/matrix mode only) */}
-            {(viewMode === 'edit' || viewMode === 'matrix') && (
-                <div className="flex-shrink-0 bg-bg-primary border-b border-bg-tertiary px-4 py-2 z-10">
+            {/* 날짜 이동 — 좁은 화면 전용 (넓은 화면은 위 도구 막대 가운데) */}
+            {showDateNav && (
+                <div className="lg:hidden flex-shrink-0 bg-bg-primary border-b border-bg-tertiary px-4 py-2 z-10">
                     <div className="app-wide flex items-center justify-between">
-                        <button
-                            onClick={() => handleDateChange('prev')}
-                            className="p-1.5 text-text-secondary hover:text-text-primary transition-colors rounded-md hover:bg-bg-secondary"
-                        >
-                            <ChevronLeft size={20} />
-                        </button>
-                        <button
-                            onClick={() => handleDateChange('today')}
-                            className="flex items-center gap-2 px-3 py-1 rounded-md transition-colors hover:bg-bg-secondary"
-                        >
-                            <span className={`text-sm font-medium ${isToday ? 'text-text-primary' : 'text-accent'}`}>
-                                {format(selectedDate, 'M월 d일 (EEE)', { locale: ko })}
-                            </span>
-                            {isToday ? (
-                                <span className="text-[10px] bg-accent/15 text-accent px-1.5 py-0.5 rounded-full font-bold">오늘</span>
-                            ) : (
-                                <span className="text-[10px] text-text-tertiary">← 오늘로</span>
-                            )}
-                        </button>
-                        <button
-                            onClick={() => handleDateChange('next')}
-                            className="p-1.5 text-text-secondary hover:text-text-primary transition-colors rounded-md hover:bg-bg-secondary"
-                        >
-                            <ChevronRight size={20} />
-                        </button>
+                        {renderDateNav()}
                     </div>
                 </div>
             )}
@@ -2252,44 +2312,24 @@ const TodoTab: React.FC<TodoTabProps> = ({
             ) : (
                 /* Edit Mode & Template Mode */
                 <div className="w-full app-wide relative flex flex-col flex-1 overflow-hidden">
-                    {/* Saving Indicator */}
-                    <div className="absolute top-4 right-16 z-30 flex items-center gap-2 pointer-events-none">
-                        <span className={`text-xs font-medium transition-opacity duration-300 ${isSaving ? 'text-accent opacity-100' : 'opacity-0'}`}>
-                            저장 중...
-                        </span>
-                        {!isSaving && lastSaved && (
-                            <span className="text-xs text-text-tertiary transition-opacity duration-500 opacity-100">
-                                저장됨
-                            </span>
-                        )}
+                    {/* 저장 표시·편집 버튼·루틴 표시: 좁은 화면에서만 본문 위에 띄운다 (넓은 화면은 위 도구 막대) */}
+                    <div className="lg:hidden absolute top-4 right-16 z-30 flex items-center gap-2 pointer-events-none">
+                        {renderSaveStatus()}
                     </div>
 
-                    {/* Toggle Button (Only for Edit Mode) */}
                     {viewMode === 'edit' && (
                         <button
                             onClick={() => setIsEditing(!isEditing)}
-                            className="absolute top-4 right-4 z-30 p-2 bg-bg-secondary rounded-full text-text-secondary hover:text-accent transition-colors"
+                            className="lg:hidden absolute top-4 right-4 z-30 p-2 bg-bg-secondary rounded-full text-text-secondary hover:text-accent transition-colors"
                             title={isEditing ? "완료" : "편집"}
                         >
                             {isEditing ? <Check size={20} /> : <Edit3 size={20} />}
                         </button>
                     )}
 
-                    {/* Template Mode Indicator */}
                     {viewMode === 'template' && (
-                        <div className="absolute top-4 right-4 z-30 flex items-center gap-2">
-                            <button
-                                onClick={() => setShowRepeatModal(true)}
-                                className="flex items-center gap-1 px-3 py-1 bg-bg-secondary text-text-secondary hover:text-accent text-xs font-medium rounded-full border border-bg-tertiary transition-colors"
-                                title="요일·주기가 정해진 일 (매주 수요일, 격주 월요일 등)"
-                            >
-                                <CalendarClock size={12} />
-                                반복 일정
-                                {repeats.length > 0 && <span className="tabular-nums">{repeats.filter(r => r.active).length}</span>}
-                            </button>
-                            <div className="px-3 py-1 bg-accent/10 text-accent text-xs font-bold rounded-full border border-accent/20">
-                                매일 반복되는 루틴
-                            </div>
+                        <div className="lg:hidden absolute top-4 right-4 z-30 flex items-center gap-2">
+                            {renderTemplateBadges()}
                         </div>
                     )}
 
@@ -2302,7 +2342,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                 onChange={handleChange}
                                 onKeyDown={handleKeyDown}
                                 placeholder={viewMode === 'template' ? "매일 반복할 루틴을 입력하세요..." : placeholder}
-                                className="flex-1 w-full bg-transparent text-text-primary p-4 pt-16 pb-8 resize-none focus:outline-none font-mono text-sm leading-relaxed overflow-y-auto"
+                                className="flex-1 w-full bg-transparent text-text-primary p-4 pt-16 lg:pt-5 pb-8 resize-none focus:outline-none font-mono text-sm leading-relaxed overflow-y-auto"
                                 spellCheck={false}
                             />
 
@@ -2365,7 +2405,8 @@ const TodoTab: React.FC<TodoTabProps> = ({
                     ) : (
                         <>
                             {/* Reading Mode (Only for Edit Mode) */}
-                            <div className="flex-1 overflow-y-auto p-4 pt-16 pb-20 w-full">
+                            {/* 위쪽 여백(pt-16)은 좁은 화면에서 떠 있는 저장 표시·편집 버튼 자리. 넓은 화면은 도구 막대로 옮겨 줄인다 */}
+                            <div className="flex-1 overflow-y-auto p-4 pt-16 lg:pt-5 pb-20 w-full">
                                 {/* 자동으로 들어온 항목 안내 — 목록이 갑자기 늘어난 이유가 보이게 */}
                                 {autoAdded && (
                                     <div className="mb-3 flex items-center gap-2 px-3 py-2 bg-accent/10 border border-accent/20 rounded-lg">
@@ -2383,7 +2424,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                 {/* 넓은 화면: 목록은 왼쪽, 진행률·시간 카드는 오른쪽에 붙여 스크롤해도 보이게 한다.
                                     좁은 화면에서는 예전처럼 카드가 목록 위에 온다 (DOM 순서 그대로) */}
                                 <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_22rem] xl:grid-cols-[minmax(0,1fr)_24rem] lg:gap-8 lg:items-start">
-                                {/* sticky 기준선이 스크롤 영역의 위쪽 여백(pt-16) 안쪽이라 top-0이어야 목록 첫 줄과 맞는다 */}
+                                {/* sticky 기준선이 스크롤 영역의 위쪽 여백 안쪽이라 top-0이어야 목록 첫 줄과 맞는다 */}
                                 <aside className="lg:order-2 lg:sticky lg:top-0">
                                 {/* Progress Bar (today only) */}
                                 {isToday && todos.length > 0 && (() => {
@@ -2567,9 +2608,21 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                 </aside>
 
                                 <section className="lg:order-1 min-w-0">
-                                {/* Sort Toggle */}
-                                {todos.length > 0 && todos.some(t => t.duration) && (
-                                    <div className="flex justify-end mb-2">
+                                {/* 목록 도구: 예상 시간 숨기기 · 소요시간 정렬 */}
+                                {todos.length > 0 && (todos.some(t => t.duration) || estimates.size > 0 || finishAt.size > 0) && (
+                                    <div className="flex justify-end gap-1 mb-2">
+                                        {(estimates.size > 0 || finishAt.size > 0) && (
+                                            <button
+                                                onClick={toggleEstimates}
+                                                className="flex items-center gap-1 px-2 py-1 text-xs rounded-md transition-colors text-text-tertiary hover:text-text-secondary hover:bg-bg-secondary"
+                                                title={showEstimates ? '항목 옆의 예상 시간·끝나는 시각 숨기기' : '항목 옆에 예상 시간·끝나는 시각 보이기'}
+                                                aria-pressed={!showEstimates}
+                                            >
+                                                {showEstimates ? <EyeOff size={12} /> : <Eye size={12} />}
+                                                {showEstimates ? '예상 숨기기' : '예상 보기'}
+                                            </button>
+                                        )}
+                                        {todos.some(t => t.duration) && (
                                         <button
                                             onClick={toggleSort}
                                             className={`flex items-center gap-1 px-2 py-1 text-xs rounded-md transition-colors ${sortByDuration !== 'none' ? 'bg-accent/15 text-accent' : 'text-text-tertiary hover:text-text-secondary hover:bg-bg-secondary'}`}
@@ -2579,6 +2632,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                             <Clock size={12} />
                                             {sortByDuration === 'desc' ? '큰 순' : sortByDuration === 'asc' ? '작은 순' : '정렬'}
                                         </button>
+                                        )}
                                     </div>
                                 )}
 
@@ -2618,8 +2672,8 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                                         handleSubAdd={handleSubAdd}
                                                         collapsedKeys={collapsedKeys}
                                                         onToggleCollapse={toggleCollapse}
-                                                        estimates={estimates}
-                                                        finishAt={finishAt}
+                                                        estimates={showEstimates ? estimates : NO_ESTIMATES}
+                                                        finishAt={showEstimates ? finishAt : NO_FINISH_TIMES}
                                                         bedMin={bedMin}
                                                     />
                                                 ))}

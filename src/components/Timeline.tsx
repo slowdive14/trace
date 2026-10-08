@@ -656,10 +656,10 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
             <div className="sticky top-0 bg-bg-primary/95 backdrop-blur border-b border-bg-tertiary z-20 px-4 py-3">
                 <div className={`${columnWidth} flex flex-col gap-3`}>
                     <div className="flex gap-2">
-                        <div className="flex-1 flex gap-1 bg-bg-secondary rounded-lg p-1">
+                        <div className="flex-1 lg:flex-none flex gap-1 bg-bg-secondary rounded-lg p-1">
                             <button
                                 onClick={() => { setDateFilter('today'); setSpecificDate(''); }}
-                                className={`flex-1 py-1 px-2 text-[10px] font-bold rounded-md transition-colors ${dateFilter === 'today'
+                                className={`flex-1 lg:flex-none py-1 px-2 lg:px-4 text-[10px] lg:text-xs lg:leading-4 font-bold rounded-md transition-colors ${dateFilter === 'today'
                                     ? 'bg-accent text-white shadow-sm'
                                     : 'text-text-secondary hover:text-text-primary'
                                     }`}
@@ -668,7 +668,7 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
                             </button>
                             <button
                                 onClick={() => { setDateFilter('7days'); setSpecificDate(''); }}
-                                className={`flex-1 py-1 px-2 text-[10px] font-bold rounded-md transition-colors ${dateFilter === '7days'
+                                className={`flex-1 lg:flex-none py-1 px-2 lg:px-4 text-[10px] lg:text-xs lg:leading-4 font-bold rounded-md transition-colors ${dateFilter === '7days'
                                     ? 'bg-accent text-white shadow-sm'
                                     : 'text-text-secondary hover:text-text-primary'
                                     }`}
@@ -677,7 +677,7 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
                             </button>
                             <button
                                 onClick={() => { setDateFilter('30days'); setSpecificDate(''); }}
-                                className={`flex-1 py-1 px-2 text-[10px] font-bold rounded-md transition-colors ${dateFilter === '30days'
+                                className={`flex-1 lg:flex-none py-1 px-2 lg:px-4 text-[10px] lg:text-xs lg:leading-4 font-bold rounded-md transition-colors ${dateFilter === '30days'
                                     ? 'bg-accent text-white shadow-sm'
                                     : 'text-text-secondary hover:text-text-primary'
                                     }`}
@@ -686,7 +686,7 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
                             </button>
                             <button
                                 onClick={() => { setDateFilter('all'); setSpecificDate(''); }}
-                                className={`flex-1 py-1 px-2 text-[10px] font-bold rounded-md transition-colors ${dateFilter === 'all'
+                                className={`flex-1 lg:flex-none py-1 px-2 lg:px-4 text-[10px] lg:text-xs lg:leading-4 font-bold rounded-md transition-colors ${dateFilter === 'all'
                                     ? 'bg-accent text-white shadow-sm'
                                     : 'text-text-secondary hover:text-text-primary'
                                     }`}
@@ -694,7 +694,7 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
                                 전체
                             </button>
                         </div>
-                        <div className="relative">
+                        <div className="relative lg:ml-auto">
                             <button
                                 onClick={() => {
                                     const input = document.getElementById('timeline-date-picker') as HTMLInputElement;
@@ -761,7 +761,7 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
                     <div className="app-wide flex gap-2">
                         <button
                             onClick={() => onSubFilterChange?.(null)}
-                            className={`flex-1 py-1.5 px-2 text-xs font-medium rounded-md transition-colors ${subFilter === null
+                            className={`flex-1 lg:flex-none py-1.5 px-2 lg:px-4 text-xs font-medium rounded-md transition-colors ${subFilter === null
                                 ? 'bg-amber-700 text-white'
                                 : 'bg-bg-secondary text-text-secondary hover:bg-bg-tertiary'
                                 }`}
@@ -770,7 +770,7 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
                         </button>
                         <button
                             onClick={() => onSubFilterChange?.('#읽을책')}
-                            className={`flex-1 py-1.5 px-2 text-xs font-medium rounded-md transition-colors ${subFilter === '#읽을책'
+                            className={`flex-1 lg:flex-none py-1.5 px-2 lg:px-4 text-xs font-medium rounded-md transition-colors ${subFilter === '#읽을책'
                                 ? 'bg-amber-700 text-white'
                                 : 'bg-bg-secondary text-text-secondary hover:bg-bg-tertiary'
                                 }`}
