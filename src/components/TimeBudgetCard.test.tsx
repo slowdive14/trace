@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import TimeBudgetCard from './TimeBudgetCard';
-import { formatHM, type TodayLoad, type TypicalDay } from '../utils/timeBudget';
+import { formatHM, type TodayLoad, type TypicalDay, type TypicalDone } from '../utils/timeBudget';
 import type { ReasonSummary } from '../utils/missReasons';
 
 /** 태그를 걷어 낸 화면 글자 */
@@ -24,6 +24,7 @@ const card = (over: {
     plannedBedtime?: string | null;
     overReasons?: ReasonSummary | null;
     underReasons?: ReasonSummary | null;
+    dayPlan?: { planned: number; typical: TypicalDone } | null;
 }) => (
     <TimeBudgetCard
         typical={over.typical === undefined ? typical : over.typical}
@@ -34,6 +35,7 @@ const card = (over: {
         onBedtimeChange={noop}
         overReasons={over.overReasons ?? null}
         underReasons={over.underReasons ?? null}
+        dayPlan={over.dayPlan ?? null}
     />
 );
 
@@ -141,6 +143,33 @@ describe('끝나는 시각', () => {
 
     it('남은 할 일이 없으면 끝나는 시각을 적지 않는다', () => {
         expect(text(card({ load: ld(0, 0, 0, 2) }))).not.toContain('지금 시작하면');
+    });
+});
+
+describe('하루 단위: 오늘 계획 vs 평소 끝내는 양', () => {
+    const thursday: TypicalDone = { minutes: 228, days: 8, weekday: 4, doneRatioPct: 63 };
+
+    it('평소보다 많이 잡은 날은 얼마나 많은지와, 평소 계획을 얼마나 끝내는지 알린다', () => {
+        const t = text(card({ dayPlan: { planned: 360, typical: thursday } }));
+        expect(t).toContain('오늘 계획 6시간 · 평소 목요일엔 3시간 48분 끝내요');
+        expect(t).toContain('2시간 12분 많아요');
+        expect(t).toContain('평소 목요일엔 계획한 것의 63%를 끝냈어요');
+    });
+
+    it('평소만큼이면 그렇게만 적는다', () => {
+        const t = text(card({ dayPlan: { planned: 240, typical: thursday } }));
+        expect(t).toContain('평소만큼이에요');
+        expect(t).not.toContain('계획한 것의');
+    });
+
+    it('요일 기록이 모자라 최근 기간으로 봤으면 "평소 하루"라고 적는다', () => {
+        const t = text(card({ dayPlan: { planned: 150, typical: { ...thursday, weekday: null } } }));
+        expect(t).toContain('평소 하루 3시간 48분 끝내요');
+        expect(t).toContain('평소보다 적어요');
+    });
+
+    it('비교할 기록이 없으면 그 줄을 그리지 않는다', () => {
+        expect(text(card({}))).not.toContain('오늘 계획');
     });
 });
 

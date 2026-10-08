@@ -1,8 +1,8 @@
 import React from 'react';
 import { format } from 'date-fns';
 import {
-    bedClockToMinutes, clockLabel, formatHM, TYPICAL_DAY_WINDOW,
-    type TypicalDay, type TodayLoad,
+    bedClockToMinutes, clockLabel, formatHM, comparePlanToTypical, weekdayName, TYPICAL_DAY_WINDOW,
+    type TypicalDay, type TodayLoad, type TypicalDone,
 } from '../utils/timeBudget';
 import type { ReasonSummary } from '../utils/missReasons';
 
@@ -21,6 +21,8 @@ interface TimeBudgetCardProps {
     /** 크게 넘친 / 크게 덜 걸린 이유 (쌓인 게 적으면 null) */
     overReasons?: ReasonSummary | null;
     underReasons?: ReasonSummary | null;
+    /** 오늘 계획량(끝낸 것 + 남은 것)과 평소 하루에 끝내는 양 */
+    dayPlan?: { planned: number; typical: TypicalDone } | null;
 }
 
 /**
@@ -31,7 +33,7 @@ interface TimeBudgetCardProps {
  * (오늘은 일찍 자려 한다거나, 평균이 오늘과 맞지 않을 때).
  */
 const TimeBudgetCard: React.FC<TimeBudgetCardProps> = ({
-    typical, load, nowMin, togglUpdatedAt, plannedBedtime, onBedtimeChange, overReasons, underReasons,
+    typical, load, nowMin, togglUpdatedAt, plannedBedtime, onBedtimeChange, overReasons, underReasons, dayPlan,
 }) => {
     const plannedMin = plannedBedtime ? bedClockToMinutes(plannedBedtime) : null;
     const bedMin = plannedMin ?? typical?.bedMin ?? null;
@@ -127,6 +129,37 @@ const TimeBudgetCard: React.FC<TimeBudgetCardProps> = ({
                     )}
                 </div>
             )}
+
+            {/* 하루 단위: 오늘 계획이 평소 하루에 끝내는 양에 비해 어떤지 */}
+            {dayPlan && dayPlan.planned > 0 && (() => {
+                const { planned, typical: done } = dayPlan;
+                const { tone, diff } = comparePlanToTypical(planned, done.minutes);
+                const basis = done.weekday !== null ? `평소 ${weekdayName(done.weekday)}엔` : '평소 하루';
+                const basisNote = done.weekday !== null
+                    ? `최근 ${done.days}번의 ${weekdayName(done.weekday)}`
+                    : `최근 ${done.days}일`;
+                return (
+                    <div
+                        className="mt-2.5 pt-2.5 border-t border-bg-tertiary text-[11px] tabular-nums"
+                        title={`${basisNote}에 끝낸 할 일 시간의 중간값. 그날들 계획한 것의 ${done.doneRatioPct}%를 끝냈어요`}
+                    >
+                        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+                            <span className="text-text-secondary">
+                                오늘 계획 {formatHM(planned)} · {basis} {formatHM(done.minutes)} 끝내요
+                            </span>
+                            <span className={tone === 'over' ? 'text-amber-400' : 'text-text-secondary'}>
+                                {tone === 'over' ? `${formatHM(diff)} 많아요` : tone === 'under' ? '평소보다 적어요' : '평소만큼이에요'}
+                            </span>
+                        </div>
+                        {/* 많이 잡은 날에만, 평소 계획을 얼마나 끝내는지 덧붙인다 */}
+                        {tone === 'over' && (
+                            <div className="mt-0.5 text-text-tertiary">
+                                {basis} 계획한 것의 {done.doneRatioPct}%를 끝냈어요
+                            </div>
+                        )}
+                    </div>
+                );
+            })()}
 
             {/* 크게 어긋났던 날의 이유 — 숫자보다 손쓸 곳이 분명하다 */}
             {(overReasons || underReasons) && (

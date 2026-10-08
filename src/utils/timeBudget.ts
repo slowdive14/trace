@@ -199,6 +199,129 @@ export const computeTodayLoad = (
     return load;
 };
 
+// ===== 하루 단위: 계획한 양 vs 끝낸 양 =====
+
+export interface DayTotals {
+    /** 그날 목록 전체에 드는 시간 (분) — 끝낸 것 + 남은 것 */
+    planned: number;
+    /** 그중 끝낸 몫 (분) */
+    done: number;
+    /** 시간을 알 수 없는 항목 수 */
+    unknown: number;
+}
+
+/**
+ * 하루 목록의 계획량과 완료량. 시간을 정하는 규칙은 computeTodayLoad와 같다
+ * (직접 적은 시간 → 예상 → 하위 항목의 합). 끝낸 항목의 '(30m)'는 실제 걸린 시간이다.
+ */
+export const computeDayTotals = (
+    items: TodoItem[],
+    estimateOf: (item: TodoItem) => ItemEstimate | null | undefined,
+): DayTotals => {
+    const totals: DayTotals = { planned: 0, done: 0, unknown: 0 };
+
+    const visit = (node: TaskNode): void => {
+        const { item, children } = node;
+        const est = item.duration === undefined && !hasExplicitBelow(node) ? estimateOf(item) : undefined;
+        const own = item.duration ?? est?.minutes;
+        if (own !== undefined) {
+            // 부모를 직접 체크했으면 하위와 상관없이 끝낸 것으로 본다
+            const frac = item.checked ? 1 : children.length > 0 ? doneFraction(node) : 0;
+            totals.planned += own;
+            totals.done += own * frac;
+            return;
+        }
+        if (children.length > 0) {
+            children.forEach(visit);
+            return;
+        }
+        totals.unknown++;
+    };
+
+    buildTaskTree(items).forEach(visit);
+    totals.planned = Math.round(totals.planned);
+    totals.done = Math.round(totals.done);
+    return totals;
+};
+
+/** 지난 하루의 계획량·완료량 */
+export interface DayRecord {
+    date: string;
+    planned: number;
+    done: number;
+}
+
+/** 같은 요일을 몇 주까지 돌아볼지 */
+export const TYPICAL_DONE_WEEKS = 8;
+/** 같은 요일 기록이 이만큼 있어야 요일 기준으로 본다 */
+export const SAME_WEEKDAY_MIN = 4;
+/** 요일 기록이 모자랄 때 돌아볼 기간 (일) */
+export const TYPICAL_DONE_RECENT_DAYS = 28;
+/** 그때 필요한 최소 일수 */
+export const RECENT_DONE_MIN = 5;
+
+export interface TypicalDone {
+    /** 평소 하루에 끝내는 양 (분, 중간값) */
+    minutes: number;
+    /** 바탕이 된 일수 */
+    days: number;
+    /** 같은 요일 기준이면 그 요일 (0=일), 최근 기간 기준이면 null */
+    weekday: number | null;
+    /** 그날들 계획한 것 중 끝낸 비율 (%, 중간값) */
+    doneRatioPct: number;
+}
+
+const WEEKDAY_NAMES = ['일', '월', '화', '수', '목', '금', '토'];
+export const weekdayName = (wd: number): string => `${WEEKDAY_NAMES[wd]}요일`;
+
+const weekdayOf = (dateStr: string): number => {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    return new Date(y, m - 1, d, 12).getDay();
+};
+
+/**
+ * 평소 하루에 끝내는 양.
+ *
+ * 요일마다 하루가 꽤 다르다 (실제 기록에서 화·토는 3시간 남짓, 월·수·일은 5시간 넘게).
+ * 그래서 최근 8주의 같은 요일이 4일 이상이면 그것으로, 모자라면 최근 4주 전체로 본다.
+ * 계획에 시간이 하나도 없던 날은 뺀다 (끝낸 양을 셀 수 없다).
+ */
+export const getTypicalDone = (records: DayRecord[], todayStr: string): TypicalDone | null => {
+    const past = records.filter(r => r.date < todayStr && r.planned > 0);
+    const wd = weekdayOf(todayStr);
+
+    const weeksFrom = shiftDate(todayStr, -TYPICAL_DONE_WEEKS * 7);
+    const sameWeekday = past.filter(r => r.date >= weeksFrom && weekdayOf(r.date) === wd);
+
+    const recentFrom = shiftDate(todayStr, -TYPICAL_DONE_RECENT_DAYS);
+    const recent = past.filter(r => r.date >= recentFrom);
+
+    const [picked, weekday] = sameWeekday.length >= SAME_WEEKDAY_MIN
+        ? [sameWeekday, wd]
+        : recent.length >= RECENT_DONE_MIN ? [recent, null] : [null, null];
+    if (!picked) return null;
+
+    const med = (xs: number[]) => {
+        const s = [...xs].sort((a, b) => a - b);
+        const mid = Math.floor(s.length / 2);
+        return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+    };
+    return {
+        minutes: Math.round(med(picked.map(r => r.done))),
+        days: picked.length,
+        weekday,
+        doneRatioPct: Math.round(med(picked.map(r => r.done / r.planned)) * 100),
+    };
+};
+
+/** 오늘 계획을 평소 끝내는 양과 견준다. 20% 안쪽이면 '평소만큼'으로 본다 */
+export const comparePlanToTypical = (planned: number, typical: number): { tone: 'over' | 'even' | 'under'; diff: number } => {
+    const diff = planned - typical;
+    if (planned > typical * 1.2) return { tone: 'over', diff };
+    if (planned < typical * 0.8) return { tone: 'under', diff };
+    return { tone: 'even', diff };
+};
+
 /**
  * 지금부터 화면 순서대로 이어서 하면 각 항목이 몇 시에 끝나는지.
  * '4시간 남음'보다 '19시 25분에 끝남'이 손에 잡힌다.

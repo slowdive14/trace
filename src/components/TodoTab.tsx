@@ -11,7 +11,7 @@ import {
 } from '../utils/taskEstimate';
 import {
     getTypicalDay, computeTodayLoad, minutesSinceLogicalMidnight, projectFinishTimes,
-    bedClockToMinutes, clockLabel,
+    bedClockToMinutes, clockLabel, computeDayTotals, getTypicalDone, type DayRecord,
 } from '../utils/timeBudget';
 import {
     missDirection, recordTextFromLine, summarizeReasons,
@@ -922,6 +922,16 @@ const TodoTab: React.FC<TodoTabProps> = ({
 
     const estimator = useMemo(() => buildEstimator(appSamples, togglRows), [appSamples, togglRows]);
 
+    // 지난 날들의 계획량·완료량 (평소 하루에 끝내는 양을 내는 데 쓴다).
+    // 끝낸 항목의 '(30m)'는 실제 걸린 시간이고, 시간을 안 적은 것은 예상으로 채운다.
+    const dayRecords = useMemo<DayRecord[]>(() => allTodos
+        .map(t => {
+            const date = format(new Date(t.date), 'yyyy-MM-dd');
+            const { planned, done } = computeDayTotals(parseTodos(t.content ?? ''), item => estimator(item.text));
+            return { date, planned, done };
+        }), [allTodos, estimator]);
+    const typicalDone = useMemo(() => getTypicalDone(dayRecords, currentLogicalDay), [dayRecords, currentLogicalDay]);
+
     // 최근 7일 평균 기상·취침
     const typicalDay = useMemo(
         () => getTypicalDay(extractSleepRecords(entries), currentLogicalDay),
@@ -1635,6 +1645,13 @@ const TodoTab: React.FC<TodoTabProps> = ({
         () => computeTodayLoad(todos, item => estimates.get(item.lineIndex)),
         [todos, estimates],
     );
+
+    // 오늘 계획량 (끝낸 것 + 남은 것) — 평소 하루에 끝내는 양과 견준다
+    const dayPlan = useMemo(() => {
+        if (!typicalDone) return null;
+        const { planned } = computeDayTotals(todos, item => estimator(item.text));
+        return { planned, typical: typicalDone };
+    }, [todos, estimator, typicalDone]);
 
     // 오늘 취침 시각: 직접 정한 것, 없으면 최근 7일 평균
     const bedMin = useMemo(
@@ -2537,6 +2554,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                         onBedtimeChange={handleBedtimeChange}
                                         overReasons={overReasons}
                                         underReasons={underReasons}
+                                        dayPlan={dayPlan}
                                     />
                                 )}
 

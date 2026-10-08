@@ -3,7 +3,8 @@ import { parseTodos } from './todoUtils';
 import type { SleepRecord } from './sleepUtils';
 import {
     getTypicalDay, minutesSinceLogicalMidnight, clockLabel, computeTodayLoad, bedClockToMinutes,
-    projectFinishTimes, type ItemEstimate,
+    projectFinishTimes, computeDayTotals, getTypicalDone, comparePlanToTypical, weekdayName,
+    type ItemEstimate, type DayRecord,
 } from './timeBudget';
 
 /** date(기상일)에 hh:mm 기상, 그 전날 밤(또는 새벽) bed 취침 */
@@ -136,6 +137,77 @@ describe('남은 할 일에 드는 시간', () => {
   - [ ] 1 (30m)
   - [ ] 2 (40m)`), none);
         expect(load.remaining).toBe(120);
+    });
+});
+
+describe('하루치 계획량과 완료량', () => {
+    it('끝낸 것과 남은 것을 모두 계획에 넣고, 끝낸 몫만 완료로 센다', () => {
+        const t = computeDayTotals(parseTodos(`- [x] 웨이트 (60m)
+- [x] 혼공머신
+- [ ] 방송대 강의 (75m)
+- [ ] 배터리 찾아오기`), item => (item.text === '혼공머신' ? { minutes: 70 } : undefined));
+        expect(t).toEqual({ planned: 205, done: 130, unknown: 1 });
+    });
+
+    it('하위 항목이 반쯤 끝난 일은 그만큼만 완료로 센다', () => {
+        const t = computeDayTotals(parseTodos(`- [ ] 보고서 (120m)
+  - [x] 초안
+  - [ ] 검토`), () => undefined);
+        expect(t).toEqual({ planned: 120, done: 60, unknown: 0 });
+    });
+
+    it('부모를 직접 체크했으면 하위와 상관없이 끝낸 것으로 본다', () => {
+        const t = computeDayTotals(parseTodos(`- [x] 보고서 (120m)
+  - [ ] 초안`), () => undefined);
+        expect(t.done).toBe(120);
+    });
+});
+
+describe('평소 하루에 끝내는 양', () => {
+    // 2026-10-08은 목요일
+    const day = (date: string, done: number, planned = done + 60): DayRecord => ({ date, planned, done });
+    const thursdays = ['2026-10-01', '2026-09-24', '2026-09-17', '2026-09-10', '2026-09-03'];
+
+    it('같은 요일이 4번 이상이면 그 요일의 중간값', () => {
+        const records = [
+            ...thursdays.map((d, i) => day(d, [240, 310, 165, 160, 215][i])),
+            day('2026-10-05', 330), day('2026-10-06', 230), day('2026-10-07', 369),
+        ];
+        const t = getTypicalDone(records, '2026-10-08');
+        expect(t).toMatchObject({ minutes: 215, days: 5, weekday: 4 });
+        expect(weekdayName(t!.weekday!)).toBe('목요일');
+    });
+
+    it('같은 요일이 모자라면 최근 4주 전체로', () => {
+        const records = [
+            day('2026-10-01', 240), day('2026-09-24', 310),          // 목요일 2번뿐
+            day('2026-10-05', 330), day('2026-10-06', 230), day('2026-10-07', 369),
+        ];
+        expect(getTypicalDone(records, '2026-10-08')).toMatchObject({ minutes: 310, days: 5, weekday: null });
+    });
+
+    it('기록이 너무 적으면 비교하지 않는다', () => {
+        expect(getTypicalDone([day('2026-10-07', 300)], '2026-10-08')).toBeNull();
+    });
+
+    it('오늘과 계획에 시간이 없던 날은 뺀다', () => {
+        const records = [
+            ...thursdays.map(d => day(d, 200)),
+            day('2026-10-08', 999),                // 오늘
+            { date: '2026-10-01', planned: 0, done: 0 },   // 시간 정보가 없던 날
+        ];
+        expect(getTypicalDone(records, '2026-10-08')).toMatchObject({ minutes: 200, days: 5 });
+    });
+
+    it('계획한 것 중 끝낸 비율도 낸다', () => {
+        const records = thursdays.map(d => day(d, 240, 400));
+        expect(getTypicalDone(records, '2026-10-08')!.doneRatioPct).toBe(60);
+    });
+
+    it('오늘 계획을 평소와 견준다 (20% 안쪽은 평소만큼)', () => {
+        expect(comparePlanToTypical(360, 228)).toEqual({ tone: 'over', diff: 132 });
+        expect(comparePlanToTypical(250, 228).tone).toBe('even');
+        expect(comparePlanToTypical(120, 228).tone).toBe('under');
     });
 });
 
