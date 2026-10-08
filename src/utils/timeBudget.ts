@@ -100,15 +100,33 @@ export const clockLabel = (minutes: number): string => {
 
 // ===== 오늘 할 일에 드는 시간 =====
 
+/** 한 최상위 항목(과 그 하위)의 남은 몫 */
+export interface RootLoad {
+    /** 중간값 기준 (분) */
+    remaining: number;
+    /** 범위 위쪽 기준 (분) — '늦으면' */
+    high: number;
+}
+
 export interface TodayLoad {
     /** 아직 안 한 몫 (분) */
     remaining: number;
+    /** 범위 위쪽으로 잡았을 때의 남은 몫 (분). 범위가 없는 항목은 중간값 그대로 */
+    remainingHigh: number;
     /** 시간을 알 수 없는 미완료 항목 수 */
     unknown: number;
     /** 예상 시간을 쓴 미완료 항목 수 */
     estimated: number;
     /** 시간을 아는 미완료 항목 수 (직접 적음 + 예상) */
     known: number;
+    /** 최상위 항목 줄 번호 → 남은 몫 (시간을 아는 몫이 있는 것만) */
+    perRoot: Map<number, RootLoad>;
+}
+
+/** 예상 시간 중 여기서 쓰는 것 (taskEstimate의 TaskEstimate와 맞는 모양) */
+export interface ItemEstimate {
+    minutes: number;
+    high?: number;
 }
 
 /** 하위 항목을 똑같이 나눴을 때의 완료 비율 (달성률 계산과 같은 방식) */
@@ -133,32 +151,75 @@ const hasExplicitBelow = (node: TaskNode): boolean =>
  * 않고 하위에 적힌 시간을 따른다 (직접 적은 것이 짐작보다 정확하다).
  *
  * 추가 항목(+)도 넣는다. 달성률 분모에서는 빠지지만 시간은 똑같이 든다.
+ *
+ * 직접 적은 시간은 내 계획이라 범위가 없다. 예상에 범위가 있으면 위쪽 값으로
+ * '늦으면'을 따로 더한다.
  */
 export const computeTodayLoad = (
     items: TodoItem[],
-    estimateOf: (item: TodoItem) => number | undefined,
+    estimateOf: (item: TodoItem) => ItemEstimate | undefined,
 ): TodayLoad => {
-    const load: TodayLoad = { remaining: 0, unknown: 0, estimated: 0, known: 0 };
+    const load: TodayLoad = { remaining: 0, remainingHigh: 0, unknown: 0, estimated: 0, known: 0, perRoot: new Map() };
 
-    const visit = (node: TaskNode): void => {
+    /** 이 항목(과 하위)의 남은 몫. any는 시간을 아는 몫이 있었는지 */
+    const visit = (node: TaskNode): { min: number; high: number; any: boolean } => {
         const { item, children } = node;
-        if (item.checked) return;
+        const none = { min: 0, high: 0, any: false };
+        if (item.checked) return none;
 
-        const own = item.duration ?? (hasExplicitBelow(node) ? undefined : estimateOf(item));
+        const est = item.duration === undefined && !hasExplicitBelow(node) ? estimateOf(item) : undefined;
+        const own = item.duration ?? est?.minutes;
         if (own !== undefined) {
             load.known++;
             if (item.duration === undefined) load.estimated++;
-            load.remaining += children.length > 0 ? own * (1 - doneFraction(node)) : own;
-            return;
+            const left = children.length > 0 ? 1 - doneFraction(node) : 1;
+            const ownHigh = item.duration ?? est?.high ?? own;
+            return { min: own * left, high: ownHigh * left, any: true };
         }
         if (children.length > 0) {
-            children.forEach(visit);
-            return;
+            return children.map(visit).reduce(
+                (acc, p) => ({ min: acc.min + p.min, high: acc.high + p.high, any: acc.any || p.any }),
+                none,
+            );
         }
         load.unknown++;
+        return none;
     };
 
-    buildTaskTree(items).forEach(visit);
+    for (const root of buildTaskTree(items)) {
+        const part = visit(root);
+        load.remaining += part.min;
+        load.remainingHigh += part.high;
+        if (part.any) {
+            load.perRoot.set(root.item.lineIndex, { remaining: Math.round(part.min), high: Math.round(part.high) });
+        }
+    }
     load.remaining = Math.round(load.remaining);
+    load.remainingHigh = Math.round(load.remainingHigh);
     return load;
+};
+
+/**
+ * 지금부터 화면 순서대로 이어서 하면 각 항목이 몇 시에 끝나는지.
+ * '4시간 남음'보다 '19시 25분에 끝남'이 손에 잡힌다.
+ * 시간을 모르는 항목은 0분으로 보고 건너뛴다 (끝나는 시각을 붙이지 않는다).
+ *
+ * @param order  최상위 항목 줄 번호를 화면에 보이는 순서대로
+ * @param nowMin 논리적 0시부터 지금까지의 분
+ * @returns 줄 번호 → 끝나는 시각 (논리적 0시부터 분)
+ */
+export const projectFinishTimes = (
+    order: number[],
+    perRoot: Map<number, RootLoad>,
+    nowMin: number,
+): Map<number, number> => {
+    const out = new Map<number, number>();
+    let t = nowMin;
+    for (const lineIndex of order) {
+        const part = perRoot.get(lineIndex);
+        if (!part || part.remaining <= 0) continue;
+        t += part.remaining;
+        out.set(lineIndex, t);
+    }
+    return out;
 };

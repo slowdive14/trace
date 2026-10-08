@@ -19,6 +19,7 @@ import { db } from './firebase';
 import { startOfDay, format as formatDateFns } from 'date-fns';
 import { getDueRules, getEffectivePostDate } from '../utils/expenseUtils';
 import type { TogglRow } from '../utils/taskEstimate';
+import { missRecordId, type MissRecord } from '../utils/missReasons';
 import type { Expense, ExpenseCategory, RecurringExpense, SleepCoaching, SleepCoachingRecord, Todo, RecurringTodo, Worry, WorryEntry, BrainDump, BrainDumpStatus, BrainDumpInsight, DailyReflection, MonthlyReview, MonthlyInsight, EntryPhoto } from '../types/types';
 
 const EXPENSES_COLLECTION = 'expenses';
@@ -454,6 +455,39 @@ export const getTogglSummary = async (userId: string): Promise<TogglSummary | nu
         // 없어도 앱 기록만으로 예상한다
         console.error("Error getting Toggl summary: ", e);
         return null;
+    }
+};
+
+// ============ 예상과 크게 어긋난 이유 ============
+// 걸린 시간을 입력했는데 예상과 크게 어긋나면, 이유를 한 번 눌러 남긴다.
+// 같은 날 같은 일을 다시 체크하면 덮어쓴다 (문서 ID가 날짜+이름).
+
+const MISS_LOG_COLLECTION = 'missLog';
+
+export const saveMissRecord = async (userId: string, record: MissRecord): Promise<void> => {
+    await setDoc(
+        doc(db, `users/${userId}/${MISS_LOG_COLLECTION}`, missRecordId(record.date, record.text)),
+        { ...record, createdAt: Timestamp.now() },
+    );
+};
+
+export const getMissRecords = async (userId: string, max = 200): Promise<MissRecord[]> => {
+    try {
+        const snap = await getDocs(query(
+            collection(db, `users/${userId}/${MISS_LOG_COLLECTION}`),
+            orderBy('at', 'desc'),
+            limit(max),
+        ));
+        return snap.docs.map(d => {
+            const v = d.data();
+            return {
+                date: v.date, text: v.text, expected: v.expected, actual: v.actual,
+                kind: v.kind, direction: v.direction, reason: v.reason, at: v.at,
+            } as MissRecord;
+        });
+    } catch (e) {
+        console.error("Error getting miss records: ", e);
+        return [];
     }
 };
 

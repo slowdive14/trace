@@ -3,14 +3,23 @@ import { useAuth } from './AuthContext';
 import {
     saveTodo, getTodo, getTodos, getAllTodos, saveTemplate, getTemplate, addEntry, deleteEntry,
     getBacklog, saveBacklog, getRecurringTodos, getTogglSummary, saveTodoBedtime,
+    getMissRecords, saveMissRecord,
 } from '../services/firestore';
 import {
-    buildEstimator, collectAppSamples, describeEstimate,
+    buildEstimator, collectAppSamples, describeEstimate, formatEstimate,
     type TaskEstimate, type TogglRow,
 } from '../utils/taskEstimate';
-import { getTypicalDay, computeTodayLoad, minutesSinceLogicalMidnight } from '../utils/timeBudget';
+import {
+    getTypicalDay, computeTodayLoad, minutesSinceLogicalMidnight, projectFinishTimes,
+    bedClockToMinutes, clockLabel,
+} from '../utils/timeBudget';
+import {
+    missDirection, recordTextFromLine, summarizeReasons,
+    type Expectation, type MissRecord,
+} from '../utils/missReasons';
 import { extractSleepRecords } from '../utils/sleepUtils';
 import TimeBudgetCard from './TimeBudgetCard';
+import MissReasonPrompt, { type MissPromptData } from './MissReasonPrompt';
 import {
     getDueRepeats, appendTodoLine, appendTodoLines,
     parseBacklog, formatBacklog, removeBacklogItem, setBacklogDue,
@@ -28,6 +37,7 @@ import { getLogicalDate } from '../utils/dateUtils';
 import {
     type TodoItem,
     parseTodos,
+    parseDuration,
     getCollapseKey,
     getVisibleRows,
     calculateTotalWeightedRate,
@@ -175,6 +185,10 @@ interface SortableTodoGroupProps {
     onToggleCollapse: (key: string) => void;
     /** 소요시간을 적지 않은 미완료 항목의 예상 시간 (lineIndex → 예상) */
     estimates: Map<number, TaskEstimate>;
+    /** 최상위 항목이 끝나는 시각 (lineIndex → 논리적 0시부터 분) */
+    finishAt: Map<number, number>;
+    /** 오늘 취침 시각 (논리적 0시부터 분). 끝나는 시각이 넘기면 빨갛게 */
+    bedMin: number | null;
 }
 
 const SortableTodoGroup: React.FC<SortableTodoGroupProps> = ({
@@ -199,6 +213,8 @@ const SortableTodoGroup: React.FC<SortableTodoGroupProps> = ({
     collapsedKeys,
     onToggleCollapse,
     estimates,
+    finishAt,
+    bedMin,
 }) => {
     const parentId = group[0].lineIndex.toString();
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: parentId });
@@ -279,17 +295,33 @@ const SortableTodoGroup: React.FC<SortableTodoGroupProps> = ({
                                         </span>
                                     )}
                                     {renderText(item.text)}
-                                    {/* 직접 적지 않은 소요시간을 지난 기록으로 짐작해 흐리게 붙인다 */}
+                                    {/* 직접 적지 않은 소요시간은 지난 기록으로 짐작해 흐리게 붙인다 (기록이 쌓이면 범위로).
+                                        그리고 지금부터 순서대로 하면 몇 시에 끝나는지 붙인다 */}
                                     {(() => {
-                                        const est = item.checked ? undefined : estimates.get(item.lineIndex);
-                                        return est ? (
-                                            <span
-                                                className="ml-1.5 inline-flex align-middle text-[11px] text-text-tertiary tabular-nums select-none"
-                                                title={describeEstimate(est)}
-                                            >
-                                                예상 {formatDuration(est.minutes)}
-                                            </span>
-                                        ) : null;
+                                        if (item.checked) return null;
+                                        const est = estimates.get(item.lineIndex);
+                                        const finish = finishAt.get(item.lineIndex);
+                                        const afterBed = finish !== undefined && bedMin !== null && finish > bedMin;
+                                        return (
+                                            <>
+                                                {est && (
+                                                    <span
+                                                        className="ml-1.5 inline-flex align-middle text-[11px] text-text-tertiary tabular-nums select-none"
+                                                        title={describeEstimate(est)}
+                                                    >
+                                                        예상 {formatEstimate(est)}
+                                                    </span>
+                                                )}
+                                                {finish !== undefined && (
+                                                    <span
+                                                        className={`ml-1.5 inline-flex align-middle text-[11px] tabular-nums select-none ${afterBed ? 'text-red-400' : 'text-text-tertiary'}`}
+                                                        title={afterBed ? '이어서 하면 취침 시각을 넘겨요' : '지금부터 순서대로 하면 끝나는 시각'}
+                                                    >
+                                                        → {clockLabel(finish)}
+                                                    </span>
+                                                )}
+                                            </>
+                                        );
                                     })()}
                                     {collapsed && <ChildProgress done={childDone} total={childTotal} />}
                                 </span>
@@ -412,7 +444,14 @@ const TodoTab: React.FC<TodoTabProps> = ({
     const [lastSaved, setLastSaved] = useState<Date | null>(null);
     const [currentLogicalDay, setCurrentLogicalDay] = useState(format(getLogicalDate(), 'yyyy-MM-dd'));
     const [selectedDate, setSelectedDate] = useState<Date>(getLogicalDate());
-    const [timePopup, setTimePopup] = useState<{ lineIndex: number; lineText: string; dateStr?: string; currentTime?: number } | null>(null);
+    const [timePopup, setTimePopup] = useState<{
+        lineIndex: number; lineText: string; dateStr?: string; currentTime?: number;
+        /** 체크할 때 그 항목에 보이던 예상 (걸린 시간과 견주어 크게 어긋나면 이유를 묻는다) */
+        expected?: Expectation;
+    } | null>(null);
+    // 걸린 시간이 예상과 크게 어긋났을 때 띄우는 '왜 달랐나요?' 창, 그리고 쌓인 답
+    const [missPrompt, setMissPrompt] = useState<(MissPromptData & { date: string; kind: Expectation['kind'] }) | null>(null);
+    const [missRecords, setMissRecords] = useState<MissRecord[]>([]);
     const [minutesInput, setMinutesInput] = useState<string>('');
     const [recordToAction, setRecordToAction] = useState<boolean>(true);
     const [deletingLineIndex, setDeletingLineIndex] = useState<number | null>(null);
@@ -846,6 +885,35 @@ const TodoTab: React.FC<TodoTabProps> = ({
         return () => { cancelled = true; };
     }, [user, currentLogicalDay]);
 
+    // 크게 어긋났던 날의 이유들 (시간 카드에 패턴으로 보인다)
+    useEffect(() => {
+        if (!user) return;
+        let cancelled = false;
+        getMissRecords(user.uid).then(records => { if (!cancelled) setMissRecords(records); });
+        return () => { cancelled = true; };
+    }, [user]);
+    const overReasons = useMemo(() => summarizeReasons(missRecords, 'over'), [missRecords]);
+    const underReasons = useMemo(() => summarizeReasons(missRecords, 'under'), [missRecords]);
+
+    const pickMissReason = useCallback((reason: string) => {
+        if (!missPrompt) return;
+        const record: MissRecord = {
+            date: missPrompt.date,
+            text: missPrompt.text,
+            expected: missPrompt.expected,
+            actual: missPrompt.actual,
+            kind: missPrompt.kind,
+            direction: missPrompt.direction,
+            reason,
+            at: Date.now(),
+        };
+        setMissPrompt(null);
+        // 같은 날 같은 일을 다시 답하면 앞의 답을 바꾼다 (저장도 같은 문서를 덮어쓴다)
+        setMissRecords(prev => [record, ...prev.filter(r => !(r.date === record.date && r.text === record.text))]);
+        if (user) saveMissRecord(user.uid, record).catch(err => console.error('Failed to save miss reason:', err));
+    }, [missPrompt, user]);
+    const dismissMissPrompt = useCallback(() => setMissPrompt(null), []);
+
     // 앱에 남긴 '(30m)' 기록. 오늘 적힌 시간은 아직 계획일 수 있어 뺀다
     const appSamples = useMemo(() => collectAppSamples(
         allTodos.map(t => ({ date: format(new Date(t.date), 'yyyy-MM-dd'), content: t.content })),
@@ -1242,6 +1310,14 @@ const TodoTab: React.FC<TodoTabProps> = ({
         const line = lines[lineIndex];
 
         if (line.includes('- [ ]')) {
+            // 체크하면 예상 표시가 사라지므로, 그 전에 이 항목에 보이던 예상을 잡아 둔다.
+            // 직접 적은 '(30m)'가 있으면 그게 내 계획이고, 없으면 앱의 예상이다.
+            const planned = parseDuration(line.replace(/^[\t ]*- \[ \] /, '').replace(/\s*\{eid:[^}]+\}/g, ''))?.minutes;
+            const est = estimates.get(lineIndex);
+            const expected: Expectation | undefined = planned !== undefined
+                ? { minutes: planned, kind: 'plan' }
+                : est ? { minutes: est.minutes, low: est.low, high: est.high, kind: 'estimate' } : undefined;
+
             // 미완료 → 완료: 체크 먼저 반영하고 시간 팝업 표시
             lines[lineIndex] = line.replace('- [ ]', '- [x]');
             const newContent = lines.join('\n');
@@ -1258,6 +1334,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
                 lineIndex,
                 lineText: checkedLine,
                 currentTime: existingMinutes,
+                expected,
             });
         } else if (line.includes('- [x]')) {
             // 완료 → 미완료: 즉시 토글 + 연동 엔트리 삭제
@@ -1309,6 +1386,15 @@ const TodoTab: React.FC<TodoTabProps> = ({
             const timeMatch = line.match(/\((\d+)m\)\s*$/);
             const checkedLine = line.replace('- [ ]', '- [x]');
             const existingMinutes = timeMatch ? parseInt(timeMatch[1], 10) : undefined;
+
+            // 지난 날짜 목록에는 예상 표시가 없지만, 같은 방식으로 예상을 잡아 둔다
+            const itemText = line.replace(/^[\t ]*- \[ \] /, '').replace(/\s*\{eid:[^}]+\}/g, '');
+            const planned = parseDuration(itemText)?.minutes;
+            const est = planned === undefined ? estimator(itemText) : null;
+            const expected: Expectation | undefined = planned !== undefined
+                ? { minutes: planned, kind: 'plan' }
+                : est ? { minutes: est.minutes, low: est.low, high: est.high, kind: 'estimate' } : undefined;
+
             setRecordToAction(true);
             setMinutesInput(existingMinutes !== undefined ? String(existingMinutes) : '');
             setTimePopup({
@@ -1316,6 +1402,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
                 lineText: checkedLine,
                 dateStr,
                 currentTime: existingMinutes,
+                expected,
             });
         }
     };
@@ -1359,6 +1446,20 @@ const TodoTab: React.FC<TodoTabProps> = ({
                 const newContent = lines.join('\n');
                 setContent(newContent);
                 handleSave(newContent);
+            }
+
+            // 예상과 크게 어긋났으면 왜 그랬는지 한 번 묻는다 (답하지 않아도 된다)
+            const exp = timePopup.expected;
+            const direction = exp ? missDirection(exp, minutes) : null;
+            if (exp && direction) {
+                setMissPrompt({
+                    text: recordTextFromLine(timePopup.lineText),
+                    expected: exp.minutes,
+                    actual: minutes,
+                    direction,
+                    date: timePopup.dateStr ?? format(selectedDate, 'yyyy-MM-dd'),
+                    kind: exp.kind,
+                });
             }
         }
 
@@ -1422,7 +1523,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
         }
 
         setTimePopup(null);
-    }, [timePopup, content, user, handleSave, getHistoryContent, saveHistoryContent]);
+    }, [timePopup, content, user, handleSave, getHistoryContent, saveHistoryContent, selectedDate]);
 
     const insertText = (text: string, cursorOffset = 0) => {
         if (!textareaRef.current) return;
@@ -1531,9 +1632,16 @@ const TodoTab: React.FC<TodoTabProps> = ({
     }, [todos, estimator]);
 
     const todayLoad = useMemo(
-        () => computeTodayLoad(todos, item => estimates.get(item.lineIndex)?.minutes),
+        () => computeTodayLoad(todos, item => estimates.get(item.lineIndex)),
         [todos, estimates],
     );
+
+    // 오늘 취침 시각: 직접 정한 것, 없으면 최근 7일 평균
+    const bedMin = useMemo(
+        () => (plannedBedtime ? bedClockToMinutes(plannedBedtime) : null) ?? typicalDay?.bedMin ?? null,
+        [plannedBedtime, typicalDay],
+    );
+    const nowMin = minutesSinceLogicalMidnight(new Date(nowMs), currentLogicalDay);
 
     // 최상위(indent=0) 기준으로 부모+하위항목을 그룹으로 묶고 정렬 (완료 그룹은 하단, duration 정렬 옵션)
     const sortedGroups = useMemo(() => {
@@ -1567,6 +1675,13 @@ const TodoTab: React.FC<TodoTabProps> = ({
 
         return groups;
     }, [todos, sortByDuration]);
+
+    // 지금부터 화면 순서대로 이어서 하면 각 항목이 끝나는 시각 (오늘만 — 다른 날은 '지금'이 없다)
+    const finishAt = useMemo(() => {
+        if (!isToday) return new Map<number, number>();
+        const order = sortedGroups.filter(g => !g.every(i => i.checked)).map(g => g[0].lineIndex);
+        return projectFinishTimes(order, todayLoad.perRoot, nowMin);
+    }, [isToday, sortedGroups, todayLoad, nowMin]);
 
     const toggleCollapse = useCallback((key: string) => {
         setCollapsedKeys(prev => {
@@ -2416,10 +2531,12 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                     <TimeBudgetCard
                                         typical={typicalDay}
                                         load={todayLoad}
-                                        nowMin={minutesSinceLogicalMidnight(new Date(nowMs), currentLogicalDay)}
+                                        nowMin={nowMin}
                                         togglUpdatedAt={togglUpdatedAt}
                                         plannedBedtime={plannedBedtime}
                                         onBedtimeChange={handleBedtimeChange}
+                                        overReasons={overReasons}
+                                        underReasons={underReasons}
                                     />
                                 )}
 
@@ -2475,6 +2592,8 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                                         collapsedKeys={collapsedKeys}
                                                         onToggleCollapse={toggleCollapse}
                                                         estimates={estimates}
+                                                        finishAt={finishAt}
+                                                        bedMin={bedMin}
                                                     />
                                                 ))}
                                             </div>
@@ -2656,6 +2775,11 @@ const TodoTab: React.FC<TodoTabProps> = ({
                         </>
                     )}
                 </div>
+            )}
+
+            {/* 걸린 시간이 예상과 크게 어긋났을 때 이유를 한 번 묻는다 */}
+            {missPrompt && (
+                <MissReasonPrompt prompt={missPrompt} onPick={pickMissReason} onDismiss={dismissMissPrompt} />
             )}
 
             {/* 실행시간 입력 팝업 */}

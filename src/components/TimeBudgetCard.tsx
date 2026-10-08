@@ -4,6 +4,9 @@ import {
     bedClockToMinutes, clockLabel, formatHM, TYPICAL_DAY_WINDOW,
     type TypicalDay, type TodayLoad,
 } from '../utils/timeBudget';
+import type { ReasonSummary } from '../utils/missReasons';
+
+const reasonLine = (s: ReasonSummary): string => s.reasons.map(r => `${r.label} ${r.count}`).join(' · ');
 
 interface TimeBudgetCardProps {
     typical: TypicalDay | null;
@@ -15,6 +18,9 @@ interface TimeBudgetCardProps {
     plannedBedtime: string | null;
     /** 취침 시각을 정하거나(HH:mm) 평균으로 되돌린다(null) */
     onBedtimeChange: (bedtime: string | null) => void;
+    /** 크게 넘친 / 크게 덜 걸린 이유 (쌓인 게 적으면 null) */
+    overReasons?: ReasonSummary | null;
+    underReasons?: ReasonSummary | null;
 }
 
 /**
@@ -25,7 +31,7 @@ interface TimeBudgetCardProps {
  * (오늘은 일찍 자려 한다거나, 평균이 오늘과 맞지 않을 때).
  */
 const TimeBudgetCard: React.FC<TimeBudgetCardProps> = ({
-    typical, load, nowMin, togglUpdatedAt, plannedBedtime, onBedtimeChange,
+    typical, load, nowMin, togglUpdatedAt, plannedBedtime, onBedtimeChange, overReasons, underReasons,
 }) => {
     const plannedMin = plannedBedtime ? bedClockToMinutes(plannedBedtime) : null;
     const bedMin = plannedMin ?? typical?.bedMin ?? null;
@@ -36,6 +42,12 @@ const TimeBudgetCard: React.FC<TimeBudgetCardProps> = ({
     const spare = untilBed !== null && !pastBed ? untilBed - load.remaining : null;
     const over = spare !== null && spare < 0;
     const fill = untilBed && untilBed > 0 ? Math.min(100, (load.remaining / untilBed) * 100) : 0;
+
+    // 지금부터 이어서 하면 끝나는 시각 (중간값 기준 / 범위 위쪽 기준)
+    const endMin = nowMin + load.remaining;
+    const endHighMin = nowMin + load.remainingHigh;
+    // 보통은 들어가는데 늦어지면 취침을 넘기는 날은 '늦으면'을 눈에 띄게 둔다
+    const lateCrossesBed = bedMin !== null && endMin <= bedMin && endHighMin > bedMin;
 
     // 시간 선택기에 보여 줄 값 (직접 정한 값, 없으면 평균)
     const pickerValue = plannedBedtime ?? (typical ? clockLabel(typical.bedMin) : '');
@@ -89,17 +101,39 @@ const TimeBudgetCard: React.FC<TimeBudgetCardProps> = ({
             </div>
 
             {spare !== null && (
-                <>
-                    <div className="relative h-1 mt-3 bg-bg-tertiary rounded-full overflow-hidden">
-                        <div
-                            className={`absolute inset-y-0 left-0 rounded-full transition-all duration-500 ease-out ${over ? 'bg-red-400' : 'bg-accent'}`}
-                            style={{ width: `${fill}%` }}
-                        />
-                    </div>
-                    <div className={`mt-1.5 text-[11px] tabular-nums ${over ? 'text-red-400' : 'text-text-secondary'}`}>
-                        {over ? `취침까지 ${formatHM(-spare)} 넘쳐요` : `여유 ${formatHM(spare)}`}
-                    </div>
-                </>
+                <div className="relative h-1 mt-3 bg-bg-tertiary rounded-full overflow-hidden">
+                    <div
+                        className={`absolute inset-y-0 left-0 rounded-full transition-all duration-500 ease-out ${over ? 'bg-red-400' : 'bg-accent'}`}
+                        style={{ width: `${fill}%` }}
+                    />
+                </div>
+            )}
+            {(load.remaining > 0 || spare !== null) && (
+                <div className="mt-1.5 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 text-[11px] tabular-nums">
+                    {load.remaining > 0 && (
+                        <span className="text-text-secondary">
+                            지금 시작하면 {clockLabel(endMin)}쯤 끝나요
+                            {endHighMin > endMin && (
+                                <span className={lateCrossesBed ? 'text-amber-400' : 'text-text-tertiary'}>
+                                    {' · '}늦으면 {clockLabel(endHighMin)}
+                                </span>
+                            )}
+                        </span>
+                    )}
+                    {spare !== null && (
+                        <span className={over ? 'text-red-400' : 'text-text-secondary'}>
+                            {over ? `취침까지 ${formatHM(-spare)} 넘쳐요` : `여유 ${formatHM(spare)}`}
+                        </span>
+                    )}
+                </div>
+            )}
+
+            {/* 크게 어긋났던 날의 이유 — 숫자보다 손쓸 곳이 분명하다 */}
+            {(overReasons || underReasons) && (
+                <div className="mt-2 text-[11px] text-text-secondary leading-relaxed tabular-nums">
+                    {overReasons && <div>크게 넘친 {overReasons.total}번 · {reasonLine(overReasons)}</div>}
+                    {underReasons && <div>크게 덜 걸린 {underReasons.total}번 · {reasonLine(underReasons)}</div>}
+                </div>
             )}
             {pastBed && bedMin !== null && (
                 <div className="mt-2 text-[11px] text-text-secondary">

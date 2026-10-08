@@ -15,7 +15,7 @@
  *   3) 없으면 바탕 이름이 같은 기록 전체
  * 순서로 고른다. 그래도 없으면 Toggl 프로젝트 이름으로 찾는다.
  */
-import { parseTodos, parseDuration } from './todoUtils';
+import { parseTodos, parseDuration, formatDuration } from './todoUtils';
 
 export type SampleSource = 'app' | 'toggl';
 
@@ -44,8 +44,15 @@ export interface TogglRow {
 export type EstimateMethod = 'perPage' | 'same' | 'similar' | 'project';
 
 export interface TaskEstimate {
-    /** 예상 소요시간 (분, 5분 단위) */
+    /** 예상 소요시간 (분, 5분 단위) — 최근 기록의 중간값 */
     minutes: number;
+    /**
+     * 보통 걸리는 범위 (분, 5분 단위) — 최근 기록의 가운데 절반(25~75%).
+     * 같은 일도 날마다 걸리는 시간이 달라서 한 점보다 범위가 정직하다.
+     * 기록이 RANGE_MIN_COUNT번보다 적으면 범위를 믿기 어려워 없다.
+     */
+    low?: number;
+    high?: number;
     method: EstimateMethod;
     /** 근거가 된 기록 수 */
     count: number;
@@ -62,6 +69,9 @@ export interface TaskEstimate {
 
 /** 최근 몇 건으로 예상할지 */
 export const ESTIMATE_RECENT = 8;
+
+/** 범위를 보여 주려면 기록이 몇 번 있어야 하는지 */
+export const RANGE_MIN_COUNT = 3;
 
 /** 표시와 무관한 표식(eid·소요시간·사분면 태그·강조·추가 표시)을 걷어낸 이름 */
 export const normalizeTaskText = (text: string): string => {
@@ -112,13 +122,27 @@ export const trailingNumber = (text: string): number | undefined => {
     return n > 0 ? n : undefined;
 };
 
-const median = (xs: number[]): number => {
+/** 백분위수 (사이 값은 선형 보간). q는 0~1 */
+const quantile = (xs: number[], q: number): number => {
     const s = [...xs].sort((a, b) => a - b);
-    const mid = Math.floor(s.length / 2);
-    return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+    const pos = (s.length - 1) * q;
+    const lo = Math.floor(pos);
+    const hi = Math.ceil(pos);
+    return s[lo] + (s[hi] - s[lo]) * (pos - lo);
 };
 
+const median = (xs: number[]): number => quantile(xs, 0.5);
+
 const roundTo5 = (minutes: number): number => Math.max(5, Math.round(minutes / 5) * 5);
+
+/** 표본 값들로 예상(중간값)과 범위(25~75%)를 낸다. scale은 쪽수 환산처럼 곱할 값 */
+const spread = (values: number[], scale = 1): Pick<TaskEstimate, 'minutes' | 'low' | 'high'> => {
+    const minutes = roundTo5(median(values) * scale);
+    if (values.length < RANGE_MIN_COUNT) return { minutes };
+    const low = roundTo5(quantile(values, 0.25) * scale);
+    const high = roundTo5(quantile(values, 0.75) * scale);
+    return low === high ? { minutes } : { minutes, low, high };
+};
 
 const recent = (samples: DurationSample[]): DurationSample[] =>
     [...samples].sort((a, b) => b.date.localeCompare(a.date)).slice(0, ESTIMATE_RECENT);
@@ -215,8 +239,14 @@ export const buildEstimator = (appSamples: DurationSample[], togglRows: TogglRow
         entry.byDate.set(r.d, (entry.byDate.get(r.d) ?? 0) + r.m);
     }
 
-    const summarize = (picked: DurationSample[], method: EstimateMethod, minutes: number): TaskEstimate => ({
-        minutes: roundTo5(minutes),
+    /** 고른 표본의 값(분, 또는 쪽당 분)으로 예상·범위와 근거를 묶는다 */
+    const summarize = (
+        picked: DurationSample[],
+        method: EstimateMethod,
+        values: number[],
+        scale = 1,
+    ): TaskEstimate => ({
+        ...spread(values, scale),
         method,
         count: picked.length,
         app: picked.filter(s => s.source === 'app').length,
@@ -234,15 +264,15 @@ export const buildEstimator = (appSamples: DurationSample[], togglRows: TogglRow
             const pages = pageCount(text) ?? (withPages.length > 0 ? trailingNumber(text) : undefined);
             if (pages && withPages.length > 0) {
                 const picked = recent(withPages);
-                const perPage = median(picked.map(s => s.minutes / pageCount(s.text)!));
-                return { ...summarize(picked, 'perPage', perPage * pages), perPage, pages };
+                const rates = picked.map(s => s.minutes / pageCount(s.text)!);
+                return { ...summarize(picked, 'perPage', rates, pages), perPage: median(rates), pages };
             }
 
             // 2) 똑같은 이름 → 3) 바탕 이름이 같은 것 전체
             const key = taskKey(text);
             const same = group.filter(s => taskKey(s.text) === key);
             const picked = recent(same.length > 0 ? same : group);
-            return summarize(picked, same.length > 0 ? 'same' : 'similar', median(picked.map(s => s.minutes)));
+            return summarize(picked, same.length > 0 ? 'same' : 'similar', picked.map(s => s.minutes));
         }
 
         // 4) Toggl 프로젝트 이름과 같으면 그 프로젝트에 하루 쓴 시간
@@ -252,7 +282,7 @@ export const buildEstimator = (appSamples: DurationSample[], togglRows: TogglRow
                 .sort((a, b) => b[0].localeCompare(a[0]))
                 .slice(0, ESTIMATE_RECENT);
             return {
-                minutes: roundTo5(median(days.map(([, m]) => m))),
+                ...spread(days.map(([, m]) => m)),
                 method: 'project',
                 count: days.length,
                 app: 0,
@@ -265,17 +295,25 @@ export const buildEstimator = (appSamples: DurationSample[], togglRows: TogglRow
     };
 };
 
+/** 화면 표기: 범위가 있으면 '1h~1h30m', 없으면 '1h15m' */
+export const formatEstimate = (e: Pick<TaskEstimate, 'minutes' | 'low' | 'high'>): string =>
+    e.low !== undefined && e.high !== undefined
+        ? `${formatDuration(e.low)}~${formatDuration(e.high)}`
+        : formatDuration(e.minutes);
+
 /** 예상 근거를 사람이 읽을 문구로 */
 export const describeEstimate = (e: TaskEstimate): string => {
     const src = [e.toggl > 0 && `Toggl ${e.toggl}`, e.app > 0 && `앱 ${e.app}`].filter(Boolean).join(' · ');
+    // 범위로 보일 때는 합계에 쓰는 한 점(중간값)도 알려 준다
+    const mid = e.low !== undefined ? ` · 중간값 ${formatDuration(e.minutes)}` : '';
     switch (e.method) {
         case 'perPage':
-            return `쪽당 ${e.perPage!.toFixed(1)}분 × ${e.pages}쪽 (최근 기록 ${e.count}번: ${src})`;
+            return `쪽당 ${e.perPage!.toFixed(1)}분 × ${e.pages}쪽 (최근 기록 ${e.count}번: ${src})${mid}`;
         case 'same':
-            return `같은 일 최근 ${e.count}번의 중간값 (${src})`;
+            return `같은 일 최근 ${e.count}번의 중간값 (${src})${mid}`;
         case 'similar':
-            return `비슷한 일 최근 ${e.count}번의 중간값 (${src})`;
+            return `비슷한 일 최근 ${e.count}번의 중간값 (${src})${mid}`;
         case 'project':
-            return `Toggl 프로젝트 '${e.project}'에 하루 쓴 시간, 최근 ${e.count}일의 중간값`;
+            return `Toggl 프로젝트 '${e.project}'에 하루 쓴 시간, 최근 ${e.count}일의 중간값${mid}`;
     }
 };

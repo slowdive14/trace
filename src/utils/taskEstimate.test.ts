@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
     normalizeTaskText, taskKey, taskBase, pageCount, trailingNumber,
-    collectAppSamples, buildEstimator, describeEstimate,
+    collectAppSamples, buildEstimator, describeEstimate, formatEstimate,
     type DurationSample, type TogglRow,
 } from './taskEstimate';
 
@@ -137,6 +137,49 @@ describe('예상 시간', () => {
         const old = Array.from({ length: 10 }, (_, i) => app(`2026-08-${String(i + 1).padStart(2, '0')}`, '달리기', 120));
         const recent = Array.from({ length: 8 }, (_, i) => app(`2026-09-${String(i + 1).padStart(2, '0')}`, '달리기', 50));
         expect(buildEstimator([...old, ...recent], [])('달리기')!.minutes).toBe(50);
+    });
+});
+
+describe('범위 (가운데 절반)', () => {
+    it('기록이 3번 이상이면 25~75% 범위를 준다', () => {
+        // 방송대 강의 한 강: 40, 60, 70, 77, 80, 90, 106 (실제 기록과 비슷한 분포)
+        const est = buildEstimator(
+            [40, 60, 70, 77, 80, 90, 106].map((m, i) => app(`2026-09-0${i + 1}`, '방송대 강의 한 강', m)),
+            [],
+        )('방송대 강의 한 강');
+        expect(est).toMatchObject({ minutes: 75, low: 65, high: 85 });
+        expect(formatEstimate(est!)).toBe('1h5m~1h25m');
+    });
+
+    it('기록이 2번 이하면 범위를 믿기 어려워 한 점만', () => {
+        const est = buildEstimator([app('2026-09-01', '혼공머신', 60), app('2026-09-02', '혼공머신', 90)], [])('혼공머신');
+        expect(est!.low).toBeUndefined();
+        expect(formatEstimate(est!)).toBe('1h15m');
+    });
+
+    it('늘 비슷하게 걸려 범위가 한 점으로 모이면 한 점만', () => {
+        const est = buildEstimator(
+            [15, 15, 15, 15].map((m, i) => app(`2026-09-0${i + 1}`, '미니닌 영어', m)),
+            [],
+        )('미니닌 영어');
+        expect(est!.low).toBeUndefined();
+        expect(formatEstimate(est!)).toBe('15m');
+    });
+
+    it('쪽수로 환산할 때 범위도 같이 환산한다', () => {
+        const est = buildEstimator([
+            app('2026-09-01', '넥서스 30쪽', 30),
+            app('2026-09-02', '넥서스 30쪽', 30),
+            app('2026-09-03', '넥서스 30쪽', 45),
+            app('2026-09-04', '넥서스 30쪽', 60),
+        ], [])('넥서스 60');
+        // 쪽당 1, 1, 1.5, 2 → 25% 1, 50% 1.25, 75% 1.625 → ×60
+        expect(est).toMatchObject({ minutes: 75, low: 60, high: 100 });
+    });
+
+    it('근거 문구에 합계에 쓰는 중간값을 함께 적는다', () => {
+        expect(describeEstimate({ minutes: 75, low: 65, high: 85, method: 'same', count: 7, app: 7, toggl: 0 }))
+            .toBe('같은 일 최근 7번의 중간값 (앱 7) · 중간값 1h15m');
     });
 });
 
