@@ -63,6 +63,19 @@ export const getTypicalDay = (records: SleepRecord[], todayStr: string): Typical
     };
 };
 
+/**
+ * 취침 시각 'HH:mm' → 논리적 0시부터의 분.
+ * 새벽(6시 전)이면 자정을 넘긴 것으로 본다 ('01:30' → 1530). 형식이 틀리면 null.
+ */
+export const bedClockToMinutes = (hhmm: string): number | null => {
+    const m = /^(\d{1,2}):(\d{2})$/.exec(hhmm.trim());
+    if (!m) return null;
+    const h = Number(m[1]);
+    const min = Number(m[2]);
+    if (h > 23 || min > 59) return null;
+    return h < NIGHT_CUTOFF_HOUR ? h * 60 + min + 1440 : h * 60 + min;
+};
+
 /** 논리적 하루의 0시부터 지금까지 몇 분 지났는지 */
 export const minutesSinceLogicalMidnight = (now: Date, logicalDayStr: string): number => {
     const [y, m, d] = logicalDayStr.split('-').map(Number);

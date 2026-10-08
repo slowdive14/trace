@@ -12,7 +12,8 @@ import {
     limit,
     Timestamp,
     setDoc,
-    writeBatch
+    writeBatch,
+    deleteField
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { startOfDay, format as formatDateFns } from 'date-fns';
@@ -302,6 +303,25 @@ export const saveTodo = async (
         console.error("Error saving todo: ", e);
         throw e;
     }
+};
+
+/**
+ * 그날 직접 정한 취침 시각('HH:mm')을 날짜 문서에 둔다. null이면 지운다(평균으로 돌아간다).
+ * 본문 저장과 같은 문서지만 병합 저장이라 서로 덮어쓰지 않는다.
+ * 문서가 아직 없을 때도 날짜 조회에서 빠지지 않도록 date를 함께 적는다.
+ */
+export const saveTodoBedtime = async (
+    userId: string,
+    date: Date,
+    bedtime: string | null,
+    collectionName: string = 'todos',
+) => {
+    const normalizedDate = startOfDay(date);
+    const docRef = doc(db, `users/${userId}/${collectionName}`, formatDateFns(normalizedDate, 'yyyy-MM-dd'));
+    await setDoc(docRef, {
+        plannedBedtime: bedtime ?? deleteField(),
+        date: Timestamp.fromDate(normalizedDate),
+    }, { merge: true });
 };
 
 export const getTodo = async (userId: string, date: Date, collectionName: string = 'todos') => {

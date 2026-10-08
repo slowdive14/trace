@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { parseTodos } from './todoUtils';
 import type { SleepRecord } from './sleepUtils';
 import {
-    getTypicalDay, minutesSinceLogicalMidnight, clockLabel, computeTodayLoad,
+    getTypicalDay, minutesSinceLogicalMidnight, clockLabel, computeTodayLoad, bedClockToMinutes,
 } from './timeBudget';
 
 /** date(기상일)에 hh:mm 기상, 그 전날 밤(또는 새벽) bed 취침 */
@@ -47,6 +47,15 @@ describe('지금 시각 (논리적 하루 기준)', () => {
     it('자정을 넘기면 24시 이후로 센다', () => {
         expect(minutesSinceLogicalMidnight(new Date(2026, 9, 7, 15, 40), '2026-10-07')).toBe(940);
         expect(minutesSinceLogicalMidnight(new Date(2026, 9, 8, 1, 0), '2026-10-07')).toBe(1500);
+    });
+
+    it('직접 정한 취침 시각을 분으로 바꾼다 (새벽은 자정 넘김)', () => {
+        expect(bedClockToMinutes('23:30')).toBe(1410);
+        expect(bedClockToMinutes('01:30')).toBe(1530);
+        expect(bedClockToMinutes('05:59')).toBe(1799);
+        expect(bedClockToMinutes('06:00')).toBe(360);
+        expect(bedClockToMinutes('25:00')).toBeNull();
+        expect(bedClockToMinutes('')).toBeNull();
     });
 
     it('시계 표기로 되돌린다', () => {

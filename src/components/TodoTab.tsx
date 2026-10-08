@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useAuth } from './AuthContext';
 import {
     saveTodo, getTodo, getTodos, getAllTodos, saveTemplate, getTemplate, addEntry, deleteEntry,
-    getBacklog, saveBacklog, getRecurringTodos, getTogglSummary,
+    getBacklog, saveBacklog, getRecurringTodos, getTogglSummary, saveTodoBedtime,
 } from '../services/firestore';
 import {
     buildEstimator, collectAppSamples, describeEstimate,
@@ -535,6 +535,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
 
                     let loaded = todo?.content ?? '';
                     if (todo) setLastSaved(todo.updatedAt || new Date());
+                    setPlannedBedtime(todo?.plannedBedtime ?? null);
 
                     const todayStr = format(getLogicalDate(), 'yyyy-MM-dd');
                     const dateStr = format(selectedDate, 'yyyy-MM-dd');
@@ -858,6 +859,15 @@ const TodoTab: React.FC<TodoTabProps> = ({
         () => getTypicalDay(extractSleepRecords(entries), currentLogicalDay),
         [entries, currentLogicalDay],
     );
+
+    // 그날 직접 정한 취침 시각 ('HH:mm'). 날짜 문서에 두어 휴대폰·PC에서 같이 쓴다
+    const [plannedBedtime, setPlannedBedtime] = useState<string | null>(null);
+    const handleBedtimeChange = useCallback((bedtime: string | null) => {
+        setPlannedBedtime(bedtime);
+        if (!user) return;
+        saveTodoBedtime(user.uid, selectedDate, bedtime, collectionName)
+            .catch(err => console.error('Failed to save bedtime:', err));
+    }, [user, selectedDate, collectionName]);
 
     // 취침까지 남은 시간이 흐르도록 1분마다 다시 그린다
     const [nowMs, setNowMs] = useState(() => Date.now());
@@ -2408,6 +2418,8 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                         load={todayLoad}
                                         nowMin={minutesSinceLogicalMidnight(new Date(nowMs), currentLogicalDay)}
                                         togglUpdatedAt={togglUpdatedAt}
+                                        plannedBedtime={plannedBedtime}
+                                        onBedtimeChange={handleBedtimeChange}
                                     />
                                 )}
 

@@ -62,6 +62,11 @@ export interface Todo {
      * 문서가 먼저 생기는 바람에 그날이 와도 습관이 통째로 빠졌다.
      */
     templateFilled?: boolean;
+    /**
+     * 그날 직접 정한 취침 시각 ('HH:mm'). 없으면 최근 7일 평균을 쓴다.
+     * '오늘 쓸 수 있는 시간' 계산에만 쓰인다.
+     */
+    plannedBedtime?: string;
 }
 
 /** 반복 일정의 주기 */
