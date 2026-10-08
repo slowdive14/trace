@@ -17,9 +17,18 @@ interface InputBarProps {
     activeCategory?: 'action' | 'thought' | 'chore' | 'book';
     collectionName?: string;
     entries?: Entry[];
+    /** 일상 탭의 '기분' 버튼 — 감정을 고르고 한 줄 메모와 함께 바로 남기는 창을 연다 */
+    onQuickEmotion?: () => void;
 }
 
-const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collectionName = 'entries', entries = [] }) => {
+/** 입력창 위 빠른 버튼 (잠자기·기상·낮잠·기분, 태그). 색은 아이콘에만 둬서 줄이 시끄럽지 않게 한다 */
+const chipBase = 'inline-flex items-center gap-1.5 h-8 rounded-full text-xs font-medium border border-white/5 text-text-secondary hover:text-text-primary transition-colors select-none';
+/** 본문 위에 떠 있을 때(좁은 화면)는 뒤가 비치지 않게, 입력 카드 안(넓은 화면)에서는 한 톤 낮게 */
+// 떠 있는 줄은 빈 곳으로 뒤의 목록을 누를 수 있게 버튼만 눌리게 한다. 360px 폭 휴대폰에서도 한 줄에 들도록 좌우 여백을 줄인다
+const chipFloating = `${chipBase} px-2.5 pointer-events-auto bg-bg-secondary/95 backdrop-blur-sm shadow-sm hover:bg-bg-tertiary`;
+const chipDocked = `${chipBase} px-3 bg-bg-tertiary/50 hover:bg-bg-tertiary`;
+
+const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collectionName = 'entries', entries = [], onQuickEmotion }) => {
     const [content, setContent] = useState('');
     const [isExpanded, setIsExpanded] = useState(false);
     // Use null to represent "Now/Today". This prevents stale timestamps when the app is left open.
@@ -479,72 +488,122 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
         return getIdealSleepSchedule(records);
     }, [entries]);
 
+    // 입력창 위 빠른 버튼 줄: 일상은 수면·기분 버튼과 적정 시각, 할일·책은 태그.
+    // 예전에는 적정 시각 알약, 큰 원색 버튼 상자, 입력 막대가 세 겹으로 따로 떠서 산만했다.
+    const showQuickRow = !isExpanded && pendingPhotos.length === 0
+        && (activeCategory === 'action' || activeCategory === 'chore' || activeCategory === 'book');
+
+    const renderQuickRow = (docked: boolean) => {
+        const chip = docked ? chipDocked : chipFloating;
+        if (activeCategory === 'action') {
+            return (
+                <>
+                    <button
+                        type="button"
+                        onMouseDown={() => handleSleepButtonDown('sleep')}
+                        onMouseUp={() => handleSleepButtonUp('sleep')}
+                        onMouseLeave={handleSleepButtonLeave}
+                        onTouchStart={(e) => { e.preventDefault(); handleSleepButtonDown('sleep'); }}
+                        onTouchEnd={(e) => { e.preventDefault(); handleSleepButtonUp('sleep'); }}
+                        className={chip}
+                        title={`지금 잠자기 (길게 누르면 시각 고르기)${idealSchedule ? ` · 적정 취침 ${idealSchedule.bedtime}` : ''}`}
+                    >
+                        <Moon size={14} className="text-indigo-400" /> 잠자기
+                        {/* 좁은 화면은 한 줄에 담으려고 적정 시각을 버튼 안에 둔다 */}
+                        {!docked && idealSchedule && (
+                            <span className="text-[10px] text-text-tertiary tabular-nums">{idealSchedule.bedtime}</span>
+                        )}
+                    </button>
+                    <button
+                        type="button"
+                        onMouseDown={() => handleSleepButtonDown('wake')}
+                        onMouseUp={() => handleSleepButtonUp('wake')}
+                        onMouseLeave={handleSleepButtonLeave}
+                        onTouchStart={(e) => { e.preventDefault(); handleSleepButtonDown('wake'); }}
+                        onTouchEnd={(e) => { e.preventDefault(); handleSleepButtonUp('wake'); }}
+                        className={chip}
+                        title={`지금 기상 (길게 누르면 시각 고르기)${idealSchedule ? ` · 적정 기상 ${idealSchedule.waketime}` : ''}`}
+                    >
+                        <Sun size={14} className="text-amber-400" /> 기상
+                        {!docked && idealSchedule && (
+                            <span className="text-[10px] text-text-tertiary tabular-nums">{idealSchedule.waketime}</span>
+                        )}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setShowNapModal(true);
+                            setNapStartTime('');
+                            setNapEndTime(format(new Date(), 'HH:mm'));
+                        }}
+                        className={chip}
+                    >
+                        <CloudMoon size={14} className="text-slate-400" /> 낮잠
+                    </button>
+                    {onQuickEmotion && (
+                        <button
+                            type="button"
+                            onClick={onQuickEmotion}
+                            className={chip}
+                            title="지금 기분을 한 줄 메모와 함께 남기기"
+                            aria-label="기분 기록"
+                        >
+                            {/* 좁은 화면은 예전 떠 있던 버튼과 같은 노란 얼굴만 둔다 */}
+                            <Smile size={14} className="text-yellow-400" />{docked && ' 기분'}
+                        </button>
+                    )}
+                    {/* 넓은 화면: 적정 시각은 정보일 뿐이라 버튼과 구분되게 오른쪽 끝에 글자로만 둔다 */}
+                    {docked && idealSchedule && (
+                        <span
+                            className="ml-auto inline-flex items-center gap-2 pr-1 text-[11px] text-text-tertiary tabular-nums whitespace-nowrap"
+                            title="최근 수면 기록으로 정한 적정 취침·기상 시각"
+                        >
+                            <span>적정</span>
+                            <span className="inline-flex items-center gap-1">
+                                <Moon size={11} className="text-indigo-400" />
+                                취침 <span className="text-text-secondary">{idealSchedule.bedtime}</span>
+                            </span>
+                            <span className="inline-flex items-center gap-1">
+                                <Sun size={11} className="text-amber-400" />
+                                기상 <span className="text-text-secondary">{idealSchedule.waketime}</span>
+                            </span>
+                        </span>
+                    )}
+                </>
+            );
+        }
+        if (activeCategory === 'book') {
+            return (
+                <button type="button" onClick={() => insertBookTag('#읽을책')} className={chip}>
+                    <span className="text-amber-500">#</span>읽을책
+                </button>
+            );
+        }
+        if (activeCategory === 'chore') {
+            return ['#q1', '#q2', '#q3', '#q4'].map(tag => (
+                <button key={tag} type="button" onClick={() => insertBookTag(tag)} className={chip}>
+                    <span className="text-orange-400">#</span>{tag.slice(1)}
+                </button>
+            ));
+        }
+        return null;
+    };
+
     return (
         <>
-            {/* 수면 기록 버튼 바 - 일상 탭에서만 표시 (사진 첨부 중엔 숨겨 충돌 방지) */}
-            {activeCategory === 'action' && !isExpanded && pendingPhotos.length === 0 && (
-                <div className="fixed bottom-[136px] lg:bottom-[88px] left-0 lg:left-[var(--rail-w)] right-0 flex justify-center z-[60] pointer-events-none">
-                    <div className="app-container px-4 pointer-events-auto">
-                        {/* 적정 수면 가이드 */}
-                        {idealSchedule && (
-                            <div className="flex justify-center mb-2">
-                                <div className="bg-bg-secondary/80 backdrop-blur-sm border border-bg-tertiary px-3 py-1.5 rounded-full flex items-center gap-3 shadow-sm">
-                                    <div className="flex items-center gap-1.5 whitespace-nowrap">
-                                        <Moon size={12} className="text-indigo-400" />
-                                        <span className="text-[10px] text-text-secondary">적정 취침</span>
-                                        <span className="text-[11px] font-bold text-indigo-400">{idealSchedule.bedtime}</span>
-                                    </div>
-                                    <div className="w-[1px] h-2.5 bg-bg-tertiary" />
-                                    <div className="flex items-center gap-1.5 whitespace-nowrap">
-                                        <Sun size={12} className="text-amber-400" />
-                                        <span className="text-[10px] text-text-secondary">적정 기상</span>
-                                        <span className="text-[11px] font-bold text-amber-400">{idealSchedule.waketime}</span>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                        <div className="flex gap-2 p-2 bg-bg-secondary rounded-lg border border-bg-tertiary shadow-lg justify-center">
-                            <button
-                                type="button"
-                                onMouseDown={() => handleSleepButtonDown('sleep')}
-                                onMouseUp={() => handleSleepButtonUp('sleep')}
-                                onMouseLeave={handleSleepButtonLeave}
-                                onTouchStart={(e) => { e.preventDefault(); handleSleepButtonDown('sleep'); }}
-                                onTouchEnd={(e) => { e.preventDefault(); handleSleepButtonUp('sleep'); }}
-                                className="flex items-center gap-1.5 py-1.5 px-3 text-sm font-medium rounded-md bg-indigo-600 text-white hover:bg-indigo-500 transition-colors select-none"
-                            >
-                                <Moon size={16} /> 잠자기
-                            </button>
-                            <button
-                                type="button"
-                                onMouseDown={() => handleSleepButtonDown('wake')}
-                                onMouseUp={() => handleSleepButtonUp('wake')}
-                                onMouseLeave={handleSleepButtonLeave}
-                                onTouchStart={(e) => { e.preventDefault(); handleSleepButtonDown('wake'); }}
-                                onTouchEnd={(e) => { e.preventDefault(); handleSleepButtonUp('wake'); }}
-                                className="flex items-center gap-1.5 py-1.5 px-3 text-sm font-medium rounded-md bg-amber-500 text-white hover:bg-amber-400 transition-colors select-none"
-                            >
-                                <Sun size={16} /> 기상
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setShowNapModal(true);
-                                    setNapStartTime('');
-                                    setNapEndTime(format(new Date(), 'HH:mm'));
-                                }}
-                                className="flex items-center gap-1.5 py-1.5 px-3 text-sm font-medium rounded-md bg-slate-600 text-white hover:bg-slate-500 transition-colors select-none"
-                            >
-                                <CloudMoon size={16} /> 낮잠
-                            </button>
-                        </div>
+            {/* 빠른 버튼 줄 (좁은 화면): 아래쪽 탭 위에 작은 버튼 한 줄로만 띄운다.
+                넓은 화면에서는 입력 카드 안으로 들어간다 (아래 renderQuickRow(true)) */}
+            {showQuickRow && (
+                <div className="lg:hidden fixed bottom-[136px] left-0 right-0 flex justify-center z-[60] pointer-events-none">
+                    <div className="app-container px-4 flex items-center gap-1.5 flex-wrap">
+                        {renderQuickRow(false)}
                     </div>
                 </div>
             )}
 
             {/* 자동완성 드롭다운 - Fixed positioning above everything */}
             {showAutocomplete && (
-                <div className="fixed bottom-[120px] lg:bottom-[80px] left-0 lg:left-[var(--rail-w)] right-0 flex justify-center z-[100] pointer-events-none">
+                <div className="fixed bottom-[120px] lg:bottom-[140px] left-0 lg:left-[var(--rail-w)] right-0 flex justify-center z-[100] pointer-events-none">
                     <div className="app-container px-4 pointer-events-auto">
                         <div
                             ref={autocompleteRef}
@@ -572,86 +631,34 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
                 </div>
             )}
 
-            {/* 책 태그 버튼 바 - Fixed positioning (only when not expanded) */}
-            {activeCategory === 'book' && !isExpanded && pendingPhotos.length === 0 && (
-                <div className="fixed bottom-[136px] lg:bottom-[88px] left-0 lg:left-[var(--rail-w)] right-0 flex justify-center z-[60] pointer-events-none">
-                    <div className="app-container px-4 pointer-events-auto">
-                        <div className="flex gap-2 flex-wrap p-2 bg-bg-secondary rounded-lg border border-bg-tertiary shadow-lg">
-                            <button
-                                type="button"
-                                onClick={() => insertBookTag('#읽을책')}
-                                className="py-1.5 px-3 text-xs font-medium rounded-md bg-amber-500 text-white hover:bg-amber-600 transition-colors"
-                            >
-                                #읽을책
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* 할일/정보 태그 버튼 바 - Fixed positioning (only when not expanded) */}
-            {activeCategory === 'chore' && !isExpanded && pendingPhotos.length === 0 && (
-                <div className="fixed bottom-[136px] lg:bottom-[88px] left-0 lg:left-[var(--rail-w)] right-0 flex justify-center z-[60] pointer-events-none">
-                    <div className="app-container px-4 pointer-events-auto">
-                        <div className="flex gap-2 flex-wrap p-2 bg-bg-secondary rounded-lg border border-bg-tertiary shadow-lg">
-                            {['#q1', '#q2', '#q3', '#q4'].map((tag) => (
-                                <button
-                                    key={tag}
-                                    type="button"
-                                    onClick={() => insertBookTag(tag)}
-                                    className="py-1.5 px-3 text-xs font-medium rounded-md bg-orange-500 text-white hover:bg-orange-600 transition-colors"
-                                >
-                                    {tag}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-            )}
-
             {/* 사진 미리보기/에러가 탭바·플로팅바에 가려지지 않도록 입력창을 그 위로 올린다 */}
-            <div className={`fixed bottom-0 left-0 lg:left-[var(--rail-w)] right-0 bg-bg-secondary border-t border-bg-tertiary p-3 transition-all duration-300 ${isExpanded ? 'h-1/2 z-50' : 'h-auto z-[70]'}`}>
-                <div className="app-container flex flex-col h-full gap-2 relative">
+            {/* 좁은 화면: 화면 아래에 붙은 막대 / 넓은 화면: 본문 가운데 떠 있는 둥근 카드 하나 */}
+            <div className={`fixed bottom-0 left-0 lg:left-[var(--rail-w)] right-0 bg-bg-secondary border-t border-bg-tertiary p-3 lg:bg-transparent lg:border-t-0 lg:px-6 lg:pt-0 lg:pb-5 lg:pointer-events-none transition-all duration-300 ${isExpanded ? 'h-1/2 z-50' : 'h-auto z-[70]'}`}>
+                <div className="app-container flex flex-col h-full gap-2 relative lg:pointer-events-auto lg:bg-bg-secondary lg:border lg:border-white/[0.06] lg:rounded-2xl lg:p-2.5 lg:shadow-[0_12px_40px_-8px_rgba(0,0,0,0.6)]">
+                    {/* 넓은 화면에서는 빠른 버튼 줄이 카드 안 맨 위에 붙는다 */}
+                    {showQuickRow && (
+                        <div className="hidden lg:flex items-center gap-1.5 flex-wrap px-0.5">
+                            {renderQuickRow(true)}
+                        </div>
+                    )}
                     {/* 확장 모드에서 현장 관찰 템플릿 (6개 항목이라 확장 입력창이 필요하다) */}
                     {activeCategory === 'action' && isExpanded && (
-                        <div className="flex gap-2 flex-wrap p-2 bg-bg-tertiary rounded-lg border-b border-bg-primary">
+                        <div className="flex gap-1.5 flex-wrap">
                             <button
                                 type="button"
                                 onClick={insertFieldNoteTemplate}
-                                className="flex items-center gap-1.5 py-1.5 px-3 text-xs font-medium rounded-md bg-teal-600 text-white hover:bg-teal-500 transition-colors"
+                                className={chipDocked}
                                 title="정신건강 현장에서 발견한 문제를 같은 틀로 기록"
                             >
-                                <Microscope size={13} /> 현장관찰
+                                <Microscope size={14} className="text-teal-400" /> 현장관찰
                             </button>
                         </div>
                     )}
 
-                    {/* 확장 모드에서 책 태그 버튼 바를 InputBar 상단에 표시 */}
-                    {activeCategory === 'book' && isExpanded && (
-                        <div className="flex gap-2 flex-wrap p-2 bg-bg-tertiary rounded-lg border-b border-bg-primary">
-                            <button
-                                type="button"
-                                onClick={() => insertBookTag('#읽을책')}
-                                className="py-1.5 px-3 text-xs font-medium rounded-md bg-amber-500 text-white hover:bg-amber-600 transition-colors"
-                            >
-                                #읽을책
-                            </button>
-                        </div>
-                    )}
-
-                    {/* 확장 모드에서 할일/정보 태그 버튼 바를 InputBar 상단에 표시 */}
-                    {activeCategory === 'chore' && isExpanded && (
-                        <div className="flex gap-2 flex-wrap p-2 bg-bg-tertiary rounded-lg border-b border-bg-primary">
-                            {['#q1', '#q2', '#q3', '#q4'].map((tag) => (
-                                <button
-                                    key={tag}
-                                    type="button"
-                                    onClick={() => insertBookTag(tag)}
-                                    className="py-1.5 px-3 text-xs font-medium rounded-md bg-orange-500 text-white hover:bg-orange-600 transition-colors"
-                                >
-                                    {tag}
-                                </button>
-                            ))}
+                    {/* 확장 모드에서는 태그 버튼을 입력창 안 맨 위에 둔다 */}
+                    {(activeCategory === 'book' || activeCategory === 'chore') && isExpanded && (
+                        <div className="flex gap-1.5 flex-wrap">
+                            {renderQuickRow(true)}
                         </div>
                     )}
 
@@ -739,13 +746,16 @@ const InputBar: React.FC<InputBarProps> = ({ activeCategory = 'action', collecti
                                 rows={1}
                             />
                         </div>
-                        <button
-                            onClick={() => setShowEmotionModal(true)}
-                            className="p-2 text-yellow-500 hover:text-yellow-400 transition-colors"
-                            title="감정 태그 선택"
-                        >
-                            <Smile size={20} />
-                        </button>
+                        {/* 일상 탭은 위 줄의 '기분' 버튼이 같은 일을 하므로 겹치지 않게 뺀다 (#감정/ 자동완성은 그대로) */}
+                        {!(activeCategory === 'action' && onQuickEmotion) && (
+                            <button
+                                onClick={() => setShowEmotionModal(true)}
+                                className="p-2 text-yellow-500 hover:text-yellow-400 transition-colors"
+                                title="감정 태그 선택"
+                            >
+                                <Smile size={20} />
+                            </button>
+                        )}
                         <button
                             type="button"
                             onClick={() => fileInputRef.current?.click()}

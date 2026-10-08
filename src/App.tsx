@@ -360,7 +360,12 @@ const AppContent: React.FC = () => {
                 navigationTarget={navigationTarget}
                 onNavigationComplete={handleNavigationComplete}
               />
-              <InputBar activeCategory={activeTab} entries={entries} />
+              <InputBar
+                activeCategory={activeTab}
+                entries={entries}
+                // 감정 빠른 기록은 일상 탭의 입력창 위 '기분' 버튼으로만 연다
+                onQuickEmotion={activeTab === 'action' ? () => setShowEmotionFab(true) : undefined}
+              />
             </>
           )}
           </Suspense>
@@ -388,18 +393,7 @@ const AppContent: React.FC = () => {
             </div>
           </div>
 
-          {/* 감정 빠른 기록 FAB (전체화면 탭 제외) */}
-          {!['worry', 'braindump'].includes(activeTab) && (
-            <button
-              onClick={() => setShowEmotionFab(true)}
-              className="fixed right-4 bottom-60 lg:right-8 lg:bottom-32 z-[65] w-12 h-12 rounded-full bg-yellow-500 text-white shadow-lg flex items-center justify-center hover:bg-yellow-400 active:scale-95 transition-all"
-              aria-label="감정 빠른 기록"
-              title="지금 기분 기록"
-            >
-              <Smile size={24} />
-            </button>
-          )}
-
+          {/* 감정 빠른 기록: 예전에는 모든 탭에 떠 있는 버튼이었는데, 일상 탭 입력창 위 '기분' 버튼으로 옮겼다 */}
           <EmotionPickerModal
             isOpen={showEmotionFab}
             onClose={() => setShowEmotionFab(false)}
