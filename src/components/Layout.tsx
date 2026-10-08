@@ -86,14 +86,15 @@ const Layout: React.FC<LayoutProps> = ({ children, onSearch, onCalendar, onGalle
                                     key={tab.id}
                                     onClick={() => nav!.onSelect(tab.id)}
                                     aria-current={active ? 'page' : undefined}
-                                    className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-bold text-left transition-colors ${active
-                                        ? `${tab.color} bg-white/[0.06]`
-                                        : 'text-text-secondary hover:text-text-primary hover:bg-white/[0.03]'
+                                    className={`flex items-center gap-3 px-3 py-2 rounded-lg text-[15px] text-left transition-colors ${active
+                                        ? `${tab.color} font-semibold bg-white/[0.05]`
+                                        : 'text-text-secondary font-normal hover:text-text-primary hover:bg-white/[0.03]'
                                         }`}
                                 >
-                                    {/* 모바일 탭과 같은 빛나는 점으로 지금 화면을 표시한다 */}
+                                    {/* 지금 화면에만 모바일 탭과 같은 빛나는 점을 둔다.
+                                        나머지는 자리만 지켜 글자 줄이 흔들리지 않게 한다 */}
                                     <span
-                                        className={`w-1.5 h-1.5 rounded-full shrink-0 ${active ? 'bg-current shadow-[0_0_8px_currentColor]' : 'bg-white/10'}`}
+                                        className={`w-1.5 h-1.5 rounded-full shrink-0 ${active ? 'bg-current shadow-[0_0_8px_currentColor]' : ''}`}
                                         aria-hidden="true"
                                     />
                                     <span className="truncate">{tab.label}</span>

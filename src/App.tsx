@@ -31,16 +31,20 @@ import { db } from './services/firebase';
 
 type TabId = 'action' | 'braindump' | 'chore' | 'book' | 'todo' | 'expense' | 'worry';
 
-/** 화면 탭. 좁은 화면은 아래쪽 탭으로, 넓은 화면은 왼쪽 메뉴로 그린다 */
-const TABS: { id: TabId; label: string; color: string; border: string }[] = [
-  { id: 'todo', label: '투두', color: 'text-emerald-400', border: 'border-emerald-400/50' },
-  { id: 'action', label: '일상', color: 'text-blue-400', border: 'border-blue-400/50' },
-  { id: 'chore', label: '할일', color: 'text-orange-400', border: 'border-orange-400/50' },
-  { id: 'braindump', label: '🧠 덤프', color: 'text-accent', border: 'border-accent/50' },
-  { id: 'book', label: '📚 책', color: 'text-amber-600', border: 'border-amber-600/50' },
-  { id: 'expense', label: '💰 돈', color: 'text-rose-400', border: 'border-rose-400/50' },
-  { id: 'worry', label: '🌱 고민', color: 'text-green-400', border: 'border-green-400/50' },
+/**
+ * 화면 탭. 좁은 화면은 아래쪽 탭(label, 이모지 포함)으로, 넓은 화면은 왼쪽 메뉴(name, 글자만)로 그린다.
+ * 세로로 늘어선 메뉴에서는 색색의 이모지가 오히려 어수선해 이름만 쓴다.
+ */
+const TABS: { id: TabId; label: string; name: string; color: string; border: string }[] = [
+  { id: 'todo', label: '투두', name: '투두', color: 'text-emerald-400', border: 'border-emerald-400/50' },
+  { id: 'action', label: '일상', name: '일상', color: 'text-blue-400', border: 'border-blue-400/50' },
+  { id: 'chore', label: '할일', name: '할일', color: 'text-orange-400', border: 'border-orange-400/50' },
+  { id: 'braindump', label: '🧠 덤프', name: '덤프', color: 'text-accent', border: 'border-accent/50' },
+  { id: 'book', label: '📚 책', name: '책', color: 'text-amber-600', border: 'border-amber-600/50' },
+  { id: 'expense', label: '💰 돈', name: '돈', color: 'text-rose-400', border: 'border-rose-400/50' },
+  { id: 'worry', label: '🌱 고민', name: '고민', color: 'text-green-400', border: 'border-green-400/50' },
 ];
+const RAIL_TABS = TABS.map(t => ({ id: t.id, label: t.name, color: t.color }));
 
 const AppContent: React.FC = () => {
   const { user, loading } = useAuth();
@@ -282,7 +286,7 @@ const AppContent: React.FC = () => {
       onSearch={() => setShowSearch(true)}
       onCalendar={() => setShowUnifiedCalendar(true)}
       onGallery={() => setShowGallery(true)}
-      nav={{ tabs: TABS, active: activeTab, onSelect: selectTab }}
+      nav={{ tabs: RAIL_TABS, active: activeTab, onSelect: selectTab }}
     >
       {user ? (
         <>
