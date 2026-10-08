@@ -30,7 +30,7 @@ const MissReasonPrompt: React.FC<MissReasonPromptProps> = ({ prompt, onPick, onD
 
     return (
         <div
-            className="fixed top-20 left-1/2 -translate-x-1/2 z-[70] w-[calc(100%-32px)] max-w-sm p-3.5 bg-bg-secondary border border-bg-tertiary rounded-xl shadow-lg"
+            className="fixed top-20 left-1/2 -translate-x-1/2 lg:ml-[calc(var(--rail-w)/2)] lg:top-8 z-[70] w-[calc(100%-32px)] max-w-sm p-3.5 bg-bg-secondary border border-bg-tertiary rounded-xl shadow-lg"
             role="dialog"
             aria-label="예상과 크게 어긋난 이유"
         >

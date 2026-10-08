@@ -158,7 +158,10 @@ const ExpenseTimeline: React.FC<ExpenseTimelineProps> = ({ onDateSelect, navigat
     };
 
     return (
-        <div className="pb-40 px-4 app-container">
+        // 넓은 화면: 내역은 왼쪽, 달력·통계는 오른쪽에 붙여 내역을 내려도 계속 보이게 한다.
+        // 좁은 화면에서는 예전처럼 달력·통계가 내역 위에 온다 (DOM 순서 그대로).
+        <div className="pb-40 px-4 app-wide lg:grid lg:grid-cols-[minmax(0,1fr)_24rem] lg:gap-8 lg:items-start">
+            <aside className="lg:order-2 lg:sticky lg:top-6 lg:max-h-[calc(100vh-48px)] lg:overflow-y-auto">
             <ExpenseCalendar
                 expenses={expenses}
                 selectedDate={selectedDate}
@@ -191,11 +194,13 @@ const ExpenseTimeline: React.FC<ExpenseTimelineProps> = ({ onDateSelect, navigat
                 <Repeat size={12} />
                 반복 지출 관리
             </button>
+            </aside>
 
             {showRecurring && (
                 <RecurringExpenseModal onClose={() => { setShowRecurring(false); loadRules(); }} />
             )}
 
+            <section className="lg:order-1 min-w-0">
             {selectedCategory && (
                 <div className="flex items-center justify-between mb-4 px-1">
                     <span className="text-xs text-text-secondary">
@@ -279,6 +284,7 @@ const ExpenseTimeline: React.FC<ExpenseTimelineProps> = ({ onDateSelect, navigat
                     이 카테고리의 지출 내역이 없습니다.
                 </div>
             )}
+            </section>
         </div>
     );
 };

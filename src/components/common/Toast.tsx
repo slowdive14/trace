@@ -11,7 +11,7 @@ const Toast: React.FC<ToastProps> = ({ message, isVisible, icon }) => {
     if (!isVisible) return null;
 
     return (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-accent text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 animate-fade-in">
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 lg:ml-[calc(var(--rail-w)/2)] lg:top-8 z-50 bg-accent text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 animate-fade-in">
             {icon || <Check size={16} />}
             <span className="text-sm font-medium">{message}</span>
         </div>

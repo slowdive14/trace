@@ -29,6 +29,19 @@ import type { Entry, Expense, Todo, Worry, WorryEntry, NavigationTarget } from '
 import { onSnapshot, collection, query, orderBy } from 'firebase/firestore';
 import { db } from './services/firebase';
 
+type TabId = 'action' | 'braindump' | 'chore' | 'book' | 'todo' | 'expense' | 'worry';
+
+/** 화면 탭. 좁은 화면은 아래쪽 탭으로, 넓은 화면은 왼쪽 메뉴로 그린다 */
+const TABS: { id: TabId; label: string; color: string; border: string }[] = [
+  { id: 'todo', label: '투두', color: 'text-emerald-400', border: 'border-emerald-400/50' },
+  { id: 'action', label: '일상', color: 'text-blue-400', border: 'border-blue-400/50' },
+  { id: 'chore', label: '할일', color: 'text-orange-400', border: 'border-orange-400/50' },
+  { id: 'braindump', label: '🧠 덤프', color: 'text-accent', border: 'border-accent/50' },
+  { id: 'book', label: '📚 책', color: 'text-amber-600', border: 'border-amber-600/50' },
+  { id: 'expense', label: '💰 돈', color: 'text-rose-400', border: 'border-rose-400/50' },
+  { id: 'worry', label: '🌱 고민', color: 'text-green-400', border: 'border-green-400/50' },
+];
+
 const AppContent: React.FC = () => {
   const { user, loading } = useAuth();
   const [showCalendar, setShowCalendar] = useState(false);
@@ -39,7 +52,7 @@ const AppContent: React.FC = () => {
   const [pendingEmotion, setPendingEmotion] = useState<string | null>(null);
   const [emotionNote, setEmotionNote] = useState('');
   const emotionToast = useToast();
-  const [activeTab, setActiveTab] = useState<'action' | 'braindump' | 'chore' | 'book' | 'todo' | 'expense' | 'worry'>('todo');
+  const [activeTab, setActiveTab] = useState<TabId>('todo');
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [selectedExpenseDate, setSelectedExpenseDate] = useState<Date | undefined>(undefined);
   const [bookSubFilter, setBookSubFilter] = useState<string | null>(null);
@@ -218,6 +231,13 @@ const AppContent: React.FC = () => {
     setNavigationTarget(null);
   };
 
+  // 탭 바꾸기 (좁은 화면의 아래쪽 탭, 넓은 화면의 왼쪽 메뉴가 함께 쓴다)
+  const selectTab = (id: string) => {
+    setActiveTab(id as TabId);
+    setSelectedTag(null);
+    if (id === 'book') setBookSubFilter(null);
+  };
+
   // 갤러리에서 사진 → 해당 기록(엔트리)으로 점프
   const handleGalleryJump = (entryId: string) => {
     const entry = entries.find(e => e.id === entryId);
@@ -262,6 +282,7 @@ const AppContent: React.FC = () => {
       onSearch={() => setShowSearch(true)}
       onCalendar={() => setShowUnifiedCalendar(true)}
       onGallery={() => setShowGallery(true)}
+      nav={{ tabs: TABS, active: activeTab, onSelect: selectTab }}
     >
       {user ? (
         <>
@@ -286,7 +307,10 @@ const AppContent: React.FC = () => {
           {activeTab === 'worry' ? (
             <WorryTab />
           ) : activeTab === 'braindump' ? (
-            <BrainDumpTab />
+            // 넓은 화면에서 한 줄이 끝없이 길어지지 않게 기둥 너비를 둔다 (쓰는 화면은 전체 화면이라 영향 없음)
+            <div className="app-container">
+              <BrainDumpTab />
+            </div>
           ) : activeTab === 'expense' ? (
             <>
               <ExpenseTimeline
@@ -342,26 +366,14 @@ const AppContent: React.FC = () => {
           </Suspense>
           </ChunkErrorBoundary>
 
-          {/* Category Tabs */}
-          <div className={`fixed left-0 right-0 bg-bg-primary/80 backdrop-blur-xl border-t border-white/5 z-[45] safe-area-bottom transition-all duration-300 ${['worry', 'braindump'].includes(activeTab) ? 'bottom-0' : 'bottom-20'
+          {/* Category Tabs — 좁은 화면 전용. 넓은 화면에서는 Layout의 왼쪽 메뉴가 맡는다 */}
+          <div className={`lg:hidden fixed left-0 right-0 bg-bg-primary/80 backdrop-blur-xl border-t border-white/5 z-[45] safe-area-bottom transition-all duration-300 ${['worry', 'braindump'].includes(activeTab) ? 'bottom-0' : 'bottom-20'
             }`}>
             <div className="app-container flex px-2">
-              {[
-                { id: 'todo', label: '투두', color: 'text-emerald-400', border: 'border-emerald-400/50' },
-                { id: 'action', label: '일상', color: 'text-blue-400', border: 'border-blue-400/50' },
-                { id: 'chore', label: '할일', color: 'text-orange-400', border: 'border-orange-400/50' },
-                { id: 'braindump', label: '🧠 덤프', color: 'text-accent', border: 'border-accent/50' },
-                { id: 'book', label: '📚 책', color: 'text-amber-600', border: 'border-amber-600/50' },
-                { id: 'expense', label: '💰 돈', color: 'text-rose-400', border: 'border-rose-400/50' },
-                { id: 'worry', label: '🌱 고민', color: 'text-green-400', border: 'border-green-400/50' },
-              ].map((tab) => (
+              {TABS.map((tab) => (
                 <button
                   key={tab.id}
-                  onClick={() => {
-                    setActiveTab(tab.id as any);
-                    setSelectedTag(null);
-                    if (tab.id === 'book') setBookSubFilter(null);
-                  }}
+                  onClick={() => selectTab(tab.id)}
                   className={`flex-1 py-5 text-xs font-bold transition-all duration-300 flex flex-col items-center gap-1 ${activeTab === tab.id
                     ? `${tab.color} scale-110`
                     : 'text-text-secondary hover:text-text-primary'
@@ -380,7 +392,7 @@ const AppContent: React.FC = () => {
           {!['worry', 'braindump'].includes(activeTab) && (
             <button
               onClick={() => setShowEmotionFab(true)}
-              className="fixed right-4 bottom-60 z-[65] w-12 h-12 rounded-full bg-yellow-500 text-white shadow-lg flex items-center justify-center hover:bg-yellow-400 active:scale-95 transition-all"
+              className="fixed right-4 bottom-60 lg:right-8 lg:bottom-32 z-[65] w-12 h-12 rounded-full bg-yellow-500 text-white shadow-lg flex items-center justify-center hover:bg-yellow-400 active:scale-95 transition-all"
               aria-label="감정 빠른 기록"
               title="지금 기분 기록"
             >

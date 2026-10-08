@@ -642,6 +642,11 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
         return format(date, 'M월 d일 (eee)', { locale: ko });
     };
 
+    // 본문 기둥 너비. 할일은 원래부터 태블릿까지 넓게(4xl) 써서 그대로 두고, 넓은 화면에서는 모두 넓힌다
+    const columnWidth = category === 'chore' ? 'app-wide max-w-4xl lg:max-w-[var(--app-wide-w)]' : 'app-wide';
+    // 오른쪽 칸에 둘 것이 있을 때만 두 칸으로 나눈다 (비어 있는 칸이 생기지 않게)
+    const hasAside = category === 'action' || pinnedEntries.length > 0;
+
     return (
         <>
             {/* Toast Notification */}
@@ -649,7 +654,7 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
 
             {/* Header: Date Filter & View Toggle */}
             <div className="sticky top-0 bg-bg-primary/95 backdrop-blur border-b border-bg-tertiary z-20 px-4 py-3">
-                <div className={`${category === 'chore' ? 'max-w-4xl' : 'app-container'} mx-auto flex flex-col gap-3`}>
+                <div className={`${columnWidth} flex flex-col gap-3`}>
                     <div className="flex gap-2">
                         <div className="flex-1 flex gap-1 bg-bg-secondary rounded-lg p-1">
                             <button
@@ -753,7 +758,7 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
             {/* Sub-filter for Book Category */}
             {category === 'book' && (
                 <div className="sticky top-[57px] bg-bg-primary/95 backdrop-blur border-b border-bg-tertiary z-19 px-4 py-2">
-                    <div className="app-container flex gap-2">
+                    <div className="app-wide flex gap-2">
                         <button
                             onClick={() => onSubFilterChange?.(null)}
                             className={`flex-1 py-1.5 px-2 text-xs font-medium rounded-md transition-colors ${subFilter === null
@@ -787,7 +792,7 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
                 </div>
             )}
 
-            <div className={`px-4 ${category === 'chore' ? 'max-w-4xl' : 'app-container'} mx-auto ${category === 'book' ? 'pb-60' : 'pb-32'}`}>
+            <div className={`px-4 ${columnWidth} ${category === 'book' ? 'pb-60' : 'pb-32'}`}>
                 {category === 'book' && bookView === 'shelf' ? (
                     <BookshelfView
                         entries={shelfEntries}
@@ -803,10 +808,14 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
                         }}
                     />
                 ) : viewMode === 'list' ? (
-                    <>
+                    // 넓은 화면: 날짜별 기록은 왼쪽, 고정 항목과 (일상 탭의) 주간 진행·수면 통계는 오른쪽에 붙인다.
+                    // 좁은 화면에서는 예전처럼 위에서 아래로 쌓인다 (DOM 순서 그대로).
+                    <div className={hasAside ? 'lg:grid lg:grid-cols-[minmax(0,1fr)_22rem] xl:grid-cols-[minmax(0,1fr)_24rem] lg:gap-8 lg:items-start' : ''}>
+                    {hasAside && (
+                    <aside className={`lg:order-2 lg:sticky ${category === 'book' ? 'lg:top-[118px] lg:max-h-[calc(100vh-134px)]' : 'lg:top-[73px] lg:max-h-[calc(100vh-89px)]'} lg:overflow-y-auto lg:pt-4`}>
                         {/* Weekly Progress & Sleep Stats - 일상 탭에서만 표시 */}
                         {category === 'action' && (
-                            <div className="mt-4 space-y-2">
+                            <div className="mt-4 lg:mt-0 space-y-2 lg:mb-6">
                                 <WeeklyProgress />
                                 <SleepStats entries={allEntries} />
                             </div>
@@ -816,7 +825,7 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
                         {pinnedEntries.length > 0 && (
                             <div className="mb-8">
                                 <div
-                                    className="sticky top-[57px] bg-bg-primary/95 backdrop-blur py-2 z-10 border-b border-bg-tertiary flex justify-between items-center mb-4 cursor-pointer select-none"
+                                    className="sticky top-[57px] lg:static bg-bg-primary/95 backdrop-blur py-2 z-10 border-b border-bg-tertiary flex justify-between items-center mb-4 cursor-pointer select-none"
                                     onClick={() => setPinnedFolded(prev => !prev)}
                                 >
                                     <h2 className="text-accent text-sm font-bold flex items-center gap-2">
@@ -842,7 +851,10 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
                                 )}
                             </div>
                         )}
+                    </aside>
+                    )}
 
+                    <section className="lg:order-1 min-w-0">
                         {Object.entries(groupedEntries).map(([date, dayEntries]) => (
                             <div key={date} className="mb-8">
                                 <div className="sticky top-[57px] bg-bg-primary/95 backdrop-blur py-2 z-10 border-b border-bg-tertiary flex justify-between items-center mb-4">
@@ -925,7 +937,8 @@ const Timeline: React.FC<TimelineProps> = ({ category = 'action', selectedTag, o
                                 <p className="text-sm mt-2">Start writing to track your day.</p>
                             </div>
                         )}
-                    </>
+                    </section>
+                    </div>
                 ) : (
                     /* Matrix Mode */
                     <div className="py-2 h-[calc(100vh-220px)] flex flex-col overflow-hidden">

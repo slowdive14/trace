@@ -52,7 +52,7 @@ const WorryInput: React.FC<WorryInputProps> = ({ activeWorryId, worryStartDate, 
     if (!activeWorryId) {
         if (isEmbedded) return null;
         return (
-            <div className="fixed bottom-[52px] left-0 right-0 bg-bg-secondary border-t border-bg-tertiary p-4 z-40">
+            <div className="fixed bottom-[52px] lg:bottom-0 left-0 lg:left-[var(--rail-w)] right-0 bg-bg-secondary border-t border-bg-tertiary p-4 z-40">
                 <div className="app-container text-center text-text-secondary text-sm">
                     고민을 먼저 시작해주세요
                 </div>
@@ -62,7 +62,7 @@ const WorryInput: React.FC<WorryInputProps> = ({ activeWorryId, worryStartDate, 
 
     const containerClasses = isEmbedded
         ? "mt-4 bg-bg-secondary border border-bg-tertiary rounded-xl p-4"
-        : "fixed bottom-[52px] left-0 right-0 bg-bg-secondary border-t border-bg-tertiary p-4 z-40";
+        : "fixed bottom-[52px] lg:bottom-0 left-0 lg:left-[var(--rail-w)] right-0 bg-bg-secondary border-t border-bg-tertiary p-4 z-40";
 
     return (
         <div className={containerClasses}>

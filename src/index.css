@@ -16,14 +16,32 @@
    * 고정 헤더·입력바·탭바가 본문과 같은 값을 써야 어긋나지 않으므로
    * 반드시 이 변수 하나로만 제어한다.
    */
+  /*
+   * 넓은 화면(1024px~)에서는 위쪽 헤더와 아래쪽 탭을 왼쪽 메뉴(--rail-w) 하나로 합치고,
+   * 화면별로 여러 칸을 쓰는 본문은 --app-wide-w까지 넓힌다.
+   * 입력창처럼 한 줄로 길게 늘어지면 불편한 것은 --app-w를 그대로 쓴다.
+   * 모바일·태블릿에서는 두 값이 같고 메뉴 폭은 0이라 예전과 똑같다.
+   */
   :root {
     --app-w: 28rem;   /* 448px */
+    --app-wide-w: var(--app-w);
+    --rail-w: 0px;
   }
   @media (min-width: 768px) {
     :root { --app-w: 34rem; }   /* 544px */
   }
-  @media (min-width: 1280px) {
-    :root { --app-w: 42rem; }   /* 672px */
+  @media (min-width: 1024px) {
+    :root {
+      --rail-w: 13rem;          /* 208px */
+      --app-w: 46rem;           /* 736px */
+      --app-wide-w: 68rem;      /* 1088px */
+    }
+  }
+  @media (min-width: 1536px) {
+    :root {
+      --app-w: 50rem;           /* 800px */
+      --app-wide-w: 80rem;      /* 1280px */
+    }
   }
 }
 
@@ -32,6 +50,14 @@
   .app-container {
     width: 100%;
     max-width: var(--app-w);
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  /* 넓은 화면에서 여러 칸으로 나누는 본문 */
+  .app-wide {
+    width: 100%;
+    max-width: var(--app-wide-w);
     margin-left: auto;
     margin-right: auto;
   }

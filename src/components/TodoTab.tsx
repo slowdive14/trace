@@ -1929,10 +1929,11 @@ const TodoTab: React.FC<TodoTabProps> = ({
     };
 
     return (
-        <div className="flex flex-col relative" style={{ height: 'calc(100vh - 160px)' }}>
+        // 좁은 화면은 위쪽 헤더·아래쪽 탭(각 80px)을, 넓은 화면은 본문 위아래 여백(각 24px)만 뺀다
+        <div className="flex flex-col relative h-[calc(100vh-160px)] lg:h-[calc(100vh-48px)]">
             {/* Mode Tabs */}
             <div className="flex-shrink-0 bg-bg-primary/95 backdrop-blur border-b border-bg-tertiary z-20 px-4">
-                <div className="app-container flex gap-2 py-2">
+                <div className="app-wide flex gap-2 py-2">
                     <button
                         onClick={() => setViewMode('edit')}
                         className={`flex-1 py-2 px-4 text-sm font-medium rounded-md transition-colors ${viewMode === 'edit'
@@ -1975,7 +1976,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
             {/* Date Navigation (edit/matrix mode only) */}
             {(viewMode === 'edit' || viewMode === 'matrix') && (
                 <div className="flex-shrink-0 bg-bg-primary border-b border-bg-tertiary px-4 py-2 z-10">
-                    <div className="app-container flex items-center justify-between">
+                    <div className="app-wide flex items-center justify-between">
                         <button
                             onClick={() => handleDateChange('prev')}
                             className="p-1.5 text-text-secondary hover:text-text-primary transition-colors rounded-md hover:bg-bg-secondary"
@@ -2008,7 +2009,8 @@ const TodoTab: React.FC<TodoTabProps> = ({
             {viewMode === 'history' ? (
                 /* History Mode */
                 <div className="flex-1 overflow-y-auto px-4 pb-8">
-                    <div className="app-container pt-4">
+                    {/* 넓은 화면에서는 날짜 카드를 두 줄로 놓는다 */}
+                    <div className="app-wide pt-4 lg:grid lg:grid-cols-2 lg:gap-x-10 lg:items-start">
                         {Object.entries(groupedTodos).map(([date, todo]) => {
                             const historyItems = parseTodos(todo.content);
                             const historySummary = calculateWeightedSummary(historyItems);
@@ -2182,7 +2184,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
                             </div>
                         );})}
                         {historyTodos.length === 0 && (
-                            <div className="text-center text-text-secondary mt-20">
+                            <div className="text-center text-text-secondary mt-20 lg:col-span-2">
                                 <p>최근 30일간 작성된 투두가 없습니다.</p>
                             </div>
                         )}
@@ -2190,7 +2192,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
                 </div>
             ) : viewMode === 'matrix' ? (
                 /* Matrix Mode */
-                <div className="flex-1 flex flex-col p-4 overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
+                <div className="flex-1 flex flex-col p-4 overflow-y-auto app-wide" style={{ WebkitOverflowScrolling: 'touch' }}>
                     <DndContext
                         sensors={sensors}
                         collisionDetection={closestCenter}
@@ -2249,7 +2251,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
                 </div>
             ) : (
                 /* Edit Mode & Template Mode */
-                <div className="w-full app-container relative flex flex-col flex-1 overflow-hidden">
+                <div className="w-full app-wide relative flex flex-col flex-1 overflow-hidden">
                     {/* Saving Indicator */}
                     <div className="absolute top-4 right-16 z-30 flex items-center gap-2 pointer-events-none">
                         <span className={`text-xs font-medium transition-opacity duration-300 ${isSaving ? 'text-accent opacity-100' : 'opacity-0'}`}>
@@ -2306,7 +2308,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
 
                             {/* 리마인드 블록 지우기 확인 — 실수로 한 번에 날리지 않도록 두 단계 */}
                             {confirmClearIntro && introLineCount > 0 && (
-                                <div className="fixed bottom-[52px] left-0 right-0 z-20 app-container px-2">
+                                <div className="fixed bottom-[52px] left-0 lg:left-[var(--rail-w)] right-0 z-20 app-container px-2">
                                     <div className="flex items-center gap-2 bg-bg-tertiary border border-bg-primary rounded-lg px-3 py-2 shadow-lg">
                                         <span className="flex-1 text-xs text-text-secondary">
                                             위쪽 리마인드 {introLineCount}줄을 지울까요?
@@ -2328,7 +2330,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
                             )}
 
                             {/* Mobile Toolbar */}
-                            <div className="fixed bottom-0 left-0 right-0 bg-bg-secondary border-t border-bg-tertiary p-2 flex items-center justify-around z-20 app-container">
+                            <div className="fixed bottom-0 left-0 lg:left-[var(--rail-w)] right-0 bg-bg-secondary border-t border-bg-tertiary p-2 flex items-center justify-around z-20 app-container">
                                 <button onClick={() => insertText('- [ ] ')} className="p-2 text-text-secondary hover:text-accent" title="Checklist">
                                     <Square size={20} />
                                 </button>
@@ -2378,6 +2380,11 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                         </button>
                                     </div>
                                 )}
+                                {/* 넓은 화면: 목록은 왼쪽, 진행률·시간 카드는 오른쪽에 붙여 스크롤해도 보이게 한다.
+                                    좁은 화면에서는 예전처럼 카드가 목록 위에 온다 (DOM 순서 그대로) */}
+                                <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_22rem] xl:grid-cols-[minmax(0,1fr)_24rem] lg:gap-8 lg:items-start">
+                                {/* sticky 기준선이 스크롤 영역의 위쪽 여백(pt-16) 안쪽이라 top-0이어야 목록 첫 줄과 맞는다 */}
+                                <aside className="lg:order-2 lg:sticky lg:top-0">
                                 {/* Progress Bar (today only) */}
                                 {isToday && todos.length > 0 && (() => {
                                     const completed = todos.filter(t => t.checked).length;
@@ -2557,7 +2564,9 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                         dayPlan={dayPlan}
                                     />
                                 )}
+                                </aside>
 
+                                <section className="lg:order-1 min-w-0">
                                 {/* Sort Toggle */}
                                 {todos.length > 0 && todos.some(t => t.duration) && (
                                     <div className="flex justify-end mb-2">
@@ -2788,6 +2797,8 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                             </div>
                                         </div>
                                     )}
+                                </div>
+                                </section>
                                 </div>
                             </div>
                         </>
