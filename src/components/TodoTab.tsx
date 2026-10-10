@@ -18,6 +18,7 @@ import {
     type Expectation, type MissRecord,
 } from '../utils/missReasons';
 import { extractSleepRecords } from '../utils/sleepUtils';
+import { findTodoLine, setLineMinutes, addLineEid } from '../utils/todoLine';
 import TimeBudgetCard from './TimeBudgetCard';
 import MissReasonPrompt, { type MissPromptData } from './MissReasonPrompt';
 import {
@@ -437,6 +438,9 @@ const TodoTab: React.FC<TodoTabProps> = ({
     entries = NO_ENTRIES,
 }) => {
     const [content, setContent] = useState('');
+    // 기다렸다 이어지는 작업(일상 기록 만든 뒤 연결 표시 붙이기 등)이 그사이 바뀐 최신 내용을 보게 한다
+    const contentRef = useRef(content);
+    contentRef.current = content;
     const [isEditing, setIsEditing] = useState(false);
     const [viewMode, setViewMode] = useState<ViewMode>('edit');
     const [historyTodos, setHistoryTodos] = useState<Todo[]>([]);
@@ -456,6 +460,8 @@ const TodoTab: React.FC<TodoTabProps> = ({
     const [missPrompt, setMissPrompt] = useState<(MissPromptData & { date: string; kind: Expectation['kind'] }) | null>(null);
     const [missRecords, setMissRecords] = useState<MissRecord[]>([]);
     const [minutesInput, setMinutesInput] = useState<string>('');
+    // 걸린 시간을 붙일 항목을 못 찾았을 때 창에 띄우는 안내 (입력한 시간이 조용히 사라지지 않게)
+    const [timeError, setTimeError] = useState<string | null>(null);
     const [recordToAction, setRecordToAction] = useState<boolean>(true);
     const [deletingLineIndex, setDeletingLineIndex] = useState<number | null>(null);
     const [quickAddText, setQuickAddText] = useState('');
@@ -510,6 +516,17 @@ const TodoTab: React.FC<TodoTabProps> = ({
     const { user } = useAuth();
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    // 0.5초 기다리는 중인 저장. 날짜를 옮기거나 앱을 내리면 버리지 않고 바로 보낸다
+    const pendingSaveRef = useRef<(() => void) | null>(null);
+    const flushPendingSave = useCallback(() => {
+        if (saveTimeoutRef.current) {
+            clearTimeout(saveTimeoutRef.current);
+            saveTimeoutRef.current = null;
+        }
+        const pending = pendingSaveRef.current;
+        pendingSaveRef.current = null;
+        pending?.();
+    }, []);
     const subAddInputRef = useRef<HTMLInputElement>(null);
     const inlineEditRef = useRef<HTMLInputElement>(null);
     const historyEditRef = useRef<HTMLInputElement>(null);
@@ -547,11 +564,8 @@ const TodoTab: React.FC<TodoTabProps> = ({
     const isToday = isSameDay(selectedDate, getLogicalDate());
 
     const handleDateChange = useCallback((direction: 'prev' | 'next' | 'today') => {
-        // Flush pending save before switching date
-        if (saveTimeoutRef.current) {
-            clearTimeout(saveTimeoutRef.current);
-            saveTimeoutRef.current = null;
-        }
+        // 기다리던 저장은 원래 날짜로 바로 보낸다 (예전에는 타이머만 지워서 방금 고친 것이 사라졌다)
+        flushPendingSave();
 
         if (direction === 'today') {
             setSelectedDate(getLogicalDate());
@@ -563,7 +577,20 @@ const TodoTab: React.FC<TodoTabProps> = ({
         setContent('');
         setLastSaved(null);
         setDeletingLineIndex(null);
-    }, []);
+    }, [flushPendingSave]);
+
+    // 앱을 내리거나 닫을 때도 기다리던 저장을 바로 보낸다 (휴대폰은 백그라운드에서 타이머가 멈춘다)
+    useEffect(() => {
+        const onVisibility = () => {
+            if (document.visibilityState === 'hidden') flushPendingSave();
+        };
+        document.addEventListener('visibilitychange', onVisibility);
+        window.addEventListener('pagehide', flushPendingSave);
+        return () => {
+            document.removeEventListener('visibilitychange', onVisibility);
+            window.removeEventListener('pagehide', flushPendingSave);
+        };
+    }, [flushPendingSave]);
 
     // Load content based on view mode
     useEffect(() => {
@@ -980,6 +1007,24 @@ const TodoTab: React.FC<TodoTabProps> = ({
         return calculateStreak(rates, todayStr);
     }, [pastRatesByDate, content, currentLogicalDay]);
 
+    const persistContent = useCallback(async (newContent: string) => {
+        if (!user) return;
+        try {
+            if (viewMode === 'edit' || viewMode === 'matrix') {
+                await saveTodo(user.uid, selectedDate, newContent, collectionName);
+            } else if (viewMode === 'template') {
+                // Save as template
+                await saveTemplate(user.uid, newContent, collectionName);
+            }
+            setLastSaved(new Date());
+        } catch (error) {
+            console.error("Failed to save content:", error);
+        } finally {
+            setIsSaving(false);
+        }
+    }, [user, collectionName, viewMode, selectedDate]);
+
+    // 타이핑처럼 연달아 바뀌는 것은 0.5초 모아서 저장한다
     const handleSave = useCallback((newContent: string) => {
         if (!user) return;
 
@@ -987,23 +1032,21 @@ const TodoTab: React.FC<TodoTabProps> = ({
         if (saveTimeoutRef.current) {
             clearTimeout(saveTimeoutRef.current);
         }
+        pendingSaveRef.current = () => { void persistContent(newContent); };
+        saveTimeoutRef.current = setTimeout(flushPendingSave, 500);
+    }, [user, persistContent, flushPendingSave]);
 
-        saveTimeoutRef.current = setTimeout(async () => {
-            try {
-                if (viewMode === 'edit' || viewMode === 'matrix') {
-                    await saveTodo(user.uid, selectedDate, newContent, collectionName);
-                } else if (viewMode === 'template') {
-                    // Save as template
-                    await saveTemplate(user.uid, newContent, collectionName);
-                }
-                setLastSaved(new Date());
-            } catch (error) {
-                console.error("Failed to save content:", error);
-            } finally {
-                setIsSaving(false);
-            }
-        }, 500);
-    }, [user, collectionName, viewMode, selectedDate]);
+    /** 기다리지 않고 지금 저장한다 (입력한 걸린 시간처럼 잃으면 안 되는 것) */
+    const saveContentNow = useCallback((newContent: string) => {
+        if (!user) return;
+        if (saveTimeoutRef.current) {
+            clearTimeout(saveTimeoutRef.current);
+            saveTimeoutRef.current = null;
+        }
+        pendingSaveRef.current = null;
+        setIsSaving(true);
+        void persistContent(newContent);
+    }, [user, persistContent]);
 
     const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
         const newContent = e.target.value;
@@ -1347,16 +1390,15 @@ const TodoTab: React.FC<TodoTabProps> = ({
             setContent(newContent);
             handleSave(newContent);
 
-            // 기존 (Xm) 패턴에서 시간 추출
-            const timeMatch = line.match(/\((\d+)m\)\s*$/);
-            const checkedLine = line.replace('- [ ]', '- [x]');
-            const existingMinutes = timeMatch ? parseInt(timeMatch[1], 10) : undefined;
+            // 적어 둔 시간((30m)·(1h30m))이 있으면 미리 채운다
+            const checkedLine = lines[lineIndex];
             setRecordToAction(true);
-            setMinutesInput(existingMinutes !== undefined ? String(existingMinutes) : '');
+            setMinutesInput(planned !== undefined ? String(planned) : '');
+            setTimeError(null);
             setTimePopup({
                 lineIndex,
                 lineText: checkedLine,
-                currentTime: existingMinutes,
+                currentTime: planned,
                 expected,
             });
         } else if (line.includes('- [x]')) {
@@ -1402,13 +1444,13 @@ const TodoTab: React.FC<TodoTabProps> = ({
             lines[lineIndex] = line.replace('- [x]', '- [ ]').replace(/\s*\{eid:[^}]+\}/g, '');
         }
 
-        await saveHistoryContent(dateStr, lines.join('\n'));
+        // 화면과 최신본에는 바로 반영된다. 서버 응답은 기다리지 않는다
+        // (예전에는 응답을 기다린 뒤 창을 띄워, 그사이 한 번 더 누르면 체크가 도로 풀렸다)
+        void saveHistoryContent(dateStr, lines.join('\n'));
 
         // 미완료 → 완료 시 시간 팝업 표시
         if (isChecking) {
-            const timeMatch = line.match(/\((\d+)m\)\s*$/);
-            const checkedLine = line.replace('- [ ]', '- [x]');
-            const existingMinutes = timeMatch ? parseInt(timeMatch[1], 10) : undefined;
+            const checkedLine = lines[lineIndex];
 
             // 지난 날짜 목록에는 예상 표시가 없지만, 같은 방식으로 예상을 잡아 둔다
             const itemText = line.replace(/^[\t ]*- \[ \] /, '').replace(/\s*\{eid:[^}]+\}/g, '');
@@ -1419,134 +1461,109 @@ const TodoTab: React.FC<TodoTabProps> = ({
                 : est ? { minutes: est.minutes, low: est.low, high: est.high, kind: 'estimate' } : undefined;
 
             setRecordToAction(true);
-            setMinutesInput(existingMinutes !== undefined ? String(existingMinutes) : '');
+            setMinutesInput(planned !== undefined ? String(planned) : '');
+            setTimeError(null);
             setTimePopup({
                 lineIndex,
                 lineText: checkedLine,
                 dateStr,
-                currentTime: existingMinutes,
+                currentTime: planned,
                 expected,
             });
         }
     };
 
-    // lineText로 정확한 라인 위치를 찾는 헬퍼
-    const findLineIndex = (lines: string[], expectedIndex: number, lineText: string): number => {
-        // 예상 위치에 있으면 바로 사용
-        if (lines[expectedIndex] === lineText) return expectedIndex;
-        // 시간(Xm)이나 eid 추가로 라인이 변경된 경우: expectedIndex의 라인이 원래 텍스트로 시작하는지 확인
-        if (lines[expectedIndex]?.startsWith(lineText.trimEnd())) return expectedIndex;
-        // 없으면 전체 검색
-        const found = lines.findIndex(l => l === lineText);
-        return found;
-    };
-
     const handleTimeConfirm = useCallback(async (minutes: number | null, recordToAction: boolean = true) => {
         if (!timePopup) return;
+        const popup = timePopup;
+        const { dateStr } = popup;
+        const hasTime = minutes !== null && !isNaN(minutes) && minutes > 0;
 
-        if (minutes !== null && !isNaN(minutes) && minutes > 0) {
-            const timeStr = `(${minutes}m)`;
+        if (!hasTime && !recordToAction) {
+            setTimePopup(null);
+            setTimeError(null);
+            return;
+        }
 
-            if (timePopup.dateStr) {
-                // 히스토리 뷰
-                const current = getHistoryContent(timePopup.dateStr);
-                if (current === null || !user) { setTimePopup(null); return; }
-
-                const lines = current.split('\n');
-                const idx = findLineIndex(lines, timePopup.lineIndex, timePopup.lineText);
-                if (idx === -1) { setTimePopup(null); return; }
-
-                // 기존 (Xm) 제거 후 새 시간 추가
-                lines[idx] = lines[idx].replace(/\s*\(\d+m\)\s*$/, '') + ` ${timeStr}`;
-                await saveHistoryContent(timePopup.dateStr, lines.join('\n'));
+        // 지금 내용(오늘은 편집 중인 본문, 지난 날짜는 히스토리 최신본)을 읽고 쓴다
+        const readLines = () => (dateStr ? getHistoryContent(dateStr) : contentRef.current)?.split('\n') ?? null;
+        const writeLines = (lines: string[]) => {
+            const next = lines.join('\n');
+            if (dateStr) {
+                void saveHistoryContent(dateStr, next);
             } else {
-                // 오늘 뷰
-                const lines = content.split('\n');
-                const idx = findLineIndex(lines, timePopup.lineIndex, timePopup.lineText);
-                if (idx === -1) { setTimePopup(null); return; }
-
-                lines[idx] = lines[idx].replace(/\s*\(\d+m\)\s*$/, '') + ` ${timeStr}`;
-                const newContent = lines.join('\n');
-                setContent(newContent);
-                handleSave(newContent);
+                contentRef.current = next;
+                setContent(next);
+                saveContentNow(next);   // 걸린 시간은 기다리지 않고 바로 저장한다
             }
+        };
+
+        // 체크한 항목을 다시 찾는다. 그사이 시간·연결 표시가 붙었거나 자리가 밀렸어도 찾는다.
+        // 못 찾으면 창을 닫지 않고 알린다 (예전에는 창만 닫혀 입력한 시간이 조용히 사라졌다)
+        const lines = readLines();
+        const idx = lines ? findTodoLine(lines, popup.lineIndex, popup.lineText) : -1;
+        if (!lines || idx === -1) {
+            setTimeError('이 항목을 목록에서 찾지 못했어요. 건너뛰기로 닫은 뒤 다시 체크해 주세요.');
+            return;
+        }
+
+        // 일상 기록 내용 (서브아이템이면 부모 이름 포함, 예: "회기 리뷰 2 - 1")
+        let entryContent = recordToAction ? extractEntryContent(lines[idx]) : '';
+        if (entryContent) {
+            const parentContent = findParentContent(lines, idx);
+            if (parentContent) entryContent = `${parentContent} - ${entryContent}`;
+        }
+
+        if (hasTime) {
+            lines[idx] = setLineMinutes(lines[idx], minutes);
+            writeLines(lines);
 
             // 예상과 크게 어긋났으면 왜 그랬는지 한 번 묻는다 (답하지 않아도 된다)
-            const exp = timePopup.expected;
+            const exp = popup.expected;
             const direction = exp ? missDirection(exp, minutes) : null;
             if (exp && direction) {
                 setMissPrompt({
-                    text: recordTextFromLine(timePopup.lineText),
+                    text: recordTextFromLine(popup.lineText),
                     expected: exp.minutes,
                     actual: minutes,
                     direction,
-                    date: timePopup.dateStr ?? format(selectedDate, 'yyyy-MM-dd'),
+                    date: dateStr ?? format(selectedDate, 'yyyy-MM-dd'),
                     kind: exp.kind,
                 });
             }
         }
 
-        // 일상 탭 기록 옵션이 켜져 있을 때만 엔트리 생성 + eid 마커 삽입
-        if (user && recordToAction) {
-            let entryContent = extractEntryContent(timePopup.lineText);
-            // 서브아이템이면 부모 이름 포함 (예: "회기 리뷰 2 - 1")
-            const todoLines = (timePopup.dateStr
-                ? getHistoryContent(timePopup.dateStr)
-                : content)?.split('\n');
-            if (todoLines && entryContent) {
-                const parentContent = findParentContent(todoLines, timePopup.lineIndex);
-                if (parentContent) {
-                    entryContent = `${parentContent} - ${entryContent}`;
-                }
-            }
-            if (entryContent) {
-                try {
-                    let entryDate: Date;
-                    if (timePopup.dateStr) {
-                        const [year, month, day] = timePopup.dateStr.split('-').map(Number);
-                        entryDate = new Date(year, month - 1, day);
-                    } else {
-                        // 오늘 뷰: 체크 시점의 현재 시간 사용 (selectedDate는 마운트 시점 시간이라 부정확)
-                        entryDate = new Date();
-                    }
-                    const tags = extractTags(entryContent);
-                    const entryId = await addEntry(user.uid, entryContent, tags, 'action', entryDate);
-                    if (entryId) {
-                        const eidMarker = ` {eid:${entryId}}`;
-                        if (timePopup.dateStr) {
-                            // 히스토리 뷰: 해당 라인에 eid 추가
-                            // 바로 위에서 시간을 붙인 최신 내용을 읽어야 (Xm) 표기가 지워지지 않는다
-                            const current = getHistoryContent(timePopup.dateStr);
-                            if (current !== null) {
-                                const lines = current.split('\n');
-                                const idx = findLineIndex(lines, timePopup.lineIndex, timePopup.lineText);
-                                if (idx !== -1) {
-                                    lines[idx] = lines[idx].replace(/\s*$/, '') + eidMarker;
-                                }
-                                await saveHistoryContent(timePopup.dateStr, lines.join('\n'));
-                            }
-                        } else {
-                            // 오늘 뷰: content에 eid 추가
-                            setContent(prev => {
-                                const lines = prev.split('\n');
-                                const idx = findLineIndex(lines, timePopup.lineIndex, timePopup.lineText);
-                                if (idx !== -1) {
-                                    lines[idx] = lines[idx].replace(/\s*$/, '') + eidMarker;
-                                }
-                                const updated = lines.join('\n');
-                                handleSave(updated);
-                                return updated;
-                            });
-                        }
-                    }
-                } catch (error) {
-                    console.error('Failed to create action entry:', error);
-                }
-            }
-        }
-
+        // 시간은 이미 반영됐으니 창은 바로 닫는다. 일상 기록은 뒤에서 만들고 연결한다
+        // (서버 응답을 기다리는 동안 창이 남아 있으면 한 번 더 누르게 된다)
         setTimePopup(null);
-    }, [timePopup, content, user, handleSave, getHistoryContent, saveHistoryContent, selectedDate]);
+        setTimeError(null);
+
+        if (!user || !entryContent) return;
+        try {
+            let entryDate: Date;
+            if (dateStr) {
+                const [year, month, day] = dateStr.split('-').map(Number);
+                entryDate = new Date(year, month - 1, day);
+            } else {
+                // 오늘 뷰: 체크 시점의 현재 시간 사용 (selectedDate는 마운트 시점 시간이라 부정확)
+                entryDate = new Date();
+            }
+            const entryId = await addEntry(user.uid, entryContent, extractTags(entryContent), 'action', entryDate);
+            if (!entryId) return;
+
+            // 기다리는 사이 바뀐 최신 내용에서 다시 찾아 연결 표시를 붙인다
+            const latest = readLines();
+            const at = latest ? findTodoLine(latest, idx, lines[idx]) : -1;
+            if (latest && at !== -1) {
+                latest[at] = addLineEid(latest[at], entryId);
+                writeLines(latest);
+            } else {
+                console.warn('일상 기록은 만들었지만 연결할 투두 항목을 찾지 못했습니다:', entryId);
+            }
+        } catch (error) {
+            console.error('Failed to create action entry:', error);
+        }
+    }, [timePopup, user, getHistoryContent, saveHistoryContent, saveContentNow, selectedDate]);
 
     const insertText = (text: string, cursorOffset = 0) => {
         if (!textareaRef.current) return;
@@ -2869,17 +2886,28 @@ const TodoTab: React.FC<TodoTabProps> = ({
             {timePopup && (() => {
                 const parsedMinutes = (() => {
                     const n = parseInt(minutesInput, 10);
-                    return !isNaN(n) && n > 0 ? n : null;
+                    return !isNaN(n) && n > 0 && n <= 1440 ? n : null;
                 })();
                 const hasTime = parsedMinutes !== null;
+                const badTime = minutesInput !== '' && !hasTime;
                 const hasEntry = recordToAction;
-                const canSave = hasTime || hasEntry;
+                const canSave = (hasTime || hasEntry) && !badTime;
                 const previewParts: string[] = [];
                 if (hasTime) previewParts.push(`⏱ ${parsedMinutes}분 기록`);
                 if (hasEntry) previewParts.push(`📝 일상 탭에 추가`);
                 const skip = () => handleTimeConfirm(null, false);
+                // 바깥을 눌러 닫는 건 아직 아무것도 적지 않았을 때만. 시간을 적었으면 키보드만 내리고 창은 둔다
+                // (저장을 누른 손가락이 키보드가 내려가며 밀린 창 바깥에 닿아도 적은 시간이 사라지지 않게)
+                const onBackdrop = () => {
+                    if (minutesInput === '') {
+                        skip();
+                        return;
+                    }
+                    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+                };
                 return (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={skip}>
+                    // 좁은 화면에서는 위쪽에 띄운다. 가운데 두면 키보드가 저장 버튼을 가리거나 창을 밀어 올린다
+                    <div className="fixed inset-0 z-50 flex items-start justify-center pt-[12vh] md:items-center md:pt-0 bg-black/40" onClick={onBackdrop}>
                         <div
                             className="bg-bg-secondary rounded-xl p-5 shadow-lg w-72 border border-bg-tertiary"
                             onClick={(e) => e.stopPropagation()}
@@ -2894,13 +2922,17 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                 handleTimeConfirm(parsedMinutes, recordToAction);
                             }}>
                                 <div className="flex items-center gap-2 mb-3">
+                                    {/* type="number"는 범위를 벗어나면 브라우저가 제출을 말없이 막는다. 숫자 자판만 띄우고 직접 거른다 */}
                                     <input
-                                        type="number"
-                                        min="1"
-                                        max="1440"
+                                        type="text"
+                                        inputMode="numeric"
+                                        pattern="[0-9]*"
+                                        enterKeyHint="done"
+                                        autoComplete="off"
+                                        aria-label="걸린 시간(분)"
                                         autoFocus
                                         value={minutesInput}
-                                        onChange={(e) => setMinutesInput(e.target.value)}
+                                        onChange={(e) => setMinutesInput(e.target.value.replace(/\D/g, '').slice(0, 4))}
                                         placeholder="예: 30"
                                         className="flex-1 px-3 py-2 rounded-lg bg-bg-primary border border-bg-tertiary text-text-primary text-center text-lg focus:outline-none focus:ring-2 focus:ring-accent"
                                         onKeyDown={(e) => {
@@ -2922,7 +2954,11 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                     </div>
                                 </label>
                                 <div className="min-h-[28px] mb-3 pt-2 border-t border-bg-tertiary">
-                                    {canSave ? (
+                                    {timeError ? (
+                                        <div className="text-[11px] text-red-400 leading-tight" role="alert">{timeError}</div>
+                                    ) : badTime ? (
+                                        <div className="text-[11px] text-amber-400 leading-tight">1~1440분 사이로 적어 주세요</div>
+                                    ) : canSave ? (
                                         <div className="text-[11px] text-text-secondary leading-tight">
                                             <span className="text-text-tertiary">저장 시: </span>
                                             {previewParts.join(' + ')}
