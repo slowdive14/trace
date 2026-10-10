@@ -1503,7 +1503,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
         const lines = readLines();
         const idx = lines ? findTodoLine(lines, popup.lineIndex, popup.lineText) : -1;
         if (!lines || idx === -1) {
-            setTimeError('이 항목을 목록에서 찾지 못했어요. 건너뛰기로 닫은 뒤 다시 체크해 주세요.');
+            setTimeError('이 항목을 목록에서 찾지 못했어요. 닫은 뒤 다시 체크해 주세요.');
             return;
         }
 
@@ -2890,24 +2890,21 @@ const TodoTab: React.FC<TodoTabProps> = ({
                 })();
                 const hasTime = parsedMinutes !== null;
                 const badTime = minutesInput !== '' && !hasTime;
-                const hasEntry = recordToAction;
-                const canSave = (hasTime || hasEntry) && !badTime;
-                const previewParts: string[] = [];
-                if (hasTime) previewParts.push(`⏱ ${parsedMinutes}분 기록`);
-                if (hasEntry) previewParts.push(`📝 일상 탭에 추가`);
-                const skip = () => handleTimeConfirm(null, false);
-                // 바깥을 눌러 닫는 건 아직 아무것도 적지 않았을 때만. 시간을 적었으면 키보드만 내리고 창은 둔다
+                // 버튼은 하나다. 무엇이 남는지는 버튼 글자(시간)와 체크박스(일상 기록)만 보면 알 수 있게 한다.
+                // 예전의 '건너뛰기'는 일상 기록만 건너뛰는 것처럼 읽혀, 적어 둔 시간까지 버려지곤 했다.
+                const close = () => handleTimeConfirm(null, false);
+                // 바깥을 누르거나 Esc로 닫는 건 아직 아무것도 적지 않았을 때만. 시간을 적었으면 키보드만 내리고 창은 둔다
                 // (저장을 누른 손가락이 키보드가 내려가며 밀린 창 바깥에 닿아도 적은 시간이 사라지지 않게)
-                const onBackdrop = () => {
+                const dismiss = () => {
                     if (minutesInput === '') {
-                        skip();
+                        close();
                         return;
                     }
                     if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
                 };
                 return (
                     // 좁은 화면에서는 위쪽에 띄운다. 가운데 두면 키보드가 저장 버튼을 가리거나 창을 밀어 올린다
-                    <div className="fixed inset-0 z-50 flex items-start justify-center pt-[12vh] md:items-center md:pt-0 bg-black/40" onClick={onBackdrop}>
+                    <div className="fixed inset-0 z-50 flex items-start justify-center pt-[12vh] md:items-center md:pt-0 bg-black/40" onClick={dismiss}>
                         <div
                             className="bg-bg-secondary rounded-xl p-5 shadow-lg w-72 border border-bg-tertiary"
                             onClick={(e) => e.stopPropagation()}
@@ -2918,7 +2915,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
                             </div>
                             <form onSubmit={(e) => {
                                 e.preventDefault();
-                                if (!canSave) return;
+                                if (badTime) return;
                                 handleTimeConfirm(parsedMinutes, recordToAction);
                             }}>
                                 <div className="flex items-center gap-2 mb-3">
@@ -2936,7 +2933,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                         placeholder="예: 30"
                                         className="flex-1 px-3 py-2 rounded-lg bg-bg-primary border border-bg-tertiary text-text-primary text-center text-lg focus:outline-none focus:ring-2 focus:ring-accent"
                                         onKeyDown={(e) => {
-                                            if (e.key === 'Escape') skip();
+                                            if (e.key === 'Escape') dismiss();
                                         }}
                                     />
                                     <span className="text-sm text-text-secondary">분</span>
@@ -2953,37 +2950,31 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                         <span className="text-[10px] text-text-tertiary">타임라인에 독립된 기록 생성</span>
                                     </div>
                                 </label>
-                                <div className="min-h-[28px] mb-3 pt-2 border-t border-bg-tertiary">
+                                <div className="pt-3 border-t border-bg-tertiary">
                                     {timeError ? (
-                                        <div className="text-[11px] text-red-400 leading-tight" role="alert">{timeError}</div>
+                                        <div className="mb-2 flex items-start justify-between gap-2" role="alert">
+                                            <span className="text-[11px] text-red-400 leading-tight">{timeError}</span>
+                                            <button
+                                                type="button"
+                                                onClick={close}
+                                                className="shrink-0 text-[11px] text-text-secondary hover:text-text-primary underline"
+                                            >
+                                                닫기
+                                            </button>
+                                        </div>
                                     ) : badTime ? (
-                                        <div className="text-[11px] text-amber-400 leading-tight">1~1440분 사이로 적어 주세요</div>
-                                    ) : canSave ? (
-                                        <div className="text-[11px] text-text-secondary leading-tight">
-                                            <span className="text-text-tertiary">저장 시: </span>
-                                            {previewParts.join(' + ')}
-                                        </div>
-                                    ) : (
-                                        <div className="text-[11px] text-text-tertiary leading-tight italic">
-                                            시간이나 옵션을 입력하거나, 건너뛰기를 누르세요
-                                        </div>
-                                    )}
-                                </div>
-                                <div className="flex gap-2">
-                                    <button
-                                        type="button"
-                                        onClick={skip}
-                                        className="flex-1 px-3 py-2 rounded-lg text-sm text-text-secondary hover:bg-bg-tertiary transition-colors"
-                                        title="시간·기록 없이 완료만 표시"
-                                    >
-                                        건너뛰기
-                                    </button>
+                                        <div className="mb-2 text-[11px] text-amber-400 leading-tight">1~1440분 사이로 적어 주세요</div>
+                                    ) : null}
+                                    {/* 시간을 적었으면 그 시간을 저장하고, 비워 두면 시간 없이 완료한다 (일상 기록은 위 체크박스대로) */}
                                     <button
                                         type="submit"
-                                        disabled={!canSave}
-                                        className="flex-1 px-3 py-2 rounded-lg text-sm bg-accent text-white hover:bg-accent/80 transition-colors font-medium disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-accent"
+                                        disabled={badTime}
+                                        className={`w-full px-3 py-2.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${hasTime
+                                            ? 'bg-accent text-white hover:bg-accent/80'
+                                            : 'bg-bg-tertiary text-text-primary hover:bg-bg-tertiary/70'
+                                            }`}
                                     >
-                                        저장
+                                        {hasTime ? `${parsedMinutes}분 저장` : '시간 없이 완료'}
                                     </button>
                                 </div>
                             </form>
