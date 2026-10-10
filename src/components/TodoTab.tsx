@@ -462,7 +462,8 @@ const TodoTab: React.FC<TodoTabProps> = ({
     const [minutesInput, setMinutesInput] = useState<string>('');
     // 걸린 시간을 붙일 항목을 못 찾았을 때 창에 띄우는 안내 (입력한 시간이 조용히 사라지지 않게)
     const [timeError, setTimeError] = useState<string | null>(null);
-    const [recordToAction, setRecordToAction] = useState<boolean>(true);
+    // '일상 탭에도 기록 남기기'. 기본은 꺼 두고, 남기고 싶을 때만 켠다
+    const [recordToAction, setRecordToAction] = useState<boolean>(false);
     const [deletingLineIndex, setDeletingLineIndex] = useState<number | null>(null);
     const [quickAddText, setQuickAddText] = useState('');
     // 빠른 추가를 '계획 외 추가 항목'으로 넣을지. 켜 두면 연달아 적을 수 있다.
@@ -1392,7 +1393,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
 
             // 적어 둔 시간((30m)·(1h30m))이 있으면 미리 채운다
             const checkedLine = lines[lineIndex];
-            setRecordToAction(true);
+            setRecordToAction(false);
             setMinutesInput(planned !== undefined ? String(planned) : '');
             setTimeError(null);
             setTimePopup({
@@ -1460,7 +1461,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
                 ? { minutes: planned, kind: 'plan' }
                 : est ? { minutes: est.minutes, low: est.low, high: est.high, kind: 'estimate' } : undefined;
 
-            setRecordToAction(true);
+            setRecordToAction(false);
             setMinutesInput(planned !== undefined ? String(planned) : '');
             setTimeError(null);
             setTimePopup({
