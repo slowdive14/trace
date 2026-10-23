@@ -18,7 +18,7 @@ import {
     type Expectation, type MissRecord,
 } from '../utils/missReasons';
 import { extractSleepRecords } from '../utils/sleepUtils';
-import { findTodoLine, setLineMinutes, addLineEid } from '../utils/todoLine';
+import { findTodoLine, setLineMinutes, addLineEid, splitForMove, appendLines } from '../utils/todoLine';
 import TimeBudgetCard from './TimeBudgetCard';
 import MissReasonPrompt, { type MissPromptData } from './MissReasonPrompt';
 import {
@@ -28,7 +28,7 @@ import {
     type BacklogItem,
 } from '../utils/todoRepeat';
 import { extractTags } from '../utils/tagUtils';
-import { CheckSquare, Square, Bold, Highlighter, ArrowRight, ArrowLeft, Edit3, Check, X, ChevronLeft, ChevronRight, ChevronDown, Clock, Trash2, Plus, ArrowUpDown, ArrowUp, ArrowDown, GripVertical, Eraser, Calendar, CalendarClock, Eye, EyeOff } from 'lucide-react';
+import { CheckSquare, Square, Bold, Highlighter, ArrowRight, ArrowLeft, Edit3, Check, X, ChevronLeft, ChevronRight, ChevronDown, Clock, Trash2, Plus, ArrowUpDown, ArrowUp, ArrowDown, GripVertical, Eraser, Calendar, CalendarClock, Eye, EyeOff, Forward } from 'lucide-react';
 import RecurringTodoModal from './RecurringTodoModal';
 import DateField from './DateField';
 import { format, subDays, addDays, startOfDay, endOfDay, startOfWeek, endOfWeek, isSameDay } from 'date-fns';
@@ -193,6 +193,12 @@ interface SortableTodoGroupProps {
     finishAt: Map<number, number>;
     /** 오늘 취침 시각 (논리적 0시부터 분). 끝나는 시각이 넘기면 빨갛게 */
     bedMin: number | null;
+    /** 다른 날로 옮길 날을 고르는 중인 항목 */
+    moveIndex: number | null;
+    setMoveIndex: (v: number | null) => void;
+    /** 빠른 선택으로 보여 줄 날 (오늘·내일·다음 주 월요일 중 보고 있는 날을 뺀 것) */
+    moveTargets: { label: string; date: Date }[];
+    onMove: (lineIndex: number, target: Date | 'backlog') => void;
 }
 
 const SortableTodoGroup: React.FC<SortableTodoGroupProps> = ({
@@ -219,6 +225,10 @@ const SortableTodoGroup: React.FC<SortableTodoGroupProps> = ({
     estimates,
     finishAt,
     bedMin,
+    moveIndex,
+    setMoveIndex,
+    moveTargets,
+    onMove,
 }) => {
     const parentId = group[0].lineIndex.toString();
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: parentId });
@@ -348,6 +358,21 @@ const SortableTodoGroup: React.FC<SortableTodoGroupProps> = ({
                                     </>
                                 ) : (
                                     <>
+                                        {/* 다른 날로 옮기기: 안 끝낸 최상위 항목만 (하위 항목은 부모와 함께 옮겨 간다) */}
+                                        {!item.checked && item.indent === 0 && (
+                                            <button
+                                                onClick={() => setMoveIndex(moveIndex === item.lineIndex ? null : item.lineIndex)}
+                                                className={`p-2 transition-opacity ${moveIndex === item.lineIndex
+                                                    ? 'text-accent opacity-100'
+                                                    : 'text-text-tertiary hover:text-accent opacity-70 md:opacity-0 md:group-hover:opacity-100'
+                                                    }`}
+                                                title="다른 날로 옮기기"
+                                                aria-label="다른 날로 옮기기"
+                                                aria-expanded={moveIndex === item.lineIndex}
+                                            >
+                                                <Forward size={18} />
+                                            </button>
+                                        )}
                                         <button
                                             onClick={() => {
                                                 // 접혀 있으면 펼쳐서 방금 추가한 항목이 보이게 한다
@@ -375,6 +400,61 @@ const SortableTodoGroup: React.FC<SortableTodoGroupProps> = ({
                             </div>
                         </div>
                     </div>
+                    {moveIndex === item.lineIndex && (() => {
+                        // 이 항목 아래의 안 끝낸 하위 항목이 함께 가고, 끝낸 것은 이 날에 남는다
+                        const children = group.filter(c => c.lineIndex > item.lineIndex);
+                        const keepsDone = children.some(c => c.checked);
+                        const movesChildren = children.some(c => !c.checked);
+                        return (
+                            <div className="pb-2 pt-0.5" style={{ paddingLeft: '44px' }}>
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                    <span className="text-[11px] text-text-tertiary mr-0.5">옮길 날</span>
+                                    {moveTargets.map(t => (
+                                        <button
+                                            key={t.label}
+                                            onClick={() => onMove(item.lineIndex, t.date)}
+                                            className="px-2.5 py-1.5 text-xs rounded-md bg-bg-tertiary text-text-primary hover:bg-accent/20 transition-colors"
+                                            title={`${format(t.date, 'M월 d일 (EEE)', { locale: ko })} 목록으로`}
+                                        >
+                                            {t.label}
+                                        </button>
+                                    ))}
+                                    <DateField
+                                        value=""
+                                        onChange={value => {
+                                            if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return;
+                                            onMove(item.lineIndex, new Date(`${value}T12:00:00`));
+                                        }}
+                                        className="w-[8.5rem] bg-bg-tertiary text-text-primary text-xs rounded-md px-2 py-1.5 outline-none focus:ring-1 focus:ring-accent cursor-pointer"
+                                        title="달력에서 날짜 고르기"
+                                    />
+                                    {/* 대기 목록은 한 줄짜리라 하위 항목까지 옮길 때는 쓰지 않는다 */}
+                                    {!movesChildren && (
+                                        <button
+                                            onClick={() => onMove(item.lineIndex, 'backlog')}
+                                            className="px-2.5 py-1.5 text-xs rounded-md text-text-secondary hover:text-accent hover:bg-bg-tertiary transition-colors"
+                                            title="날짜를 정하지 않고 대기 목록에 둔다"
+                                        >
+                                            대기 목록
+                                        </button>
+                                    )}
+                                    <button
+                                        onClick={() => setMoveIndex(null)}
+                                        className="px-2 py-1.5 text-xs text-text-tertiary hover:text-text-primary"
+                                    >
+                                        닫기
+                                    </button>
+                                </div>
+                                {(movesChildren || keepsDone) && (
+                                    <p className="mt-1 text-[11px] text-text-tertiary">
+                                        {movesChildren && '안 끝낸 하위 항목도 함께 옮겨요.'}
+                                        {movesChildren && keepsDone && ' '}
+                                        {keepsDone && '끝낸 하위 항목은 이 날에 남아요.'}
+                                    </p>
+                                )}
+                            </div>
+                        );
+                    })()}
                     {subAddingIndex === item.lineIndex && (
                         <div
                             className="flex items-center gap-1 py-1"
@@ -470,6 +550,8 @@ const TodoTab: React.FC<TodoTabProps> = ({
     const [quickAddExtra, setQuickAddExtra] = useState(false);
     const [subAddingIndex, setSubAddingIndex] = useState<number | null>(null);
     const [subAddText, setSubAddText] = useState('');
+    /** 다른 날로 옮길 날을 고르는 중인 항목 */
+    const [moveIndex, setMoveIndex] = useState<number | null>(null);
     const [confirmClearIntro, setConfirmClearIntro] = useState(false);
     const [inlineEditIndex, setInlineEditIndex] = useState<number | null>(null);
     const [inlineEditText, setInlineEditText] = useState('');
@@ -578,6 +660,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
         setContent('');
         setLastSaved(null);
         setDeletingLineIndex(null);
+        setMoveIndex(null);
     }, [flushPendingSave]);
 
     // 앱을 내리거나 닫을 때도 기다리던 저장을 바로 보낸다 (휴대폰은 백그라운드에서 타이머가 멈춘다)
@@ -621,7 +704,11 @@ const TodoTab: React.FC<TodoTabProps> = ({
                         // 이 표시가 없던 예전 문서는 이미 템플릿이 들어와 있다.
                         // 겹치는 항목이 있으면 채운 것으로 보고 건너뛴다 —
                         // 그러지 않으면 오늘 일부러 지운 습관이 한 번 되살아난다.
-                        const already = parseTodos(loaded).some(t => templateTexts.has(t.text));
+                        // 다른 날에서 옮겨 오거나 대기 목록에서 보내며 새로 만든 문서는 '아직 안 채움'(false)이
+                        // 적혀 있다. 옮겨 온 루틴 항목 때문에 나머지 루틴이 통째로 빠지지 않게 그대로 채운다
+                        // (겹치는 항목은 mergeTemplateInto가 한 번만 둔다).
+                        const already = todo?.templateFilled !== false
+                            && parseTodos(loaded).some(t => templateTexts.has(t.text));
 
                         if (!already) {
                             const before = parseTodos(loaded).length;
@@ -1318,20 +1405,99 @@ const TodoTab: React.FC<TodoTabProps> = ({
         try {
             // 보고 있는 날짜면 화면의 내용을 쓴다 (아직 저장 전일 수 있다)
             const isOpenDate = targetStr === format(selectedDate, 'yyyy-MM-dd');
-            const base = isOpenDate ? content : ((await getTodo(user.uid, target, collectionName))?.content ?? '');
+            const existing = isOpenDate ? null : await getTodo(user.uid, target, collectionName);
+            const base = isOpenDate ? content : (existing?.content ?? '');
             const next = appendTodoLine(base, text);
 
             if (isOpenDate) {
                 setContent(next);
                 handleSave(next);
             } else {
-                await saveTodo(user.uid, target, next, collectionName);
+                // 새로 만드는 문서에는 '루틴 아직 안 채움'을 적어 둔다 (그날 루틴이 빠지지 않게)
+                await saveTodo(user.uid, target, next, collectionName, undefined, existing ? undefined : false);
             }
             await persistBacklog(removeBacklogItem(backlog, index));
         } catch (e) {
             console.error('대기 항목을 옮기지 못했습니다:', e);
         }
     }, [backlog, user, collectionName, selectedDate, content, handleSave, persistBacklog]);
+
+    // ===== 다른 날로 옮기기 =====
+
+    // 빠른 선택: 오늘·내일·다음 주 월요일 (보고 있는 날, 서로 겹치는 날은 뺀다)
+    const moveTargets = useMemo(() => {
+        const today = new Date(`${currentLogicalDay}T12:00:00`);
+        const options = [
+            { label: '오늘', date: today },
+            { label: '내일', date: addDays(today, 1) },
+            { label: '다음 주 월요일', date: addDays(startOfWeek(today, { weekStartsOn: 1 }), 7) },
+        ];
+        const seen = new Set([format(selectedDate, 'yyyy-MM-dd')]);
+        return options.filter(o => {
+            const key = format(o.date, 'yyyy-MM-dd');
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+    }, [currentLogicalDay, selectedDate]);
+
+    /**
+     * 안 끝낸 항목을 다른 날(또는 대기 목록)로 옮긴다. 끝낸 하위 항목은 이 날에 남는다.
+     * 받는 날 문서를 먼저 읽고 나서 이 날에서 뺀다. 읽지 못하면 아무것도 바꾸지 않는다
+     * (할 일이 어느 날에도 없게 되는 일을 막는다).
+     */
+    const moveItemTo = useCallback(async (lineIndex: number, target: Date | 'backlog') => {
+        if (!user) return;
+        const lineText = contentRef.current.split('\n')[lineIndex];
+        if (lineText === undefined) return;
+        setMoveIndex(null);
+
+        let existing: Todo | null = null;
+        if (target !== 'backlog') {
+            if (isSameDay(target, selectedDate)) return;
+            try {
+                existing = await getTodo(user.uid, target, collectionName);
+            } catch (e) {
+                console.error('옮길 날의 목록을 읽지 못했습니다:', e);
+                setAutoAdded('옮길 날의 목록을 읽지 못해 옮기지 않았어요. 잠시 뒤 다시 해 주세요.');
+                return;
+            }
+        }
+
+        // 기다리는 사이 내용이 바뀌었을 수 있으니 최신 내용에서 다시 찾아 나눈다
+        const latest = contentRef.current;
+        const idx = findTodoLine(latest.split('\n'), lineIndex, lineText);
+        const split = idx === -1 ? null : splitForMove(latest, idx);
+        if (!split) return;
+        const name = recordTextFromLine(split.moved[0]);
+
+        contentRef.current = split.remaining;
+        setContent(split.remaining);
+        saveContentNow(split.remaining);
+
+        if (target === 'backlog') {
+            await persistBacklog([...backlogRef.current, { text: split.moved[0].replace(/^- \[ \] /, '') }]);
+            setAutoAdded(`'${name}' 항목을 대기 목록으로 옮겼어요`);
+            return;
+        }
+
+        try {
+            const next = appendLines(existing?.content ?? '', split.moved);
+            // 새로 만드는 문서에는 '루틴 아직 안 채움'을 적어 둔다 (그날이 와도 루틴이 빠지지 않게)
+            await saveTodo(user.uid, target, next, collectionName, undefined, existing ? undefined : false);
+            setAutoAdded(`'${name}' 항목을 ${formatDayLabel(target)}로 옮겼어요${split.keptHead ? ' (끝낸 하위 항목은 이 날에 남겼어요)' : ''}`);
+        } catch (e) {
+            // 받는 날에 넣지 못했으면 이 날로 되돌린다 (그사이 고친 게 없으면 원래 모습 그대로)
+            console.error('다른 날로 옮기지 못했습니다:', e);
+            const restored = contentRef.current === split.remaining
+                ? latest
+                : appendLines(contentRef.current, split.moved);
+            contentRef.current = restored;
+            setContent(restored);
+            saveContentNow(restored);
+            setAutoAdded('옮기지 못해 이 날로 되돌려 놓았어요.');
+        }
+    }, [user, selectedDate, collectionName, saveContentNow, persistBacklog]);
 
     // Quick-add a todo item (reading mode)
     const handleQuickAdd = () => {
@@ -2693,6 +2859,10 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                                         estimates={showEstimates ? estimates : NO_ESTIMATES}
                                                         finishAt={showEstimates ? finishAt : NO_FINISH_TIMES}
                                                         bedMin={bedMin}
+                                                        moveIndex={moveIndex}
+                                                        setMoveIndex={setMoveIndex}
+                                                        moveTargets={moveTargets}
+                                                        onMove={moveItemTo}
                                                     />
                                                 ))}
                                             </div>

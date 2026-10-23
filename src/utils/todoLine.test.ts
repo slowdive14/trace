@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { todoLineKey, findTodoLine, setLineMinutes, addLineEid } from './todoLine';
+import { todoLineKey, findTodoLine, setLineMinutes, addLineEid, splitForMove, appendLines } from './todoLine';
 
 describe('항목 열쇠', () => {
     it('체크 상태, 줄 끝 시간, 연결 표시를 빼고 비교한다', () => {
@@ -89,5 +89,63 @@ describe('연결 표시 붙이기', () => {
 
     it('이미 있으면 그대로', () => {
         expect(addLineEid('- [x] 운동 (40m) {eid:e1}', 'e1')).toBe('- [x] 운동 (40m) {eid:e1}');
+    });
+});
+
+describe('다른 날로 옮기기', () => {
+    const day = [
+        '## 오늘',
+        '- [x] 아침 정리 (20m)',
+        '- [ ] 운동',
+        '- [ ] 보고서',
+        '  - [x] 자료 모으기 (30m) {eid:e1}',
+        '  - [ ] 초안 쓰기',
+        '    - [ ] 결론',
+        '- [ ] 책 읽기',
+    ].join('\n');
+
+    it('하위 항목이 없으면 그 줄만 옮기고 이 날에서는 뺀다', () => {
+        const r = splitForMove(day, 2)!;
+        expect(r.moved).toEqual(['- [ ] 운동']);
+        expect(r.keptHead).toBe(false);
+        expect(r.remaining.split('\n')).not.toContain('- [ ] 운동');
+        expect(r.remaining.split('\n')).toContain('- [ ] 책 읽기');
+    });
+
+    it('끝낸 하위 항목은 이 날에 남기고, 안 끝낸 것만 데려간다', () => {
+        const r = splitForMove(day, 3)!;
+        expect(r.moved).toEqual(['- [ ] 보고서', '  - [ ] 초안 쓰기', '    - [ ] 결론']);
+        expect(r.keptHead).toBe(true);
+        expect(r.remaining.split('\n').slice(3, 6)).toEqual([
+            '- [ ] 보고서',
+            '  - [x] 자료 모으기 (30m) {eid:e1}',
+            '- [ ] 책 읽기',
+        ]);
+    });
+
+    it('하위 항목을 따로 옮기면 맨 앞으로 끌어올린다', () => {
+        const r = splitForMove(day, 5)!;
+        expect(r.moved).toEqual(['- [ ] 초안 쓰기', '  - [ ] 결론']);
+    });
+
+    it("옮겨 가면 그날의 계획이 되므로 '추가(+)' 표시를 뗀다", () => {
+        expect(splitForMove('- [ ] +급한 일', 0)!.moved).toEqual(['- [ ] 급한 일']);
+    });
+
+    it('빈 줄에서 묶음이 끝난다', () => {
+        const r = splitForMove(['- [ ] 가', '', '  - [ ] 다음 묶음처럼 보이는 줄'].join('\n'), 0)!;
+        expect(r.moved).toEqual(['- [ ] 가']);
+    });
+
+    it('끝낸 항목이나 항목이 아닌 줄은 옮기지 않는다', () => {
+        expect(splitForMove(day, 1)).toBeNull();
+        expect(splitForMove(day, 0)).toBeNull();
+        expect(splitForMove(day, 99)).toBeNull();
+    });
+
+    it('받는 날 끝에 덧붙인다', () => {
+        expect(appendLines('', ['- [ ] 운동'])).toBe('- [ ] 운동');
+        expect(appendLines('- [ ] 가', ['- [ ] 나', '  - [ ] 다'])).toBe('- [ ] 가\n- [ ] 나\n  - [ ] 다');
+        expect(appendLines('- [ ] 가\n', ['- [ ] 나'])).toBe('- [ ] 가\n- [ ] 나');
     });
 });
