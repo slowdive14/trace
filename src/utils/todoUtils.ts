@@ -11,7 +11,17 @@ export interface TodoItem {
     duration?: number;  // 분 단위 (UI 표시용)
     /** 계획에 없던 '추가 항목' (줄 앞의 + 표시). 달성률 분모에서 빠지고 초과분으로 센다 */
     isExtra?: boolean;
+    /**
+     * 다른 날로 미룬 항목 ('- [>]' 줄). 그날 계획에는 남아 달성률 분모에 들어가고,
+     * 체크할 수 없다. 오늘 남은 일로는 세지 않는다.
+     */
+    deferred?: boolean;
+    /** 미룬 곳: 받은 날(yyyy-MM-dd) 또는 'backlog'. 함께 미룬 하위 항목에는 없다 */
+    deferredTo?: string;
 }
+
+/** 미룬 흔적에 붙이는 표시: {moved:2026-10-25}, {moved:backlog} */
+export const MOVED_MARKER_RE = /\s*\{moved:([^}]+)\}/;
 
 /** 추가 항목임을 나타내는 줄머리 표시 */
 export const EXTRA_PREFIX = '+';
@@ -627,7 +637,8 @@ export const mergeTemplateInto = (content: string, template: string): string => 
         if (!trimmed) return false;
         if (templateLines.has(trimmed)) return false;
         const items = parseTodos(line);
-        return !(items.length > 0 && templateTexts.has(items[0].text));
+        // 미룸 흔적은 이름이 루틴과 같아도 그날의 기록이라 남긴다
+        return !(items.length > 0 && !items[0].deferred && templateTexts.has(items[0].text));
     });
 
     return extras.length > 0 ? `${template}\n${extras.join('\n')}` : template;
@@ -650,10 +661,12 @@ export const parseTodos = (content: string): TodoItem[] => {
 
         const uncheckedMatch = line.match(/^[\t ]*- \[ \] (.+)$/);
         const checkedMatch = line.match(/^[\t ]*- \[x\] (.+)$/);
+        const deferredMatch = line.match(/^[\t ]*- \[>\] (.+)$/);
 
-        if (uncheckedMatch || checkedMatch) {
+        if (uncheckedMatch || checkedMatch || deferredMatch) {
             const isChecked = !!checkedMatch;
-            const rawText = uncheckedMatch ? uncheckedMatch[1] : checkedMatch![1];
+            const rawText = (uncheckedMatch ?? checkedMatch ?? deferredMatch)![1];
+            const movedTo = rawText.match(MOVED_MARKER_RE)?.[1];
 
             // Extract quadrant tag (#q1, #q2, #q3, #q4)
             let quadrant: 'q1' | 'q2' | 'q3' | 'q4' | 'inbox' = 'inbox';
@@ -661,6 +674,7 @@ export const parseTodos = (content: string): TodoItem[] => {
 
             // Remove {eid:...} markers from display
             cleanText = cleanText.replace(/\s*\{eid:[^}]+\}/g, '');
+            cleanText = cleanText.replace(MOVED_MARKER_RE, '');
 
             // 계획 외로 더 한 일은 줄머리 +로 구분한다
             const isExtra = EXTRA_RE.test(cleanText);
@@ -684,6 +698,7 @@ export const parseTodos = (content: string): TodoItem[] => {
                 weight: duration ? duration.minutes : (isHighlighted(rawText) ? 2 : 1),
                 duration: duration?.minutes,
                 isExtra,
+                ...(deferredMatch ? { deferred: true, ...(movedTo ? { deferredTo: movedTo } : {}) } : {}),
             });
         }
     });

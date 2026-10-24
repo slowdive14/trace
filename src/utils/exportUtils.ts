@@ -71,7 +71,11 @@ export function exportDailyMarkdown(
         // markdown += '## 🎯 오늘의 목표\n'; // Header removed as per request
         // 추가 항목은 체크박스를 떼서 내보낸다. 옵시디언의 달성률 계산은 노트 안의
         // 체크박스를 전부 분모에 넣기 때문에, 그대로 두면 앱과 숫자가 갈린다.
-        const cleanTodo = stripExtraCheckboxes(todo.content.replace(/\s*\{eid:[^}]+\}/g, ''));
+        // 미룬 흔적은 받은 날을 '→ 10/25'처럼 읽을 수 있게 바꾼다
+        const cleanTodo = stripExtraCheckboxes(todo.content
+            .replace(/\s*\{eid:[^}]+\}/g, '')
+            .replace(/\s*\{moved:(\d{4})-(\d{2})-(\d{2})\}/g, (_m, _y, mo, d) => ` → ${Number(mo)}/${Number(d)}`)
+            .replace(/\s*\{moved:backlog\}/g, ' → 대기 목록'));
         markdown += cleanTodo.trim() + '\n\n';
     }
 

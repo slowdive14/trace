@@ -18,7 +18,10 @@ import {
     type Expectation, type MissRecord,
 } from '../utils/missReasons';
 import { extractSleepRecords } from '../utils/sleepUtils';
-import { findTodoLine, setLineMinutes, addLineEid, splitForMove, appendLines } from '../utils/todoLine';
+import {
+    findTodoLine, setLineMinutes, addLineEid, splitForMove, appendLines,
+    deferKey, collectDeferrals, deferralCount, removeDeferredTrace,
+} from '../utils/todoLine';
 import TimeBudgetCard from './TimeBudgetCard';
 import MissReasonPrompt, { type MissPromptData } from './MissReasonPrompt';
 import {
@@ -199,7 +202,13 @@ interface SortableTodoGroupProps {
     /** 빠른 선택으로 보여 줄 날 (오늘·내일·다음 주 월요일 중 보고 있는 날을 뺀 것) */
     moveTargets: { label: string; date: Date }[];
     onMove: (lineIndex: number, target: Date | 'backlog') => void;
+    /** 다른 날에서 몇 번 미뤄져 온 항목인지 (lineIndex → 횟수) */
+    deferCounts: Map<number, number>;
 }
+
+/** 미룬 곳 표시: '10/25(일)' 또는 '대기 목록' */
+const deferredLabel = (to: string): string =>
+    to === 'backlog' ? '대기 목록' : /^\d{4}-\d{2}-\d{2}$/.test(to) ? formatDayLabel(new Date(`${to}T12:00:00`)) : to;
 
 const SortableTodoGroup: React.FC<SortableTodoGroupProps> = ({
     group,
@@ -229,6 +238,7 @@ const SortableTodoGroup: React.FC<SortableTodoGroupProps> = ({
     setMoveIndex,
     moveTargets,
     onMove,
+    deferCounts,
 }) => {
     const parentId = group[0].lineIndex.toString();
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: parentId });
@@ -274,13 +284,32 @@ const SortableTodoGroup: React.FC<SortableTodoGroupProps> = ({
                                     </button>
                                 )}
                             </div>
-                            <input
-                                type="checkbox"
-                                checked={item.checked}
-                                onChange={() => toggleCheckbox(item.lineIndex)}
-                                className="mt-1 w-4 h-4 rounded border-text-secondary focus:ring-accent focus:ring-2"
-                            />
-                            {inlineEditIndex === item.lineIndex ? (
+                            {item.deferred ? (
+                                // 다른 날로 미룬 항목: 이 날 계획에는 남지만 체크할 수 없다
+                                <span className="mt-1 w-4 h-4 shrink-0 flex items-center justify-center text-text-tertiary" title="다른 날로 미룬 항목">
+                                    <Forward size={14} />
+                                </span>
+                            ) : (
+                                <input
+                                    type="checkbox"
+                                    checked={item.checked}
+                                    onChange={() => toggleCheckbox(item.lineIndex)}
+                                    className="mt-1 w-4 h-4 rounded border-text-secondary focus:ring-accent focus:ring-2"
+                                />
+                            )}
+                            {item.deferred ? (
+                                <span className="flex-1 leading-relaxed text-text-tertiary">
+                                    {renderText(item.text)}
+                                    {item.deferredTo && (
+                                        <span
+                                            className="ml-1.5 inline-flex align-middle text-[11px] tabular-nums select-none"
+                                            title="미룬 곳. 이 날 계획에는 남아 달성률에 그대로 들어가요"
+                                        >
+                                            → {deferredLabel(item.deferredTo)}
+                                        </span>
+                                    )}
+                                </span>
+                            ) : inlineEditIndex === item.lineIndex ? (
                                 <input
                                     ref={inlineEditRef}
                                     type="text"
@@ -309,10 +338,23 @@ const SortableTodoGroup: React.FC<SortableTodoGroupProps> = ({
                                         </span>
                                     )}
                                     {renderText(item.text)}
+                                    {/* 다른 날에서 미뤄 온 횟수. 여러 번이면 계획이 과하거나 피하고 있다는 신호다 */}
+                                    {(() => {
+                                        const n = deferCounts.get(item.lineIndex);
+                                        if (!n) return null;
+                                        return (
+                                            <span
+                                                className={`ml-1.5 inline-flex items-center align-middle px-1 py-px text-[10px] font-medium rounded select-none ${n >= 3 ? 'bg-red-400/15 text-red-400' : 'bg-amber-400/15 text-amber-400'}`}
+                                                title={`다른 날에서 ${n}번 미뤄 온 일이에요`}
+                                            >
+                                                {n}번 미룸
+                                            </span>
+                                        );
+                                    })()}
                                     {/* 직접 적지 않은 소요시간은 지난 기록으로 짐작해 흐리게 붙인다 (기록이 쌓이면 범위로).
                                         그리고 지금부터 순서대로 하면 몇 시에 끝나는지 붙인다 */}
                                     {(() => {
-                                        if (item.checked) return null;
+                                        if (item.checked || item.deferred) return null;
                                         const est = estimates.get(item.lineIndex);
                                         const finish = finishAt.get(item.lineIndex);
                                         const afterBed = finish !== undefined && bedMin !== null && finish > bedMin;
@@ -356,6 +398,16 @@ const SortableTodoGroup: React.FC<SortableTodoGroupProps> = ({
                                             삭제
                                         </button>
                                     </>
+                                ) : item.deferred ? (
+                                    // 흔적을 지우면 이 날 계획에서도 빠진다 (미룬 게 아니라 계획을 바꾼 것이었을 때)
+                                    <button
+                                        onClick={() => setDeletingLineIndex(item.lineIndex)}
+                                        className="text-text-tertiary hover:text-red-400 p-2 opacity-70 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
+                                        title="미룸 흔적 지우기 (이 날 계획에서도 빠져요)"
+                                        aria-label="미룸 흔적 지우기"
+                                    >
+                                        <Trash2 size={18} />
+                                    </button>
                                 ) : (
                                     <>
                                         {/* 다른 날로 옮기기: 안 끝낸 최상위 항목만 (하위 항목은 부모와 함께 옮겨 간다) */}
@@ -552,6 +604,8 @@ const TodoTab: React.FC<TodoTabProps> = ({
     const [subAddText, setSubAddText] = useState('');
     /** 다른 날로 옮길 날을 고르는 중인 항목 */
     const [moveIndex, setMoveIndex] = useState<number | null>(null);
+    /** 이 화면에서 미룸 흔적을 남긴 날의 최신 내용 (전체 기록은 처음에 한 번만 읽으므로) */
+    const [sessionDays, setSessionDays] = useState<Record<string, string>>({});
     const [confirmClearIntro, setConfirmClearIntro] = useState(false);
     const [inlineEditIndex, setInlineEditIndex] = useState<number | null>(null);
     const [inlineEditText, setInlineEditText] = useState('');
@@ -1206,8 +1260,10 @@ const TodoTab: React.FC<TodoTabProps> = ({
             }
         }
 
-        lines.splice(lineIndex, 1);
-        const newContent = lines.join('\n');
+        // 미룸 흔적은 함께 미룬 하위 흔적까지 정리한다
+        const trace = removeDeferredTrace(content, lineIndex);
+        if (trace === null) lines.splice(lineIndex, 1);
+        const newContent = trace ?? lines.join('\n');
         setContent(newContent);
         handleSave(newContent);
         setDeletingLineIndex(null);
@@ -1464,20 +1520,33 @@ const TodoTab: React.FC<TodoTabProps> = ({
             }
         }
 
+        // 이미 시작한 날(오늘·지난 날)에서 옮기면 '미룸' 흔적을 남겨 그날 계획에 둔다.
+        // 그래야 옮긴다고 그날 달성률이 오르지 않는다. 아직 오지 않은 날의 일을 옮기는 건
+        // 계획을 바꾸는 것이라 흔적 없이 옮긴다.
+        const fromStr = format(selectedDate, 'yyyy-MM-dd');
+        const leaveTrace = fromStr <= currentLogicalDay;
+        const traceTo = target === 'backlog' ? 'backlog' : format(target, 'yyyy-MM-dd');
+
         // 기다리는 사이 내용이 바뀌었을 수 있으니 최신 내용에서 다시 찾아 나눈다
         const latest = contentRef.current;
         const idx = findTodoLine(latest.split('\n'), lineIndex, lineText);
-        const split = idx === -1 ? null : splitForMove(latest, idx);
+        const split = idx === -1 ? null : splitForMove(latest, idx, leaveTrace ? traceTo : undefined);
         if (!split) return;
         const name = recordTextFromLine(split.moved[0]);
+        const verb = leaveTrace ? '미뤘어요' : '옮겼어요';
+        const after = leaveTrace
+            ? ". 이 날 계획에는 '미룸'으로 남아요"
+            : split.keptDone ? ' (끝낸 하위 항목은 이 날에 남겼어요)' : '';
 
         contentRef.current = split.remaining;
         setContent(split.remaining);
         saveContentNow(split.remaining);
+        // 받는 날로 가서 볼 때 미룬 횟수를 셀 수 있게 이 날의 흔적을 바로 반영한다
+        if (leaveTrace) setSessionDays(prev => ({ ...prev, [fromStr]: split.remaining }));
 
         if (target === 'backlog') {
             await persistBacklog([...backlogRef.current, { text: split.moved[0].replace(/^- \[ \] /, '') }]);
-            setAutoAdded(`'${name}' 항목을 대기 목록으로 옮겼어요`);
+            setAutoAdded(`'${name}' 항목을 대기 목록으로 ${verb}${after}`);
             return;
         }
 
@@ -1485,7 +1554,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
             const next = appendLines(existing?.content ?? '', split.moved);
             // 새로 만드는 문서에는 '루틴 아직 안 채움'을 적어 둔다 (그날이 와도 루틴이 빠지지 않게)
             await saveTodo(user.uid, target, next, collectionName, undefined, existing ? undefined : false);
-            setAutoAdded(`'${name}' 항목을 ${formatDayLabel(target)}로 옮겼어요${split.keptHead ? ' (끝낸 하위 항목은 이 날에 남겼어요)' : ''}`);
+            setAutoAdded(`'${name}' 항목을 ${formatDayLabel(target)}로 ${verb}${after}`);
         } catch (e) {
             // 받는 날에 넣지 못했으면 이 날로 되돌린다 (그사이 고친 게 없으면 원래 모습 그대로)
             console.error('다른 날로 옮기지 못했습니다:', e);
@@ -1497,7 +1566,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
             saveContentNow(restored);
             setAutoAdded('옮기지 못해 이 날로 되돌려 놓았어요.');
         }
-    }, [user, selectedDate, collectionName, saveContentNow, persistBacklog]);
+    }, [user, selectedDate, currentLogicalDay, collectionName, saveContentNow, persistBacklog]);
 
     // Quick-add a todo item (reading mode)
     const handleQuickAdd = () => {
@@ -1831,12 +1900,35 @@ const TodoTab: React.FC<TodoTabProps> = ({
     const estimates = useMemo(() => {
         const map = new Map<number, TaskEstimate>();
         for (const item of todos) {
-            if (item.checked || item.duration !== undefined) continue;
+            if (item.checked || item.deferred || item.duration !== undefined) continue;
             const est = estimator(item.text);
             if (est) map.set(item.lineIndex, est);
         }
         return map;
     }, [todos, estimator]);
+
+    // 지난 날들의 '미룸' 흔적. 이 화면에서 방금 흔적을 남긴 날은 최신 내용으로 본다
+    const deferralIndex = useMemo(() => {
+        const byDate = new Map(allTodos.map(t => [format(new Date(t.date), 'yyyy-MM-dd'), t.content ?? '']));
+        Object.entries(sessionDays).forEach(([date, text]) => byDate.set(date, text));
+        return collectDeferrals([...byDate].map(([date, text]) => ({ date, content: text })));
+    }, [allTodos, sessionDays]);
+
+    // 보고 있는 날의 최상위 항목이 몇 번 미뤄져 왔는지 (lineIndex → 횟수)
+    const deferCounts = useMemo(() => {
+        const map = new Map<number, number>();
+        const lines = content.split('\n');
+        const dateStr = format(selectedDate, 'yyyy-MM-dd');
+        for (const item of todos) {
+            if (item.indent !== 0 || item.deferred) continue;
+            const n = deferralCount(deferralIndex, dateStr, deferKey(lines[item.lineIndex] ?? ''));
+            if (n > 0) map.set(item.lineIndex, n);
+        }
+        return map;
+    }, [todos, content, selectedDate, deferralIndex]);
+
+    // 이 날 다른 날로 미룬 항목 수 (최상위 흔적만 센다)
+    const deferredCount = useMemo(() => todos.filter(t => t.deferred && t.indent === 0).length, [todos]);
 
     const todayLoad = useMemo(
         () => computeTodayLoad(todos, item => estimates.get(item.lineIndex)),
@@ -1872,12 +1964,14 @@ const TodoTab: React.FC<TodoTabProps> = ({
         });
         if (currentGroup.length > 0) groups.push(currentGroup);
 
-        const isGroupCompleted = (group: TodoItem[]) => group.every(item => item.checked);
+        // 할 일 → 끝낸 일 → 다른 날로 미룬 일 순서
+        const rank = (group: TodoItem[]) =>
+            group[0].deferred ? 2 : group.every(item => item.checked) ? 1 : 0;
 
         groups.sort((a, b) => {
-            const aCompleted = isGroupCompleted(a);
-            const bCompleted = isGroupCompleted(b);
-            if (aCompleted !== bCompleted) return aCompleted ? 1 : -1;
+            const aRank = rank(a);
+            const bRank = rank(b);
+            if (aRank !== bRank) return aRank - bRank;
 
             if (sortByDuration !== 'none') {
                 const aDur = a[0].duration ?? (sortByDuration === 'asc' ? Infinity : -Infinity);
@@ -2302,7 +2396,26 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                     )}
                                 </div>
                                 <div className="space-y-1">
-                                    {historyItems.map(item => (
+                                    {historyItems.map(item => item.deferred ? (
+                                        // 다른 날로 미룬 항목 (지우려면 '편집'으로 열어서)
+                                        <div
+                                            key={item.lineIndex}
+                                            className="flex items-start gap-2 py-1 text-text-tertiary"
+                                            style={{ paddingLeft: `${item.indent * 24}px` }}
+                                        >
+                                            <span className="mt-1 w-4 h-4 shrink-0 flex items-center justify-center" title="다른 날로 미룬 항목">
+                                                <Forward size={14} />
+                                            </span>
+                                            <span className="flex-1 leading-relaxed">
+                                                {renderText(item.text)}
+                                                {item.deferredTo && (
+                                                    <span className="ml-1.5 inline-flex align-middle text-[11px] tabular-nums">
+                                                        → {deferredLabel(item.deferredTo)}
+                                                    </span>
+                                                )}
+                                            </span>
+                                        </div>
+                                    ) : (
                                         <div
                                             key={item.lineIndex}
                                             className="group flex items-start gap-2 py-1"
@@ -2449,34 +2562,34 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                 title={quadrantConfig.q1.title}
                                 label={quadrantConfig.q1.label}
                                 color={quadrantConfig.q1.color}
-                                items={todos.filter(t => t.quadrant === 'q1')}
+                                items={todos.filter(t => !t.deferred && t.quadrant === 'q1')}
                             />
                             <Quadrant
                                 id="q2"
                                 title={quadrantConfig.q2.title}
                                 label={quadrantConfig.q2.label}
                                 color={quadrantConfig.q2.color}
-                                items={todos.filter(t => t.quadrant === 'q2')}
+                                items={todos.filter(t => !t.deferred && t.quadrant === 'q2')}
                             />
                             <Quadrant
                                 id="q3"
                                 title={quadrantConfig.q3.title}
                                 label={quadrantConfig.q3.label}
                                 color={quadrantConfig.q3.color}
-                                items={todos.filter(t => t.quadrant === 'q3')}
+                                items={todos.filter(t => !t.deferred && t.quadrant === 'q3')}
                             />
                             <Quadrant
                                 id="q4"
                                 title={quadrantConfig.q4.title}
                                 label={quadrantConfig.q4.label}
                                 color={quadrantConfig.q4.color}
-                                items={todos.filter(t => t.quadrant === 'q4')}
+                                items={todos.filter(t => !t.deferred && t.quadrant === 'q4')}
                             />
                         </div>
 
                         {/* Inbox / Unassigned */}
                         <div className="h-1/4">
-                            <DroppableInbox items={todos.filter(t => t.quadrant === 'inbox')} />
+                            <DroppableInbox items={todos.filter(t => !t.deferred && t.quadrant === 'inbox')} />
                         </div>
 
                         <DragOverlay adjustScale={true}>
@@ -2707,6 +2820,14 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                                         {bonus.minutes > 0 && (
                                                             <span className="text-amber-400/70"> +{formatDuration(bonus.minutes)}</span>
                                                         )}
+                                                        {deferredCount > 0 && (
+                                                            <span
+                                                                className="text-text-tertiary"
+                                                                title="다른 날로 미룬 항목. 이 날 계획에는 남아 달성률에 그대로 들어가요. 흔적을 지우면 계획에서도 빠져요."
+                                                            >
+                                                                {' · '}미룸 {deferredCount}
+                                                            </span>
+                                                        )}
                                                     </span>
                                                 </div>
                                                 <div className="relative h-1 bg-bg-tertiary rounded-full overflow-hidden">
@@ -2863,6 +2984,7 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                                         setMoveIndex={setMoveIndex}
                                                         moveTargets={moveTargets}
                                                         onMove={moveItemTo}
+                                                        deferCounts={deferCounts}
                                                     />
                                                 ))}
                                             </div>

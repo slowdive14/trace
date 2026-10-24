@@ -129,10 +129,13 @@ export interface ItemEstimate {
     high?: number;
 }
 
-/** 하위 항목을 똑같이 나눴을 때의 완료 비율 (달성률 계산과 같은 방식) */
-const doneFraction = (node: TaskNode): number => {
-    if (node.children.length === 0) return node.item.checked ? 1 : 0;
-    return node.children.reduce((sum, c) => sum + doneFraction(c), 0) / node.children.length;
+/**
+ * 하위 항목을 똑같이 나눴을 때의 완료 비율 (달성률 계산과 같은 방식).
+ * settled면 다른 날로 미룬 것도 오늘 할 몫이 아니므로 끝난 쪽에 넣는다 (남은 시간 계산용).
+ */
+const doneFraction = (node: TaskNode, settled = false): number => {
+    if (node.children.length === 0) return node.item.checked || (settled && node.item.deferred) ? 1 : 0;
+    return node.children.reduce((sum, c) => sum + doneFraction(c, settled), 0) / node.children.length;
 };
 
 type TaskNode = ReturnType<typeof buildTaskTree>[number];
@@ -165,14 +168,15 @@ export const computeTodayLoad = (
     const visit = (node: TaskNode): { min: number; high: number; any: boolean } => {
         const { item, children } = node;
         const none = { min: 0, high: 0, any: false };
-        if (item.checked) return none;
+        // 끝냈거나 다른 날로 미룬 것은 오늘 남은 일이 아니다
+        if (item.checked || item.deferred) return none;
 
         const est = item.duration === undefined && !hasExplicitBelow(node) ? estimateOf(item) : undefined;
         const own = item.duration ?? est?.minutes;
         if (own !== undefined) {
             load.known++;
             if (item.duration === undefined) load.estimated++;
-            const left = children.length > 0 ? 1 - doneFraction(node) : 1;
+            const left = children.length > 0 ? 1 - doneFraction(node, true) : 1;
             const ownHigh = item.duration ?? est?.high ?? own;
             return { min: own * left, high: ownHigh * left, any: true };
         }

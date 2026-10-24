@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { todoLineKey, findTodoLine, setLineMinutes, addLineEid, splitForMove, appendLines } from './todoLine';
+import {
+    todoLineKey, findTodoLine, setLineMinutes, addLineEid, splitForMove, appendLines,
+    deferKey, collectDeferrals, deferralCount, removeDeferredTrace,
+} from './todoLine';
+import { parseTodos, calculateWeightedSummary } from './todoUtils';
 
 describe('항목 열쇠', () => {
     it('체크 상태, 줄 끝 시간, 연결 표시를 빼고 비교한다', () => {
@@ -107,7 +111,7 @@ describe('다른 날로 옮기기', () => {
     it('하위 항목이 없으면 그 줄만 옮기고 이 날에서는 뺀다', () => {
         const r = splitForMove(day, 2)!;
         expect(r.moved).toEqual(['- [ ] 운동']);
-        expect(r.keptHead).toBe(false);
+        expect(r.keptDone).toBe(false);
         expect(r.remaining.split('\n')).not.toContain('- [ ] 운동');
         expect(r.remaining.split('\n')).toContain('- [ ] 책 읽기');
     });
@@ -115,7 +119,7 @@ describe('다른 날로 옮기기', () => {
     it('끝낸 하위 항목은 이 날에 남기고, 안 끝낸 것만 데려간다', () => {
         const r = splitForMove(day, 3)!;
         expect(r.moved).toEqual(['- [ ] 보고서', '  - [ ] 초안 쓰기', '    - [ ] 결론']);
-        expect(r.keptHead).toBe(true);
+        expect(r.keptDone).toBe(true);
         expect(r.remaining.split('\n').slice(3, 6)).toEqual([
             '- [ ] 보고서',
             '  - [x] 자료 모으기 (30m) {eid:e1}',
@@ -147,5 +151,96 @@ describe('다른 날로 옮기기', () => {
         expect(appendLines('', ['- [ ] 운동'])).toBe('- [ ] 운동');
         expect(appendLines('- [ ] 가', ['- [ ] 나', '  - [ ] 다'])).toBe('- [ ] 가\n- [ ] 나\n  - [ ] 다');
         expect(appendLines('- [ ] 가\n', ['- [ ] 나'])).toBe('- [ ] 가\n- [ ] 나');
+    });
+});
+
+describe('이미 시작한 날에서 옮기면 미룸 흔적을 남긴다', () => {
+    const today = [
+        '- [x] 강의 (60m)',
+        '- [ ] 뉴스레터 (60m)',
+        '- [ ] 보고서',
+        '  - [x] 자료 모으기 (30m)',
+        '  - [ ] 초안 쓰기',
+    ].join('\n');
+
+    it('지우지 않고 [>] 줄로 바꾸고 받는 날을 적는다', () => {
+        const r = splitForMove(today, 1, '2026-10-25')!;
+        expect(r.remaining.split('\n')[1]).toBe('- [>] 뉴스레터 (60m) {moved:2026-10-25}');
+        expect(r.moved).toEqual(['- [ ] 뉴스레터 (60m)']);
+    });
+
+    it('함께 가는 하위 항목도 흔적으로 남고, 끝낸 것은 그대로', () => {
+        const r = splitForMove(today, 2, '2026-10-25')!;
+        expect(r.remaining.split('\n').slice(2)).toEqual([
+            '- [>] 보고서 {moved:2026-10-25}',
+            '  - [x] 자료 모으기 (30m)',
+            '  - [>] 초안 쓰기',
+        ]);
+        expect(r.moved).toEqual(['- [ ] 보고서', '  - [ ] 초안 쓰기']);
+        expect(r.keptDone).toBe(true);
+    });
+
+    it('옮겨도 그날 달성률은 그대로다', () => {
+        const before = calculateWeightedSummary(parseTodos(today));
+        const after = calculateWeightedSummary(parseTodos(splitForMove(today, 1, '2026-10-25')!.remaining));
+        expect(after).toEqual(before);
+    });
+
+    it('흔적은 미룬 항목으로 읽힌다 (받은 곳은 머리 줄에만)', () => {
+        const items = parseTodos(splitForMove(today, 2, 'backlog')!.remaining);
+        expect(items[2]).toMatchObject({ text: '보고서', deferred: true, deferredTo: 'backlog', checked: false });
+        expect(items[4]).toMatchObject({ text: '초안 쓰기', deferred: true });
+        expect(items[4].deferredTo).toBeUndefined();
+    });
+});
+
+describe('미룬 횟수', () => {
+    const days = [
+        { date: '2026-10-22', content: '- [>] 뉴스레터 (60m) {moved:2026-10-23}' },
+        { date: '2026-10-23', content: '- [x] 강의\n- [>] 뉴스레터 (60m) {moved:2026-10-24}' },
+        { date: '2026-10-24', content: '- [>] **뉴스레터**  {moved:2026-10-25}\n- [>] 보고서 {moved:backlog}' },
+    ];
+    const index = collectDeferrals(days);
+
+    it('보낸 날을 거슬러 올라가며 센다', () => {
+        expect(deferralCount(index, '2026-10-25', deferKey('- [ ] 뉴스레터 (60m)'))).toBe(3);
+        expect(deferralCount(index, '2026-10-24', deferKey('- [ ] 뉴스레터'))).toBe(2);
+    });
+
+    it('한 번도 안 미룬 항목은 0', () => {
+        expect(deferralCount(index, '2026-10-25', deferKey('- [ ] 강의'))).toBe(0);
+    });
+
+    it('이름의 시간·굵게·공백 차이는 같은 항목으로 본다', () => {
+        expect(deferKey('- [>] **뉴스레터**  {moved:2026-10-25}')).toBe(deferKey('- [ ] 뉴스레터 (60m)'));
+    });
+
+    it('흔적이 엉켜 돌아도 멈춘다', () => {
+        const loop = collectDeferrals([
+            { date: '2026-10-01', content: '- [>] 가 {moved:2026-10-02}' },
+            { date: '2026-10-02', content: '- [>] 가 {moved:2026-10-01}' },
+        ]);
+        expect(deferralCount(loop, '2026-10-02', deferKey('- [ ] 가'))).toBe(2);
+    });
+});
+
+describe('미룸 흔적 지우기', () => {
+    it('하위 항목이 없으면 그 줄을 지운다 (그날 계획에서도 빠진다)', () => {
+        const day = '- [x] 강의\n- [>] 뉴스레터 {moved:2026-10-25}\n- [ ] 책';
+        expect(removeDeferredTrace(day, 1)).toBe('- [x] 강의\n- [ ] 책');
+    });
+
+    it('끝낸 하위 항목은 남기고 머리 줄은 끝낸 것으로 둔다', () => {
+        const day = [
+            '- [>] 보고서 {moved:2026-10-25}',
+            '  - [x] 자료 모으기 (30m)',
+            '  - [>] 초안 쓰기',
+            '- [ ] 책',
+        ].join('\n');
+        expect(removeDeferredTrace(day, 0)).toBe('- [x] 보고서\n  - [x] 자료 모으기 (30m)\n- [ ] 책');
+    });
+
+    it('흔적 줄이 아니면 null', () => {
+        expect(removeDeferredTrace('- [ ] 책', 0)).toBeNull();
     });
 });

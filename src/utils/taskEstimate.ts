@@ -77,6 +77,7 @@ export const RANGE_MIN_COUNT = 3;
 export const normalizeTaskText = (text: string): string => {
     let t = text
         .replace(/\s*\{eid:[^}]+\}/g, '')
+        .replace(/\s*\{moved:[^}]+\}/g, '')
         .replace(/\s*#q[1-4]\b/g, '')
         .replace(/\*\*|==/g, '')
         .replace(/^\+\s*/, '')
