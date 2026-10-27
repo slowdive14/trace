@@ -115,6 +115,18 @@ function WeeklyBarChart({ data, weekOffset, onPrevWeek, onNextWeek }: {
     );
 }
 
+/** 목표보다 일찍 자거나 일어나 얻은 가산 (없어도 자리를 지켜 줄이 어긋나지 않게) */
+function EarlyBonus({ points, what }: { points: number; what: string }) {
+    return (
+        <span
+            className="w-7 text-right text-green-400 tabular-nums"
+            title={points > 0 ? `목표보다 일찍 ${what} +${points}점` : undefined}
+        >
+            {points > 0 ? `+${points}` : ''}
+        </span>
+    );
+}
+
 // 점수 섹션 컴포넌트
 function ScoreSection({ score, streak }: { score: SleepScore; streak: WeeklyStreak }) {
     const getScoreColor = (total: number) => {
@@ -131,10 +143,11 @@ function ScoreSection({ score, streak }: { score: SleepScore; streak: WeeklyStre
                     <span className="text-xs text-text-secondary">수면 점수</span>
                     <InfoTooltip content={
                         <div className="space-y-1 text-left">
-                            <div className="font-bold text-indigo-300 mb-1">총점 100점 만점</div>
+                            <div className="font-bold text-indigo-300 mb-1">총점 100점 만점 + 가산</div>
                             <div>• 수면 시간: <span className="text-white">40점</span></div>
                             <div>• 규칙성(목표 달성): <span className="text-white">36점</span> (취침18+기상18)</div>
                             <div>• 일관성(편차): <span className="text-white">24점</span> (취침12+기상12)</div>
+                            <div>• 일찍 자고 일어나기: <span className="text-green-300">최대 +8점</span> (취침4+기상4)</div>
                         </div>
                     } />
                 </div>
@@ -166,6 +179,7 @@ function ScoreSection({ score, streak }: { score: SleepScore; streak: WeeklyStre
                             />
                         </div>
                         <span className="w-12 text-right text-text-secondary">{score.durationScore}/40</span>
+                        <EarlyBonus points={0} what="" />
                     </div>
                 </div>
 
@@ -176,7 +190,9 @@ function ScoreSection({ score, streak }: { score: SleepScore; streak: WeeklyStre
                         <InfoTooltip content={
                             <div className="space-y-1 text-left">
                                 <div className="font-bold text-purple-300">규칙성 30점 만점</div>
-                                <div>• <span className="text-white">목표 달성 (18점)</span>: <br />22:00 ~ 00:30 사이 취침</div>
+                                <div>• <span className="text-white">목표 달성 (18점)</span>: <br />00:00 ~ 01:00 사이 취침</div>
+                                <div className="text-gray-400">01:00보다 늦으면 10분마다 -3점 (1시간 늦으면 0점)</div>
+                                <div className="text-green-300">00:00보다 일찍 자면 15분마다 +1점 (최대 +4점)</div>
                                 <div>• <span className="text-white">일관성 (12점)</span>: <br />매일 비슷한 시간에 자는지 평가 (편차↓ 점수↑)</div>
                             </div>
                         } />
@@ -189,6 +205,7 @@ function ScoreSection({ score, streak }: { score: SleepScore; streak: WeeklyStre
                             />
                         </div>
                         <span className="w-12 text-right text-text-secondary">{score.sleepRegularity + score.sleepConsistencyScore}/30</span>
+                        <EarlyBonus points={score.sleepEarlyBonus} what="자서" />
                     </div>
                 </div>
 
@@ -199,7 +216,9 @@ function ScoreSection({ score, streak }: { score: SleepScore; streak: WeeklyStre
                         <InfoTooltip content={
                             <div className="space-y-1 text-left">
                                 <div className="font-bold text-amber-300">규칙성 30점 만점</div>
-                                <div>• <span className="text-white">목표 달성 (18점)</span>: <br />05:45 ~ 07:30 사이 기상</div>
+                                <div>• <span className="text-white">목표 달성 (18점)</span>: <br />07:30 ~ 08:45 사이 기상</div>
+                                <div className="text-gray-400">08:45보다 늦으면 10분마다 -3점 (1시간 늦으면 0점)</div>
+                                <div className="text-green-300">07:30보다 일찍 일어나면 15분마다 +1점 (최대 +4점)</div>
                                 <div>• <span className="text-white">일관성 (12점)</span>: <br />매일 비슷한 시간에 일어나는지 평가 (편차↓ 점수↑)</div>
                             </div>
                         } />
@@ -212,6 +231,7 @@ function ScoreSection({ score, streak }: { score: SleepScore; streak: WeeklyStre
                             />
                         </div>
                         <span className="w-12 text-right text-text-secondary">{score.wakeRegularity + score.wakeConsistencyScore}/30</span>
+                        <EarlyBonus points={score.wakeEarlyBonus} what="일어나서" />
                     </div>
                 </div>
 

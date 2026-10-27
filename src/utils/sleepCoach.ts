@@ -7,8 +7,12 @@
  *
  * calculateSleepScore()의 배점을 그대로 따른다:
  *   수면시간 40 · 취침목표 18 · 기상목표 18 · 취침일관성 12 · 기상일관성 12
+ *   (+ 목표보다 일찍 자고 일어난 가산 각각 최대 4)
  */
-import type { SleepRecord, SleepScore } from './sleepUtils';
+import {
+    GOAL_POINTS, GOAL_LATE_ZERO_MIN, GOAL_EARLY_MIN_PER_POINT, GOAL_EARLY_MAX_BONUS,
+    type SleepRecord, type SleepScore,
+} from './sleepUtils';
 
 /** 이상적인 수면 시간 (calculateSleepScore와 동일) */
 export const IDEAL_HOURS = 7.5;
@@ -93,44 +97,29 @@ export function analyzeSleepGaps(score: SleepScore, records: SleepRecord[]): Sle
         gaps.push({ key: 'duration', label: '수면 시간', current: score.durationScore, max: 40, lost, reason, lever });
     }
 
-    // 2) 취침 목표 22:00~00:30 (18점)
-    {
-        const lost = 18 - score.sleepRegularity;
-        const denom = daysWithSleepTime;
-        const perDay = denom > 0 ? 18 / denom : 0;
-        gaps.push({
-            key: 'sleepGoal',
-            label: '취침 목표 (22:00~00:30)',
-            current: score.sleepRegularity,
-            max: 18,
-            lost,
-            reason: denom > 0
-                ? `취침을 기록한 ${denom}일 중 ${d.sleepGoalDays}일만 목표 구간 안`
-                : '취침 시각이 기록된 날이 없음',
-            lever: denom > 0
-                ? `하루 더 지킬 때마다 +${round1(perDay)}점, 모든 날 지키면 +${Math.round(lost)}점`
-                : '취침 시각을 기록해야 점수가 매겨진다',
-        });
-    }
-
-    // 3) 기상 목표 05:45~07:30 (18점)
-    {
-        const lost = 18 - score.wakeRegularity;
-        const denom = daysWithWakeTime;
-        const perDay = denom > 0 ? 18 / denom : 0;
-        gaps.push({
-            key: 'wakeGoal',
-            label: '기상 목표 (05:45~07:30)',
-            current: score.wakeRegularity,
-            max: 18,
-            lost,
-            reason: denom > 0
-                ? `기상을 기록한 ${denom}일 중 ${d.wakeGoalDays}일만 목표 구간 안`
-                : '기상 시각이 기록된 날이 없음',
-            lever: denom > 0
-                ? `하루 더 지킬 때마다 +${round1(perDay)}점, 모든 날 지키면 +${Math.round(lost)}점`
-                : '기상 시각을 기록해야 점수가 매겨진다',
-        });
+    // 2)(3) 취침·기상 목표 (각 18점). 늦으면 10분마다 3점 감점, 일찍이면 15분마다 가산
+    const lateStepPoints = (GOAL_POINTS * 10) / GOAL_LATE_ZERO_MIN;   // 10분 늦을 때마다 깎이는 점수 (하루)
+    const goals: Array<[GapKey, string, string, string, number, number, number, number, number, number]> = [
+        ['sleepGoal', '취침', '00:00', '01:00', score.sleepRegularity, daysWithSleepTime, d.sleepGoalDays, d.sleepLateDays, d.sleepLateAvg, score.sleepEarlyBonus],
+        ['wakeGoal', '기상', '07:30', '08:45', score.wakeRegularity, daysWithWakeTime, d.wakeGoalDays, d.wakeLateDays, d.wakeLateAvg, score.wakeEarlyBonus],
+    ];
+    for (const [key, what, start, end, current, denom, metDays, lateDays, lateAvg, bonus] of goals) {
+        const lost = GOAL_POINTS - current;
+        const earlyNote = `${start}보다 일찍이면 ${GOAL_EARLY_MIN_PER_POINT}분마다 그날 +1점 (최대 +${GOAL_EARLY_MAX_BONUS}점)`;
+        let reason: string;
+        let lever: string;
+        if (denom === 0) {
+            reason = `${what} 시각이 기록된 날이 없음`;
+            lever = `${what} 시각을 기록해야 점수가 매겨진다`;
+        } else {
+            reason = `${what}을 기록한 ${denom}일 중 ${metDays}일이 ${end}까지 (늦지 않음)`
+                + (lateDays > 0 ? `, 늦은 ${lateDays}일은 평균 ${lateAvg}분 늦음 (늦은 10분마다 그날 ${lateStepPoints}점 감점, ${GOAL_LATE_ZERO_MIN}분이면 0점)` : '')
+                + (bonus > 0 ? ` · 일찍 한 가산 +${bonus}점` : '');
+            lever = lost > 0
+                ? `늦은 날을 10분 당길 때마다 +${round1(lateStepPoints / denom)}점, 늦은 날을 모두 ${end}까지 당기면 +${Math.round(lost)}점. ${earlyNote}`
+                : `이미 만점 구간. ${earlyNote}`;
+        }
+        gaps.push({ key, label: `${what} 목표 (${start}~${end})`, current, max: GOAL_POINTS, lost, reason, lever });
     }
 
     // 4)(5) 일관성 — 편차 6분당 1점
@@ -165,7 +154,7 @@ export function analyzeSleepGaps(score: SleepScore, records: SleepRecord[]): Sle
 /** AI 프롬프트에 넣을 진단 요약 텍스트 */
 export function formatDiagnosisForPrompt(diag: SleepDiagnosis): string {
     const lines: string[] = [];
-    lines.push(`총점 ${diag.total}/100 (기록된 날 ${diag.recordedDays}일)`);
+    lines.push(`총점 ${diag.total}점 (100점 만점 + 목표보다 일찍 자고 일어난 가산 최대 ${GOAL_EARLY_MAX_BONUS * 2}점, 기록된 날 ${diag.recordedDays}일)`);
     lines.push('');
     lines.push('[항목별 점수와 개선 여지] — 아래 숫자는 앱의 실제 계산식에서 나온 값이다. 그대로 인용하고 새로 계산하지 마.');
     for (const g of diag.gaps) {

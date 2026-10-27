@@ -205,41 +205,78 @@ export function getAverageWakeTime(records: SleepRecord[]): string | null {
 // 목표 달성 체크 관련 함수들
 // ============================================
 
-// 목표 시간 상수 (분 단위)
-const WAKE_GOAL_START = 5 * 60 + 45; // 05:45 = 345분
-const WAKE_GOAL_GRACE = 7 * 60 + 30; // 07:30 = 450분 (허용 한계)
+// 목표 구간 (분). 취침은 자정을 넘기면 +1440으로 센다 (00:30 → 1470)
+// 구간 안이면 그날 만점, 구간보다 일찍이면 가산, 늦으면 늦은 만큼 감점한다.
+export const SLEEP_GOAL_START = 24 * 60;      // 00:00
+export const SLEEP_GOAL_END = 25 * 60;        // 01:00
+export const WAKE_GOAL_START = 7 * 60 + 30;   // 07:30
+export const WAKE_GOAL_END = 8 * 60 + 45;     // 08:45
 
-const SLEEP_GOAL_START = 22 * 60;    // 22:00 = 1320분
-const SLEEP_GOAL_GRACE = 30;         // 00:30 = 30분 (다음날)
+/** 목표 달성 점수 (취침·기상 각각) */
+export const GOAL_POINTS = 18;
+/** 구간 끝보다 이만큼(분) 늦으면 그날 목표 점수가 0이 된다 (10분 늦을 때마다 3점) */
+export const GOAL_LATE_ZERO_MIN = 60;
+/** 구간 시작보다 이만큼(분) 일찍일 때마다 그날 +1점 */
+export const GOAL_EARLY_MIN_PER_POINT = 15;
+/** 일찍 자고 일어난 가산점의 하루 최대치 (취침·기상 각각) */
+export const GOAL_EARLY_MAX_BONUS = 4;
+
+/** 취침 시각을 목표와 견줄 수 있는 분으로 (06:00~17:59도 '다음날'로 본다: 밤새운 날은 늦은 것) */
+const bedtimeMinutes = (date: Date): number => {
+    const m = getHours(date) * 60 + getMinutes(date);
+    return getHours(date) < 18 ? m + 1440 : m;
+};
+
+const wakeMinutesOf = (date: Date): number => getHours(date) * 60 + getMinutes(date);
+
+/** 하루치 목표 평가 */
+export interface GoalDay {
+    /** 구간 안이거나 더 일찍 (늦지 않음) */
+    met: boolean;
+    /** 목표 점수 (0~18) */
+    points: number;
+    /** 일찍 해서 얻은 가산점 (0~4) */
+    bonus: number;
+    /** 구간 끝보다 늦은 분 */
+    lateMin: number;
+}
+
+/** 구간 안이면 만점, 일찍이면 15분마다 +1점(최대 4), 늦으면 10분마다 -3점(1시간이면 0점) */
+export function scoreGoalTime(minutes: number, start: number, end: number): GoalDay {
+    if (minutes > end) {
+        const lateMin = minutes - end;
+        return { met: false, points: GOAL_POINTS * Math.max(0, 1 - lateMin / GOAL_LATE_ZERO_MIN), bonus: 0, lateMin };
+    }
+    const early = Math.max(0, start - minutes);
+    return {
+        met: true,
+        points: GOAL_POINTS,
+        bonus: Math.min(GOAL_EARLY_MAX_BONUS, early / GOAL_EARLY_MIN_PER_POINT),
+        lateMin: 0,
+    };
+}
 
 export interface GoalAchievement {
     wakeGoalMet: boolean;
     sleepGoalMet: boolean;
 }
 
+/** 취침·기상을 각각 목표 구간과 견준다 (기록이 없으면 null) */
+export function evaluateGoals(record: SleepRecord): { sleep: GoalDay | null; wake: GoalDay | null } {
+    return {
+        sleep: record.sleepTime ? scoreGoalTime(bedtimeMinutes(record.sleepTime), SLEEP_GOAL_START, SLEEP_GOAL_END) : null,
+        wake: record.wakeTime ? scoreGoalTime(wakeMinutesOf(record.wakeTime), WAKE_GOAL_START, WAKE_GOAL_END) : null,
+    };
+}
+
 /**
- * 개별 기록의 목표 달성 여부 체크
- * - 기상 목표: 05:45~07:30
- * - 취침 목표: 22:00~00:30
+ * 개별 기록의 목표 달성 여부 (늦지 않았으면 달성. 더 일찍은 오히려 좋다)
+ * - 취침 목표: 00:00~01:00 (01:00까지)
+ * - 기상 목표: 07:30~08:45 (08:45까지)
  */
 export function checkGoalAchievement(record: SleepRecord): GoalAchievement {
-    let wakeGoalMet = false;
-    let sleepGoalMet = false;
-
-    // 기상 목표 체크: 05:45 ~ 07:30
-    if (record.wakeTime) {
-        const wakeMinutes = getHours(record.wakeTime) * 60 + getMinutes(record.wakeTime);
-        wakeGoalMet = wakeMinutes >= WAKE_GOAL_START && wakeMinutes <= WAKE_GOAL_GRACE;
-    }
-
-    // 취침 목표 체크: 22:00 ~ 00:30 (자정 넘김 처리)
-    if (record.sleepTime) {
-        const sleepMinutes = getHours(record.sleepTime) * 60 + getMinutes(record.sleepTime);
-        // 22:00~23:59 OR 00:00~00:30
-        sleepGoalMet = (sleepMinutes >= SLEEP_GOAL_START) || (sleepMinutes <= SLEEP_GOAL_GRACE);
-    }
-
-    return { wakeGoalMet, sleepGoalMet };
+    const { sleep, wake } = evaluateGoals(record);
+    return { wakeGoalMet: wake?.met ?? false, sleepGoalMet: sleep?.met ?? false };
 }
 
 export interface WeeklyRecords {
@@ -271,12 +308,14 @@ export function getWeeklyRecords(records: SleepRecord[], weekOffset: number = 0)
 }
 
 export interface SleepScore {
-    total: number;           // 0-100
+    total: number;           // 0-100 (+ 일찍 자고 일어난 가산 최대 8)
     durationScore: number;   // 0-40
     sleepRegularity: number; // 0-18 (목표 달성)
     wakeRegularity: number;  // 0-18 (목표 달성)
     sleepConsistencyScore: number; // 0-12 (취침 일관성)
     wakeConsistencyScore: number;  // 0-12 (기상 일관성)
+    sleepEarlyBonus: number; // 0-4 (목표보다 일찍 잔 가산)
+    wakeEarlyBonus: number;  // 0-4 (목표보다 일찍 일어난 가산)
     details: {
         avgDuration: number | null;
         sleepGoalDays: number;
@@ -284,6 +323,11 @@ export interface SleepScore {
         totalRecordedDays: number;
         sleepConsistency: number; // 분 단위 편차
         wakeConsistency: number;  // 분 단위 편차
+        /** 목표보다 늦은 날 수와, 그날들이 평균 몇 분 늦었는지 */
+        sleepLateDays: number;
+        sleepLateAvg: number;
+        wakeLateDays: number;
+        wakeLateAvg: number;
     };
 }
 
@@ -299,11 +343,13 @@ function calculateMAD(minutes: number[]): number {
 }
 
 /**
- * 수면 점수 계산 (100점 만점)
+ * 수면 점수 계산 (100점 만점 + 가산)
  * - 수면시간 충족도: 40점 (7.5시간 기준)
- * - 목표 달성(규칙성): 36점 (취침 18 + 기상 18)
+ * - 목표 달성(규칙성): 36점 (취침 18 + 기상 18). 취침 00:00~01:00, 기상 07:30~08:45.
+ *   구간 안이면 그날 만점, 늦으면 10분마다 3점씩 깎여 1시간 늦으면 0점.
  * - 일관성 지표: 24점 (취침 12 + 기상 12)
- * 
+ * - 가산: 구간보다 일찍 자거나 일어나면 15분마다 +1점 (각각 하루 최대 +4점, 날마다 평균)
+ *
  * @param contextRecords 일관성(MAD) 계산을 위한 맥락 데이터 (예: 지난 주 기록). 점수 계산 자체는 records 기준이지만, 편차 계산 시에는 더 많은 샘플을 사용함.
  */
 export function calculateSleepScore(records: SleepRecord[], contextRecords: SleepRecord[] = []): SleepScore {
@@ -315,13 +361,19 @@ export function calculateSleepScore(records: SleepRecord[], contextRecords: Slee
             wakeRegularity: 0,
             sleepConsistencyScore: 0,
             wakeConsistencyScore: 0,
+            sleepEarlyBonus: 0,
+            wakeEarlyBonus: 0,
             details: {
                 avgDuration: null,
                 sleepGoalDays: 0,
                 wakeGoalDays: 0,
                 totalRecordedDays: 0,
                 sleepConsistency: 0,
-                wakeConsistency: 0
+                wakeConsistency: 0,
+                sleepLateDays: 0,
+                sleepLateAvg: 0,
+                wakeLateDays: 0,
+                wakeLateAvg: 0,
             }
         };
     }
@@ -338,7 +390,7 @@ export function calculateSleepScore(records: SleepRecord[], contextRecords: Slee
             .slice(0, supplementNeeded);
         goalRecords = [...records, ...supplement];
     }
-    const achievements = goalRecords.map(r => checkGoalAchievement(r));
+    const evaluations = goalRecords.map(r => evaluateGoals(r));
 
     // 1. 수면시간 점수 (40점 만점) - 원시값으로 정밀 계산 (이중 반올림 방지)
     const avgDuration = getAverageDuration(records); // 표시용 (소수점 1자리)
@@ -354,14 +406,26 @@ export function calculateSleepScore(records: SleepRecord[], contextRecords: Slee
         durationScore = Math.max(0, 40 - penalty);
     }
 
-    // 2. 목표 달성 점수 (36점 만점: 취침 18 + 기상 18)
-    // 해당 시각이 기록된 레코드만 분모로 사용 (미매칭 레코드 불이익 방지)
-    const sleepGoalDays = achievements.filter(a => a.sleepGoalMet).length;
-    const wakeGoalDays = achievements.filter(a => a.wakeGoalMet).length;
-    const recordsWithSleep = goalRecords.filter(r => r.sleepTime !== undefined).length;
-    const recordsWithWake = goalRecords.filter(r => r.wakeTime !== undefined).length;
-    const sleepGoalScore = recordsWithSleep > 0 ? (sleepGoalDays / recordsWithSleep) * 18 : 0;
-    const wakeGoalScore = recordsWithWake > 0 ? (wakeGoalDays / recordsWithWake) * 18 : 0;
+    // 2. 목표 달성 점수 (36점 만점: 취침 18 + 기상 18) + 일찍 한 가산
+    // 해당 시각이 기록된 레코드만 분모로 사용 (미매칭 레코드 불이익 방지).
+    // 하루씩 점수(늦은 만큼 깎임)와 가산을 매기고 날마다 평균한다.
+    const sleepDays = evaluations.map(e => e.sleep).filter((d): d is GoalDay => d !== null);
+    const wakeDays = evaluations.map(e => e.wake).filter((d): d is GoalDay => d !== null);
+    const avgOf = (days: GoalDay[], pick: (d: GoalDay) => number) =>
+        days.length > 0 ? days.reduce((s, d) => s + pick(d), 0) / days.length : 0;
+    const lateOf = (days: GoalDay[]) => {
+        const late = days.filter(d => !d.met);
+        return { count: late.length, avg: late.length ? Math.round(late.reduce((s, d) => s + d.lateMin, 0) / late.length) : 0 };
+    };
+
+    const sleepGoalDays = sleepDays.filter(d => d.met).length;
+    const wakeGoalDays = wakeDays.filter(d => d.met).length;
+    const sleepGoalScore = avgOf(sleepDays, d => d.points);
+    const wakeGoalScore = avgOf(wakeDays, d => d.points);
+    const sleepBonus = avgOf(sleepDays, d => d.bonus);
+    const wakeBonus = avgOf(wakeDays, d => d.bonus);
+    const sleepLate = lateOf(sleepDays);
+    const wakeLate = lateOf(wakeDays);
 
 
     // 3. 일관성 점수 (24점 만점: 취침 12 + 기상 12)
@@ -391,8 +455,11 @@ export function calculateSleepScore(records: SleepRecord[], contextRecords: Slee
     const roundedWakeGoal = Math.round(wakeGoalScore);
     const roundedSleepConsistency = Math.round(sleepConsistencyRaw);
     const roundedWakeConsistency = Math.round(wakeConsistencyRaw);
+    const roundedSleepBonus = Math.round(sleepBonus);
+    const roundedWakeBonus = Math.round(wakeBonus);
 
-    const total = roundedDuration + roundedSleepGoal + roundedWakeGoal + roundedSleepConsistency + roundedWakeConsistency;
+    const total = roundedDuration + roundedSleepGoal + roundedWakeGoal + roundedSleepConsistency + roundedWakeConsistency
+        + roundedSleepBonus + roundedWakeBonus;
 
     return {
         total,
@@ -401,6 +468,8 @@ export function calculateSleepScore(records: SleepRecord[], contextRecords: Slee
         wakeRegularity: roundedWakeGoal,
         sleepConsistencyScore: roundedSleepConsistency,
         wakeConsistencyScore: roundedWakeConsistency,
+        sleepEarlyBonus: roundedSleepBonus,
+        wakeEarlyBonus: roundedWakeBonus,
         details: {
             avgDuration,
             sleepGoalDays,
@@ -408,6 +477,10 @@ export function calculateSleepScore(records: SleepRecord[], contextRecords: Slee
             totalRecordedDays: records.length,
             sleepConsistency: Math.round(sleepMAD),
             wakeConsistency: Math.round(wakeMAD),
+            sleepLateDays: sleepLate.count,
+            sleepLateAvg: sleepLate.avg,
+            wakeLateDays: wakeLate.count,
+            wakeLateAvg: wakeLate.avg,
         }
     };
 }
@@ -526,7 +599,8 @@ export interface IdealSchedule {
 
 /**
  * 수면 점수 최대화를 위한 적정 취침/기상 시간 계산
- * - 궁극적 목표: 23:00 취침 / 06:30 기상 (기상 목표 05:45~07:30 만족)
+ * - 궁극적 목표: 23:00 취침 / 06:30 기상 (목표 구간 00:00~01:00·07:30~08:45보다 한 시간 일찍이라
+ *   일찍 한 가산을 최대로 받는다)
  * - 점진적 개선: 현재 평균이 목표와 멀다면, 한 번에 목표를 제시하지 않고 15~30분씩 당기도록 유도
  */
 export function getIdealSleepSchedule(records: SleepRecord[]): IdealSchedule {

@@ -33,12 +33,20 @@ describe('analyzeSleepGaps — 배점 분해', () => {
     });
 
     it('이상적인 주는 잃은 점수가 없다', () => {
-        // 23:00 취침 · 06:30 기상 = 7.5시간, 목표 구간 안, 편차 0
-        const records = week('23:00', '06:30');
+        // 00:30 취침 · 08:00 기상 = 7.5시간, 목표 구간 안, 편차 0
+        const records = week('00:30', '08:00');
         const score = calculateSleepScore(records);
         const diag = analyzeSleepGaps(score, records);
         expect(score.total).toBe(100);
         expect(diag.biggest).toBeNull();
+    });
+
+    it('목표보다 한 시간씩 일찍 자고 일어나면 가산 8점을 더 받는다', () => {
+        // 23:00 취침 · 06:30 기상 = 7.5시간, 두 구간보다 각각 60분 일찍
+        const score = calculateSleepScore(week('23:00', '06:30'));
+        expect(score.sleepEarlyBonus).toBe(4);
+        expect(score.wakeEarlyBonus).toBe(4);
+        expect(score.total).toBe(108);
     });
 
     it('가장 크게 되찾을 항목을 고른다', () => {
@@ -74,24 +82,46 @@ describe('개선 지침이 실제 점수와 맞는가 (왕복 검증)', () => {
         expect(calculateSleepScore(after).durationScore).toBe(40);
     });
 
-    it('취침 목표: "하루 더 지킬 때마다" 점수가 그만큼 오른다', () => {
-        // 7일 중 3일만 목표 구간(22:00~00:30) 안
-        const bad = ['2026-08-04', '2026-08-05', '2026-08-06', '2026-08-07'].map(d => rec(d, '01:30', '07:00'));
-        const good = ['2026-08-08', '2026-08-09', '2026-08-10'].map(d => rec(d, '23:00', '07:00'));
-        const records = [...bad, ...good];
+    it('취침 목표: 늦은 만큼만 깎이고, 당기면 그만큼 오른다', () => {
+        // 7일 중 4일은 01:30 취침 (구간 끝 01:00보다 30분 늦음 → 그날 9점), 3일은 00:30 (만점)
+        const late = ['2026-08-04', '2026-08-05', '2026-08-06', '2026-08-07'].map(d => rec(d, '01:30', '08:00'));
+        const onTime = ['2026-08-08', '2026-08-09', '2026-08-10'].map(d => rec(d, '00:30', '08:00'));
+        const records = [...late, ...onTime];
 
         const score = calculateSleepScore(records);
         const diag = analyzeSleepGaps(score, records);
         const gap = diag.gaps.find(g => g.key === 'sleepGoal')!;
 
+        // (4×9 + 3×18) / 7 = 12.9 → 13점
+        expect(score.sleepRegularity).toBe(13);
         expect(gap.reason).toContain('7일 중 3일');
-        expect(gap.lever).toContain('+2.6점');   // 18/7 = 2.57
+        expect(gap.reason).toContain('늦은 4일은 평균 30분 늦음');
+        expect(gap.lever).toContain('+0.4점');   // 10분 당기면 그날 +3점 → 주간 3/7
+        expect(gap.lever).toContain('+5점');     // 늦은 날을 모두 당기면 18점
 
-        // 하루를 더 지키면 실제로 약 2.6점 오른다
-        const oneMore = [...bad.slice(1), rec('2026-08-04', '23:00', '07:00'), ...good];
-        const after = calculateSleepScore(oneMore);
-        expect(after.sleepRegularity - score.sleepRegularity).toBeGreaterThanOrEqual(2);
-        expect(after.sleepRegularity - score.sleepRegularity).toBeLessThanOrEqual(3);
+        // 늦은 날을 모두 01:00까지 당기면 실제로 만점이 된다
+        const pulled = [...late.map(r => rec(r.date, '01:00', '08:00')), ...onTime];
+        expect(calculateSleepScore(pulled).sleepRegularity).toBe(18);
+    });
+
+    it('늦으면 10분마다 3점씩 깎이고, 1시간 늦으면 그날 0점이다', () => {
+        expect(calculateSleepScore(week('00:30', '09:15')).wakeRegularity).toBe(9);    // 30분 늦음
+        expect(calculateSleepScore(week('00:30', '09:45')).wakeRegularity).toBe(0);    // 60분 늦음
+        expect(calculateSleepScore(week('00:30', '11:00')).wakeRegularity).toBe(0);    // 그보다 더 늦어도 0
+    });
+
+    it('일찍이면 15분마다 +1점, 하루 최대 +4점', () => {
+        const s = calculateSleepScore(week('23:30', '07:00'));   // 각각 30분 일찍
+        expect(s.sleepEarlyBonus).toBe(2);
+        expect(s.wakeEarlyBonus).toBe(2);
+        expect(s.sleepRegularity).toBe(18);
+        expect(calculateSleepScore(week('21:00', '05:00')).wakeEarlyBonus).toBe(4);   // 최대
+    });
+
+    it('밤을 새우고 아침에 잔 날은 일찍 잔 게 아니라 늦은 것이다', () => {
+        const s = calculateSleepScore(week('07:00', '14:00'));
+        expect(s.sleepRegularity).toBe(0);
+        expect(s.sleepEarlyBonus).toBe(0);
     });
 
     it('일관성: 편차 6분마다 1점이 실제로 성립한다', () => {
