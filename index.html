@@ -1,5 +1,10 @@
 <!doctype html>
-<html lang="en">
+<!--
+  한국어 앱이다. lang이 en이면 브라우저가 영어 페이지로 보고 번역을 권하거나 자동 번역한다.
+  번역은 화면의 글자를 다른 요소로 바꿔 끼워서, React가 그 글자를 고치거나 옆에 무언가를
+  끼워 넣을 때 자리를 못 찾아 화면 전체가 멈춘다 ('예상 숨기기'를 누르면 멈추던 원인).
+-->
+<html lang="ko" translate="no">
 
 <head>
     <script type="module">
@@ -13,6 +18,7 @@
   <link rel="apple-touch-icon" href="/pwa-192x192.png" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#0d0d0d" />
+  <meta name="google" content="notranslate" />
   <title>Serein</title>
   <script>
     /*

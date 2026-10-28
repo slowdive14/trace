@@ -2327,8 +2327,9 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                     }`}
                                 title={isEditing ? '편집 마치기' : '글로 편집'}
                             >
-                                {isEditing ? <Check size={14} /> : <Edit3 size={14} />}
-                                {isEditing ? '완료' : '글로 편집'}
+                                {/* 아이콘·글자를 각자 감싼다 ('예상 숨기기' 버튼과 같은 이유) */}
+                                <span className="flex">{isEditing ? <Check size={14} /> : <Edit3 size={14} />}</span>
+                                <span key={isEditing ? 'done' : 'edit'}>{isEditing ? '완료' : '글로 편집'}</span>
                             </button>
                         )}
                     </div>
@@ -2923,8 +2924,10 @@ const TodoTab: React.FC<TodoTabProps> = ({
                                                 title={showEstimates ? '항목 옆의 예상 시간·끝나는 시각 숨기기' : '항목 옆에 예상 시간·끝나는 시각 보이기'}
                                                 aria-pressed={!showEstimates}
                                             >
-                                                {showEstimates ? <EyeOff size={12} /> : <Eye size={12} />}
-                                                {showEstimates ? '예상 숨기기' : '예상 보기'}
+                                                {/* 아이콘과 글자를 각자 감싼다. 번역 기능이 글자를 바꿔 끼운 상태에서
+                                                    아이콘만 갈아 끼우면 React가 글자 자리를 못 찾아 화면 전체가 멈췄다 */}
+                                                <span className="flex">{showEstimates ? <EyeOff size={12} /> : <Eye size={12} />}</span>
+                                                <span key={showEstimates ? 'hide' : 'show'}>{showEstimates ? '예상 숨기기' : '예상 보기'}</span>
                                             </button>
                                         )}
                                         {todos.some(t => t.duration) && (
