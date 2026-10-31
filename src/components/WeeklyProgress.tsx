@@ -67,13 +67,15 @@ export const WeeklyProgress: React.FC<WeeklyProgressProps> = ({ collectionName =
             const day = addDays(weekStart, i);
             const dateStr = format(day, 'yyyy-MM-dd');
             const todo = todos.find(t => t.id === dateStr);
-            if (!todo || !todo.content.trim()) return { date: day, dateStr, percentage: -1 };
+            if (!todo || !todo.content.trim()) return { date: day, dateStr, percentage: -1, planned: 0 };
             const items = parseTodos(todo.content);
-            if (items.length === 0) return { date: day, dateStr, percentage: -1 };
+            if (items.length === 0) return { date: day, dateStr, percentage: -1, planned: 0 };
+            // 아직 오지 않은 날은 미리 적어 둔 일이 있어도 달성률을 매기지 않는다 (0%로 평균을 깎았다)
+            if (dateStr > todayStr) return { date: day, dateStr, percentage: -1, planned: items.filter(t => t.indent === 0).length };
             const { percentage } = calculateWeightedSummary(items);
-            return { date: day, dateStr, percentage };
+            return { date: day, dateStr, percentage, planned: 0 };
         });
-    }, [weekStart, todos]);
+    }, [weekStart, todos, todayStr]);
 
     const weekHasToday = dailyRates.some(d => d.dateStr === todayStr);
 
@@ -153,6 +155,12 @@ export const WeeklyProgress: React.FC<WeeklyProgressProps> = ({ collectionName =
                                         style={{ height: `${relativeHeight}%` }}
                                         title={`${format(day.date, 'M/d (EEE)', { locale: ko })} - ${day.percentage}%${isCurrentDay ? ' (진행 중)' : ''}`}
                                     />
+                                ) : day.planned > 0 ? (
+                                    // 아직 오지 않은 날: 미리 적어 둔 일만 알린다 (평균에는 넣지 않는다)
+                                    <div
+                                        className="w-full h-3 rounded-t border border-dashed border-text-tertiary/40"
+                                        title={`${format(day.date, 'M/d (EEE)', { locale: ko })} - 미리 적어 둔 일 ${day.planned}개 (아직 오지 않은 날이라 평균에 넣지 않아요)`}
+                                    />
                                 ) : (
                                     <div className="w-full h-[2px] bg-bg-tertiary rounded-sm" />
                                 )}
@@ -165,6 +173,9 @@ export const WeeklyProgress: React.FC<WeeklyProgressProps> = ({ collectionName =
                                     <div className={`text-[8px] leading-tight mt-0.5 ${dimmed ? 'text-text-tertiary/50' : day.percentage >= 75 ? 'text-green-400' : 'text-text-tertiary'}`}>
                                         {day.percentage}%
                                     </div>
+                                )}
+                                {day.planned > 0 && (
+                                    <div className="text-[8px] leading-tight mt-0.5 text-text-tertiary/70">예정 {day.planned}</div>
                                 )}
                             </div>
                         </div>
